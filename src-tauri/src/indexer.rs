@@ -235,7 +235,7 @@ pub fn index_all(
 }
 
 /// Expand a leading `~` (bare or `~/…`) to the current user's home dir.
-fn expand_tilde(p: &str) -> PathBuf {
+pub fn expand_tilde(p: &str) -> PathBuf {
     if p == "~" || p.starts_with("~/") {
         if let Some(home) = std::env::var_os("HOME") {
             return PathBuf::from(home).join(p.trim_start_matches('~').trim_start_matches('/'));

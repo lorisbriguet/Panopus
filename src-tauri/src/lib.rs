@@ -1,6 +1,7 @@
 pub mod activation;
 mod dbfiles;
 pub mod indexer;
+pub mod watcher;
 
 use tauri::Manager;
 use tauri_plugin_sql::Migration;
@@ -441,6 +442,39 @@ pub fn run() {
                 }) {
                 Ok(conn) => activation::reactivate_all(&conn),
                 Err(e) => eprintln!("startup font reactivation skipped: {e}"),
+            }
+            // Spawn the library watcher thread. Non-fatal on any error: log and skip.
+            // Read library_path from settings (with tilde expansion) and spawn the watcher.
+            match app
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("app data dir: {e}"))
+                .and_then(|dir| {
+                    let db_name = app
+                        .state::<ActiveDb>()
+                        .0
+                        .lock()
+                        .map_err(|e| format!("lock: {e}"))?
+                        .clone();
+                    rusqlite::Connection::open(dir.join(&db_name))
+                        .map_err(|e| format!("open DB: {e}"))
+                })
+                .and_then(|conn| {
+                    let library_path: String = conn
+                        .query_row(
+                            "SELECT value FROM settings WHERE key = 'library_path'",
+                            [],
+                            |r| r.get(0),
+                        )
+                        .map_err(|e| format!("Failed to read library_path: {e}"))?;
+                    Ok(library_path)
+                }) {
+                Ok(library_path) => {
+                    // Reuse the expand_tilde helper from indexer module
+                    let library_root = indexer::expand_tilde(&library_path);
+                    watcher::spawn(app.handle().clone(), library_root);
+                }
+                Err(e) => eprintln!("library watcher setup skipped: {e}"),
             }
             Ok(())
         })
