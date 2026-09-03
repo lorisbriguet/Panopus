@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { AppLanguage } from "../i18n/ui";
+import type { FontQuery } from "../lib/fontFilters";
 import { getThemeById } from "../lib/themes";
 import type { ThemeDefinition } from "../types/theme";
 
@@ -112,6 +113,20 @@ function getInitialAccent(): AccentPreset {
   return ACCENT_PRESETS[0];
 }
 
+export type LibrarySortOption = "family_asc" | "family_desc";
+
+/** Default proof line: the classic French mini-pangram used by the toolbar's "pangram" preset. */
+export const DEFAULT_PROOF_TEXT = "Grand Hôtel du Chien Savant";
+
+export const EMPTY_FONT_QUERY: FontQuery = {
+  search: "",
+  source: null,
+  tagId: null,
+  onlyActive: false,
+  onlyFavorites: false,
+  licence: null,
+};
+
 export interface ActiveTimer {
   taskId: number;
   projectId: number;
@@ -177,6 +192,14 @@ export interface AppState {
   clientsSortDir: "asc" | "desc";
   /** Last selected calendar view — remembered across launches. */
   calendarView: CalendarViewOption;
+  /** Library proofing: sample line rendered in every FontCard preview. */
+  proofText: string;
+  /** Library proofing: preview size in px (12–96). */
+  proofSize: number;
+  /** Library grid filters (ephemeral — resets on relaunch). */
+  libraryQuery: FontQuery;
+  /** Library grid sort — remembered across launches like clientsSortKey. */
+  librarySort: LibrarySortOption;
   activeTimer: ActiveTimer | null;
   currentContext: {
     clientId?: string;
@@ -187,6 +210,11 @@ export interface AppState {
   clearTimer: () => void;
   setClientsSortKey: (key: string) => void;
   setClientsSortDir: (dir: "asc" | "desc") => void;
+  setProofText: (text: string) => void;
+  setProofSize: (size: number) => void;
+  /** Merge a partial patch into libraryQuery (spread-merge, like setContext). */
+  setLibraryQuery: (patch: Partial<FontQuery>) => void;
+  setLibrarySort: (sort: LibrarySortOption) => void;
   setLanguage: (lang: AppLanguage) => void;
   setExportLanguage: (lang: AppLanguage) => void;
   setCalendarView: (view: CalendarViewOption) => void;
@@ -281,6 +309,10 @@ export const useAppStore = create<AppState>((set) => ({
   clientsSortKey: localStorage.getItem("clientsSortKey") ?? "name",
   clientsSortDir: (localStorage.getItem("clientsSortDir") as "asc" | "desc") ?? "asc",
   calendarView: (localStorage.getItem("calendarView") as CalendarViewOption) ?? "timeGridWeek",
+  proofText: localStorage.getItem("proofText") ?? DEFAULT_PROOF_TEXT,
+  proofSize: Number(localStorage.getItem("proofSize")) || 34,
+  libraryQuery: EMPTY_FONT_QUERY,
+  librarySort: (localStorage.getItem("librarySort") as LibrarySortOption) ?? "family_asc",
   activeTimer: loadActiveTimer(),
   currentContext: {},
   // Overwrites any existing timer — callers that care about the running
@@ -301,6 +333,20 @@ export const useAppStore = create<AppState>((set) => ({
   setClientsSortDir: (dir) => {
     localStorage.setItem("clientsSortDir", dir);
     set({ clientsSortDir: dir });
+  },
+  setProofText: (text) => {
+    localStorage.setItem("proofText", text);
+    set({ proofText: text });
+  },
+  setProofSize: (size) => {
+    localStorage.setItem("proofSize", String(size));
+    set({ proofSize: size });
+  },
+  setLibraryQuery: (patch) =>
+    set((s) => ({ libraryQuery: { ...s.libraryQuery, ...patch } })),
+  setLibrarySort: (sort) => {
+    localStorage.setItem("librarySort", sort);
+    set({ librarySort: sort });
   },
   setLanguage: (lang) => {
     localStorage.setItem("appLanguage", lang);

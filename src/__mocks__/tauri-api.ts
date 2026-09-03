@@ -13,6 +13,9 @@ export async function invoke(cmd?: string, args?: Record<string, unknown>): Prom
   }
   return null;
 }
+export function convertFileSrc(path: string): string {
+  return `asset://localhost/${path}`;
+}
 export async function listen(): Promise<() => void> {
   return () => {};
 }
