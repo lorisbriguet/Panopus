@@ -37,7 +37,7 @@ CREATE TABLE designer_sources (designer_id INTEGER NOT NULL REFERENCES designers
   source TEXT NOT NULL, PRIMARY KEY (designer_id, source));
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 INSERT INTO settings (key, value) VALUES
- ('library_path', '/Users/loris.briguet/Documents/GitHub/panopus-library'),
+ ('library_path', '~/Documents/GitHub/panopus-library'),
  ('proof_text', 'Grand Hôtel du Chien Savant'), ('proof_size', '34');
 "#;
 
