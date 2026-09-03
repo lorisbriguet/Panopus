@@ -15,6 +15,12 @@ interface ProofToolbarProps {
   sources: string[];
   /** Distinct licence statuses present in the loaded rows (for the licence filter). */
   licences: string[];
+  /**
+   * Bulk affordance: replace the selection with every currently-shown font
+   * ("activate all for a source/licence"). Only offered while a specific
+   * source or licence filter narrows the grid.
+   */
+  onSelectAllShown?: () => void;
 }
 
 /**
@@ -22,7 +28,7 @@ interface ProofToolbarProps {
  * text, presets, size) and query controls (search, sort, source/licence,
  * active/favorite gates). All state lives in the app store's library slice.
  */
-export function ProofToolbar({ sources, licences }: ProofToolbarProps) {
+export function ProofToolbar({ sources, licences, onSelectAllShown }: ProofToolbarProps) {
   const t = useT();
   const proofText = useAppStore((s) => s.proofText);
   const proofSize = useAppStore((s) => s.proofSize);
@@ -108,6 +114,12 @@ export function ProofToolbar({ sources, licences }: ProofToolbarProps) {
             </option>
           ))}
         </Select>
+        {onSelectAllShown &&
+          (libraryQuery.source !== null || libraryQuery.licence !== null) && (
+            <Button variant="ghost" size="sm" onClick={onSelectAllShown}>
+              {t.select_all_shown}
+            </Button>
+          )}
         <label className="flex items-center gap-1.5 text-xs text-muted ml-2">
           <Toggle
             checked={libraryQuery.onlyActive}

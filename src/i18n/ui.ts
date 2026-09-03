@@ -115,6 +115,15 @@ const ui = {
     system_font_locked: "System fonts stay active",
     font_label: "font",
     fonts_label: "fonts",
+
+    // Bulk activation (T10)
+    bulk_selected: "selected",
+    bulk_activate: "Activate",
+    bulk_deactivate: "Deactivate",
+    bulk_clear: "Clear selection",
+    select_all_shown: "Select all shown",
+    select_font: "Select font",
+    active_label: "active",
   },
   fr: {
     // Sidebar / Nav
@@ -230,6 +239,15 @@ const ui = {
     system_font_locked: "Les polices systeme restent actives",
     font_label: "police",
     fonts_label: "polices",
+
+    // Bulk activation (T10)
+    bulk_selected: "selectionnees",
+    bulk_activate: "Activer",
+    bulk_deactivate: "Desactiver",
+    bulk_clear: "Effacer la selection",
+    select_all_shown: "Selectionner les polices affichees",
+    select_font: "Selectionner la police",
+    active_label: "actives",
   },
 } as const;
 

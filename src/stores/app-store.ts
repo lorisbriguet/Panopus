@@ -200,6 +200,12 @@ export interface AppState {
   libraryQuery: FontQuery;
   /** Library grid sort — remembered across launches like clientsSortKey. */
   librarySort: LibrarySortOption;
+  /**
+   * Bulk-selection for the library grid: font ids with a ticked checkbox.
+   * Stored as number[] (not Set) so zustand shallow snapshots stay plain data;
+   * ephemeral like libraryQuery — a selection has no meaning across launches.
+   */
+  selectedIds: number[];
   activeTimer: ActiveTimer | null;
   currentContext: {
     clientId?: string;
@@ -215,6 +221,12 @@ export interface AppState {
   /** Merge a partial patch into libraryQuery (spread-merge, like setContext). */
   setLibraryQuery: (patch: Partial<FontQuery>) => void;
   setLibrarySort: (sort: LibrarySortOption) => void;
+  /** Tick/untick one font in the bulk selection. */
+  toggleSelected: (id: number) => void;
+  /** Empty the bulk selection (hides the BulkBar). */
+  clearSelection: () => void;
+  /** REPLACE the selection with the given ids ("select all shown"). */
+  selectMany: (ids: number[]) => void;
   setLanguage: (lang: AppLanguage) => void;
   setExportLanguage: (lang: AppLanguage) => void;
   setCalendarView: (view: CalendarViewOption) => void;
@@ -313,6 +325,7 @@ export const useAppStore = create<AppState>((set) => ({
   proofSize: Number(localStorage.getItem("proofSize")) || 34,
   libraryQuery: EMPTY_FONT_QUERY,
   librarySort: (localStorage.getItem("librarySort") as LibrarySortOption) ?? "family_asc",
+  selectedIds: [],
   activeTimer: loadActiveTimer(),
   currentContext: {},
   // Overwrites any existing timer — callers that care about the running
@@ -348,6 +361,14 @@ export const useAppStore = create<AppState>((set) => ({
     localStorage.setItem("librarySort", sort);
     set({ librarySort: sort });
   },
+  toggleSelected: (id) =>
+    set((s) => ({
+      selectedIds: s.selectedIds.includes(id)
+        ? s.selectedIds.filter((x) => x !== id)
+        : [...s.selectedIds, id],
+    })),
+  clearSelection: () => set({ selectedIds: [] }),
+  selectMany: (ids) => set({ selectedIds: [...ids] }),
   setLanguage: (lang) => {
     localStorage.setItem("appLanguage", lang);
     set({ language: lang });

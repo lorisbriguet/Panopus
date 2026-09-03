@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { EmptyState, PageHeader, PageSpinner } from "../components/ui";
+import { Badge, EmptyState, PageHeader, PageSpinner } from "../components/ui";
+import { BulkBar } from "../components/fonts/BulkBar";
 import { FontCard } from "../components/fonts/FontCard";
 import { ProofToolbar } from "../components/fonts/ProofToolbar";
 import { useFonts } from "../hooks/useFonts";
@@ -14,6 +15,7 @@ export function LibraryPage() {
   const librarySort = useAppStore((s) => s.librarySort);
   const proofText = useAppStore((s) => s.proofText);
   const proofSize = useAppStore((s) => s.proofSize);
+  const selectMany = useAppStore((s) => s.selectMany);
 
   const sources = useMemo(
     () => [...new Set((rows ?? []).map((r) => r.source))].sort(),
@@ -36,14 +38,32 @@ export function LibraryPage() {
     return out;
   }, [rows, libraryQuery, librarySort]);
 
+  const activeCount = useMemo(
+    () => (rows ?? []).filter((r) => r.active === 1).length,
+    [rows]
+  );
+
   return (
     <>
       <PageHeader title={t.library}>
+        <Badge variant="success">
+          {activeCount} {t.active_label}
+        </Badge>
         <span className="text-sm text-muted">
           {filtered.length} {filtered.length === 1 ? t.font_label : t.fonts_label}
         </span>
       </PageHeader>
-      <ProofToolbar sources={sources} licences={licences} />
+      <ProofToolbar
+        sources={sources}
+        licences={licences}
+        // "Activate all for a source/licence": tick every currently-filtered
+        // row (system fonts excluded — they can't be toggled) so the BulkBar
+        // can act on the whole set with one click.
+        onSelectAllShown={() =>
+          selectMany(filtered.filter((f) => f.is_system !== 1).map((f) => f.id))
+        }
+      />
+      <BulkBar />
       {isLoading ? (
         <PageSpinner label={t.loading_fonts} />
       ) : filtered.length === 0 ? (

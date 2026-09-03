@@ -5,6 +5,7 @@ import type { BadgeVariant } from "../ui/Badge";
 import { Toggle } from "../ui/Toggle";
 import { useToggleFavorite } from "../../hooks/useFonts";
 import { useSetActive } from "../../hooks/useActivation";
+import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
 import type { FontRow } from "../../lib/fontFilters";
 import { ensureFontFace } from "./FontFaceLoader";
@@ -36,6 +37,10 @@ export const FontCard = memo(function FontCard({ font, proofText, proofSize }: F
   const [family, setFamily] = useState<string | null>(null);
   const toggleFavorite = useToggleFavorite();
   const setActive = useSetActive();
+  // Boolean selector: the memoized card only re-renders when ITS tick flips,
+  // not on every selection change across a 6'345-row library.
+  const selected = useAppStore((s) => s.selectedIds.includes(font.id));
+  const toggleSelected = useAppStore((s) => s.toggleSelected);
 
   useEffect(() => {
     if (family) return;
@@ -78,11 +83,23 @@ export const FontCard = memo(function FontCard({ font, proofText, proofSize }: F
         {proofText}
       </div>
       <div className="mt-3 pt-2 border-t border-[var(--color-border-divider)] flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-sm font-medium truncate">
-            {font.family} <span className="text-muted font-normal">{font.style}</span>
+        <div className="min-w-0 flex items-center gap-2.5">
+          {/* System fonts can't be (de)activated, so bulk-selecting them
+              would only produce guaranteed per-id failures — keep them out. */}
+          <input
+            type="checkbox"
+            checked={selected}
+            disabled={isSystem}
+            onChange={() => toggleSelected(font.id)}
+            aria-label={t.select_font}
+            className="shrink-0 h-4 w-4 accent-accent focus-accent disabled:opacity-40"
+          />
+          <div className="min-w-0">
+            <div className="text-sm font-medium truncate">
+              {font.family} <span className="text-muted font-normal">{font.style}</span>
+            </div>
+            <div className="text-xs text-muted truncate">{font.source}</div>
           </div>
-          <div className="text-xs text-muted truncate">{font.source}</div>
         </div>
         <div className="flex items-center gap-2.5 shrink-0">
           <Badge variant={LICENCE_VARIANTS[font.licence_status] ?? "neutral"}>
