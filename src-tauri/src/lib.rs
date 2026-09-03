@@ -6,6 +6,41 @@ use serde_json::Value as JsonValue;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+/// Panopus v1 initial schema migration
+pub const MIGRATION_V1: &str = r#"
+CREATE TABLE fonts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  path TEXT NOT NULL UNIQUE,
+  family TEXT NOT NULL, style TEXT NOT NULL DEFAULT 'Regular',
+  ps_name TEXT, source TEXT NOT NULL,
+  format TEXT NOT NULL, glyph_count INTEGER NOT NULL DEFAULT 0,
+  hash TEXT NOT NULL,
+  is_system INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 0,
+  favorite INTEGER NOT NULL DEFAULT 0,
+  quarantined INTEGER NOT NULL DEFAULT 0,
+  added_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_fonts_source ON fonts(source);
+CREATE INDEX idx_fonts_family ON fonts(family);
+CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, color TEXT NOT NULL DEFAULT 'blue');
+CREATE TABLE font_tags (font_id INTEGER NOT NULL REFERENCES fonts(id) ON DELETE CASCADE,
+  tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE, PRIMARY KEY (font_id, tag_id));
+CREATE TABLE sources (name TEXT PRIMARY KEY, licence_status TEXT NOT NULL DEFAULT 'free', note TEXT);
+INSERT INTO sources (name, licence_status) VALUES
+ ('steffmann','free'),('im-fell','free'),('astigmatic','free'),('wiegel','free'),
+ ('opti','rights unclear'),('bestofdafont','personal use'),('bitstream','commercial'),
+ ('klein','donationware'),('nickcurtis','free'),('apostrophic','free'),('pape','free'),('system','free');
+CREATE TABLE designers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, slug TEXT NOT NULL UNIQUE,
+  content_json TEXT NOT NULL DEFAULT '{}', links TEXT NOT NULL DEFAULT '[]');
+CREATE TABLE designer_sources (designer_id INTEGER NOT NULL REFERENCES designers(id) ON DELETE CASCADE,
+  source TEXT NOT NULL, PRIMARY KEY (designer_id, source));
+CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+INSERT INTO settings (key, value) VALUES
+ ('library_path', '/Users/loris.briguet/Documents/GitHub/panopus-library'),
+ ('proof_text', 'Grand Hôtel du Chien Savant'), ('proof_size', '34');
+"#;
+
 /// Global state: the active DB filename (default: "panopus.db").
 /// In test mode this switches to "panopus_test.db".
 struct ActiveDb(Mutex<String>);
@@ -333,8 +368,14 @@ async fn open_in_finder(path: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Task 3 will add v1 migration
-    let migrations: Vec<Migration> = vec![];
+    let migrations: Vec<Migration> = vec![
+        Migration {
+            version: 1,
+            description: "panopus_initial",
+            sql: MIGRATION_V1,
+            kind: tauri_plugin_sql::MigrationKind::Up,
+        },
+    ];
 
     tauri::Builder::default()
         .manage(ActiveDb(Mutex::new("panopus.db".to_string())))
