@@ -1,0 +1,424 @@
+mod dbfiles;
+
+use tauri::Manager;
+use tauri_plugin_sql::Migration;
+use serde_json::Value as JsonValue;
+use std::path::PathBuf;
+use std::sync::Mutex;
+
+/// Global state: the active DB filename (default: "panopus.db").
+/// In test mode this switches to "panopus_test.db".
+struct ActiveDb(Mutex<String>);
+
+/// A single SQL statement with optional bind parameters.
+#[derive(serde::Deserialize)]
+struct SqlStatement {
+    sql: String,
+    params: Vec<JsonValue>,
+}
+
+/// Execute multiple SQL statements in a single SQLite transaction.
+/// This avoids the connection-pool issue with the Tauri SQL plugin
+/// where each IPC call may get a different connection.
+/// Upper bound on statements per batch — the largest legitimate batch is a
+/// full backup restore (a few thousand rows); anything beyond this is a bug
+/// or abuse, not a real workload.
+const MAX_BATCH_STATEMENTS: usize = 10_000;
+
+#[tauri::command]
+fn execute_batch(
+    app: tauri::AppHandle,
+    statements: Vec<SqlStatement>,
+) -> Result<serde_json::Value, String> {
+    if statements.len() > MAX_BATCH_STATEMENTS {
+        return Err(format!(
+            "batch too large: {} statements (max {MAX_BATCH_STATEMENTS})",
+            statements.len()
+        ));
+    }
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let active_db = app.state::<ActiveDb>();
+    let db_name = active_db.0.lock().map_err(|e| format!("Lock error: {e}"))?.clone();
+    let db_path: PathBuf = app_dir.join(&db_name);
+
+    let conn =
+        rusqlite::Connection::open(&db_path).map_err(|e| format!("Failed to open DB: {e}"))?;
+
+    // Enforce foreign keys (rusqlite default is OFF) and wait instead of
+    // failing immediately if another connection holds the write lock.
+    conn.pragma_update(None, "foreign_keys", true)
+        .map_err(|e| format!("Failed to enable foreign_keys: {e}"))?;
+    conn.busy_timeout(std::time::Duration::from_millis(5000))
+        .map_err(|e| format!("Failed to set busy_timeout: {e}"))?;
+
+    conn.execute_batch("BEGIN")
+        .map_err(|e| format!("BEGIN failed: {e}"))?;
+
+    let mut last_insert_id: i64 = 0;
+
+    for (i, stmt) in statements.iter().enumerate() {
+        // Check if this statement references the parent insert ID
+        let uses_parent_id = stmt.sql.contains("$LAST_INSERT_ID");
+        // Allow referencing the last insert ID in subsequent statements
+        let sql = stmt.sql.replace("$LAST_INSERT_ID", &last_insert_id.to_string());
+        // Convert $1, $2, ... placeholders to ?1, ?2, ... for rusqlite
+        let sql = convert_placeholders(&sql);
+        let params: Vec<Box<dyn rusqlite::types::ToSql>> = stmt
+            .params
+            .iter()
+            .map(|v| json_to_sql(v))
+            .collect();
+        let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|b| &**b).collect();
+
+        match conn.execute(&sql, refs.as_slice()) {
+            Ok(_) => {
+                // Only update last_insert_id for parent INSERTs (statements that
+                // don't reference $LAST_INSERT_ID). This ensures child INSERTs
+                // (e.g. line items) don't overwrite the parent's rowid.
+                if !uses_parent_id {
+                    last_insert_id = conn.last_insert_rowid();
+                }
+            }
+            Err(e) => {
+                let _ = conn.execute_batch("ROLLBACK");
+                return Err(format!("statement {i} failed: {e}"));
+            }
+        }
+    }
+
+    if let Err(e) = conn.execute_batch("COMMIT") {
+        // Self-documenting all-or-nothing: never leave a transaction open
+        let _ = conn.execute_batch("ROLLBACK");
+        return Err(format!("COMMIT failed: {e}"));
+    }
+
+    Ok(serde_json::json!({ "lastInsertId": last_insert_id }))
+}
+
+/// Convert Tauri SQL plugin style $1, $2 placeholders to rusqlite ?1, ?2.
+/// Text inside single-quoted SQL string literals is left untouched — a
+/// literal like '$1 fee' must not become a placeholder.
+fn convert_placeholders(sql: &str) -> String {
+    let mut result = String::with_capacity(sql.len());
+    let mut chars = sql.chars().peekable();
+    let mut in_string = false;
+    while let Some(c) = chars.next() {
+        if c == '\'' {
+            in_string = !in_string;
+            result.push(c);
+            continue;
+        }
+        if in_string {
+            result.push(c);
+            continue;
+        }
+        if c == '$' {
+            // Check if followed by digits
+            let mut digits = String::new();
+            while let Some(&d) = chars.peek() {
+                if d.is_ascii_digit() {
+                    digits.push(d);
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            if digits.is_empty() {
+                result.push('$');
+            } else {
+                result.push('?');
+                result.push_str(&digits);
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
+fn json_to_sql(v: &JsonValue) -> Box<dyn rusqlite::types::ToSql> {
+    match v {
+        JsonValue::Null => Box::new(Option::<String>::None),
+        JsonValue::Bool(b) => Box::new(if *b { 1i64 } else { 0i64 }),
+        JsonValue::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Box::new(i)
+            } else {
+                Box::new(n.as_f64().unwrap_or(0.0))
+            }
+        }
+        JsonValue::String(s) => Box::new(s.clone()),
+        _ => Box::new(v.to_string()),
+    }
+}
+
+/// Snapshot production DB and copy to test DB. Returns the test DB path.
+#[tauri::command]
+fn enter_test_mode(app: tauri::AppHandle) -> Result<String, String> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let prod_db = app_dir.join("panopus.db");
+    let snapshot_db = app_dir.join("panopus_snapshot.db");
+    let test_db = app_dir.join("panopus_test.db");
+
+    // Snapshot production DB (safety net) — WAL-safe consistent image
+    dbfiles::snapshot_db_file(&prod_db, &snapshot_db)
+        .map_err(|e| format!("Failed to snapshot production DB: {e}"))?;
+
+    // Copy production DB to test DB
+    dbfiles::snapshot_db_file(&prod_db, &test_db)
+        .map_err(|e| format!("Failed to create test DB: {e}"))?;
+
+    // Switch active DB to test
+    let active_db = app.state::<ActiveDb>();
+    *active_db.0.lock().map_err(|e| format!("Lock error: {e}"))? = "panopus_test.db".to_string();
+
+    Ok(test_db.to_string_lossy().to_string())
+}
+
+/// Exit test mode: switch back to production DB and remove test DB.
+#[tauri::command]
+fn exit_test_mode(app: tauri::AppHandle) -> Result<(), String> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let test_db = app_dir.join("panopus_test.db");
+
+    // Switch back to production DB
+    let active_db = app.state::<ActiveDb>();
+    *active_db.0.lock().map_err(|e| format!("Lock error: {e}"))? = "panopus.db".to_string();
+
+    // Remove test DB together with its WAL/SHM companions
+    dbfiles::remove_db_files(&test_db);
+
+    Ok(())
+}
+
+/// Enter presentation mode: snapshot prod DB, create empty presentation DB, switch to it.
+#[tauri::command]
+fn enter_presentation_mode(app: tauri::AppHandle) -> Result<String, String> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let prod_db = app_dir.join("panopus.db");
+    let snapshot_db = app_dir.join("panopus_snapshot.db");
+    let pres_db = app_dir.join("panopus_presentation.db");
+
+    // Snapshot production DB (safety net) — WAL-safe consistent image
+    dbfiles::snapshot_db_file(&prod_db, &snapshot_db)
+        .map_err(|e| format!("Failed to snapshot production DB: {e}"))?;
+
+    // Copy production DB to presentation DB (so schema/migrations are intact)
+    dbfiles::snapshot_db_file(&prod_db, &pres_db)
+        .map_err(|e| format!("Failed to create presentation DB: {e}"))?;
+
+    // Switch active DB to presentation
+    let active_db = app.state::<ActiveDb>();
+    *active_db.0.lock().map_err(|e| format!("Lock error: {e}"))? = "panopus_presentation.db".to_string();
+
+    Ok(pres_db.to_string_lossy().to_string())
+}
+
+/// Exit presentation mode: switch back to production DB and remove presentation DB.
+#[tauri::command]
+fn exit_presentation_mode(app: tauri::AppHandle) -> Result<(), String> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let pres_db = app_dir.join("panopus_presentation.db");
+
+    // Switch back to production DB
+    let active_db = app.state::<ActiveDb>();
+    *active_db.0.lock().map_err(|e| format!("Lock error: {e}"))? = "panopus.db".to_string();
+
+    // Remove presentation DB together with its WAL/SHM companions
+    dbfiles::remove_db_files(&pres_db);
+
+    Ok(())
+}
+
+/// Create a manual snapshot of the production DB.
+#[tauri::command]
+fn snapshot_db(app: tauri::AppHandle) -> Result<String, String> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let prod_db = app_dir.join("panopus.db");
+    let snapshot_db = app_dir.join("panopus_snapshot.db");
+
+    dbfiles::snapshot_db_file(&prod_db, &snapshot_db)
+        .map_err(|e| format!("Failed to snapshot DB: {e}"))?;
+
+    Ok(snapshot_db.to_string_lossy().to_string())
+}
+
+/// Restore production DB from snapshot.
+#[tauri::command]
+fn restore_snapshot(app: tauri::AppHandle) -> Result<(), String> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let prod_db = app_dir.join("panopus.db");
+    let snapshot_db = app_dir.join("panopus_snapshot.db");
+
+    if !snapshot_db.exists() {
+        return Err("No snapshot found".to_string());
+    }
+
+    // Online backup API: restores INTO the live DB with proper locking, so
+    // open plugin connections keep working and see the restored content.
+    dbfiles::restore_db_file(&snapshot_db, &prod_db)
+        .map_err(|e| format!("Failed to restore snapshot: {e}"))?;
+
+    Ok(())
+}
+
+/// Check if a snapshot file exists.
+#[tauri::command]
+fn has_snapshot(app: tauri::AppHandle) -> Result<bool, String> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    Ok(app_dir.join("panopus_snapshot.db").exists())
+}
+
+/// Get the currently active DB name.
+#[tauri::command]
+fn get_active_db(app: tauri::AppHandle) -> Result<String, String> {
+    let active_db = app.state::<ActiveDb>();
+    let name = active_db.0.lock().map_err(|e| format!("Lock error: {e}"))?.clone();
+    Ok(name)
+}
+
+/// Open a directory in Finder, or reveal a file in its enclosing folder
+/// (macOS `open` command). The path is canonicalized first: it must exist
+/// and resolve to an absolute path, and a canonical path can never start
+/// with `-`, so it cannot be misparsed as an `open` flag.
+#[tauri::command]
+async fn open_in_finder(path: String) -> Result<(), String> {
+    let canonical =
+        std::fs::canonicalize(&path).map_err(|e| format!("path not found: {path} ({e})"))?;
+    if !canonical.is_absolute() {
+        return Err(format!("path is not absolute: {path}"));
+    }
+    let mut cmd = std::process::Command::new("open");
+    if canonical.is_file() {
+        // Reveal files in their enclosing Finder window instead of
+        // launching the default application for the file type.
+        cmd.arg("-R");
+    }
+    let output = cmd.arg(&canonical).output().map_err(|e| e.to_string())?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if stderr.is_empty() {
+            Err(format!("open failed for {path}: status {}", output.status))
+        } else {
+            Err(format!("open failed for {path}: {stderr}"))
+        }
+    }
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    // Task 3 will add v1 migration
+    let migrations: Vec<Migration> = vec![];
+
+    tauri::Builder::default()
+        .manage(ActiveDb(Mutex::new("panopus.db".to_string())))
+        .plugin(
+            tauri_plugin_sql::Builder::default()
+                .add_migrations("sqlite:panopus.db", migrations)
+                .build(),
+        )
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_window_state::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
+        .invoke_handler(tauri::generate_handler![
+            execute_batch,
+            enter_test_mode,
+            exit_test_mode,
+            enter_presentation_mode,
+            exit_presentation_mode,
+            snapshot_db,
+            restore_snapshot,
+            has_snapshot,
+            get_active_db,
+            open_in_finder,
+        ])
+        .setup(|app| {
+            if cfg!(debug_assertions) {
+                app.handle().plugin(
+                    tauri_plugin_log::Builder::default()
+                        .level(log::LevelFilter::Info)
+                        .build(),
+                )?;
+            }
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn converts_dollar_placeholders_to_question_marks() {
+        assert_eq!(
+            convert_placeholders("SELECT * FROM t WHERE a = $1 AND b = $12"),
+            "SELECT * FROM t WHERE a = ?1 AND b = ?12"
+        );
+    }
+
+    #[test]
+    fn leaves_a_bare_dollar_untouched() {
+        assert_eq!(convert_placeholders("a $ b"), "a $ b");
+    }
+
+    #[test]
+    fn does_not_convert_inside_string_literals() {
+        assert_eq!(
+            convert_placeholders("UPDATE t SET label = '$1 fee' WHERE id = $1"),
+            "UPDATE t SET label = '$1 fee' WHERE id = ?1"
+        );
+        // '' is an escaped quote INSIDE the literal — $2 in the literal must
+        // survive, the one outside must convert
+        assert_eq!(
+            convert_placeholders("SELECT 'it''s $2', $2"),
+            "SELECT 'it''s $2', ?2"
+        );
+    }
+
+    #[test]
+    fn json_values_bind_with_their_sql_types() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        let q = |v: &JsonValue| -> rusqlite::types::Value {
+            let boxed = json_to_sql(v);
+            conn.query_row("SELECT ?1", [&*boxed], |r| r.get(0)).unwrap()
+        };
+        use rusqlite::types::Value;
+        assert_eq!(q(&serde_json::json!("x")), Value::Text("x".into()));
+        assert_eq!(q(&serde_json::json!(7)), Value::Integer(7));
+        assert_eq!(q(&serde_json::json!(1.5)), Value::Real(1.5));
+        assert_eq!(q(&serde_json::json!(true)), Value::Integer(1));
+        assert_eq!(q(&serde_json::json!(null)), Value::Null);
+    }
+}

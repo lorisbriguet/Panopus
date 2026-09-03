@@ -1,0 +1,36 @@
+export type ProjectStatus = "active" | "completed" | "on_hold" | "cancelled";
+
+export type BlockType = "tasks" | "workload" | "resources" | "notes" | "named_tables" | "invoices" | "quotes" | "wiki";
+
+export interface LayoutBlock {
+  type: BlockType;
+  collapsed?: boolean;
+  width?: "full" | "half";
+}
+
+export type LayoutConfig = LayoutBlock[];
+
+export const STANDARD_LAYOUT: LayoutConfig = [
+  { type: "tasks" },
+  { type: "notes", width: "half" },
+  { type: "resources", width: "half" },
+  { type: "workload" },
+  { type: "named_tables" },
+  { type: "invoices", width: "half" },
+  { type: "quotes", width: "half" },
+];
+
+export interface Project {
+  id: number;
+  client_id: string;
+  name: string;
+  description: string;
+  status: ProjectStatus;
+  start_date: string | null;
+  deadline: string | null;
+  notes: string;
+  layout_config: string | null;
+  folder_path: string | null;
+  created_at: string;
+  updated_at: string;
+}

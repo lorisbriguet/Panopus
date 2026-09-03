@@ -1,0 +1,634 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-sidebar: #f8f8f8;
+  --color-sidebar-border: #e5e5e5;
+  --color-accent: #2563eb;
+  --color-accent-hover: color-mix(in srgb, var(--color-accent) 85%, black);
+  --color-accent-light: #dbeafe;
+  --color-muted: #5d6570;
+  --color-danger: #dc2626;
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-success-bg: #dcfce7;
+  --color-success-text: #15803d;
+  --color-warning-bg: #fef9c3;
+  --color-warning-text: #a16207;
+  --color-danger-bg: #fee2e2;
+  --color-danger-text: #dc2626;
+  --color-info-bg: #dbeafe;
+  --color-info-text: #1d4ed8;
+  --color-indigo-bg: #e0e7ff;
+  --color-indigo-text: #4338ca;
+  --color-banner-test: #f59e0b;
+  --color-banner-test-hover: #d97706;
+  --color-banner-presentation: #6366f1;
+  --color-banner-presentation-hover: #4f46e5;
+  --color-chart-1: #2563eb;
+  --color-chart-2: #16a34a;
+  --color-chart-3: #d97706;
+  --color-chart-4: #dc2626;
+  --color-chart-5: #8b5cf6;
+  --color-chart-6: #06b6d4;
+  --color-chart-7: #ec4899;
+  --color-chart-8: #84cc16;
+  --color-bg: #ffffff;
+  --color-text: #111827;
+  --color-text-secondary: #374151;
+  --color-surface: #ffffff;
+  --color-border: #e5e5e5;
+  --color-border-divider: #f7f7f7;
+  --color-border-header: #f0f0f0;
+  --color-input-bg: #f5f5f5;
+  --color-input-border: #e5e5e5;
+  --color-hover-row: #f8f8f8;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: #ffffff;
+  color: #111827;
+  overflow: hidden;
+}
+
+.dark body,
+.dark > body {
+  background: #111111;
+  color: #e5e5e5;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+}
+
+[cmdk-group-heading] {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+  padding: 6px 8px;
+}
+
+/* ─── Dark mode ─── */
+.dark {
+  color-scheme: dark;
+
+  --color-gray-50: #1a1a1a;
+  --color-gray-100: #252525;
+  --color-gray-200: #333333;
+  --color-gray-300: #484848;
+  --color-gray-400: #5c5c5c;
+  --color-gray-500: #7a7a7a;
+  --color-gray-600: #a8a8a8;
+  --color-gray-700: #d4d4d4;
+  --color-gray-800: #e5e5e5;
+  --color-gray-900: #f5f5f5;
+  --color-gray-950: #fafafa;
+
+  --color-sidebar: #161616;
+  --color-sidebar-border: #333333;
+  --color-accent-light: var(--color-accent-dark-light, #172554);
+  --color-muted: #b0b0b0;
+  --color-chart-1: #60a5fa;
+  --color-chart-2: #4ade80;
+  --color-chart-3: #fbbf24;
+  --color-chart-4: #f87171;
+  --color-chart-5: #a78bfa;
+  --color-chart-6: #22d3ee;
+  --color-chart-7: #f472b6;
+  --color-chart-8: #a3e635;
+  --color-success-bg: #052e16;
+  --color-success-text: #4ade80;
+  --color-warning-bg: #1c1917;
+  --color-warning-text: #fbbf24;
+  --color-danger-bg: #2a1215;
+  --color-danger-text: #f87171;
+  --color-info-bg: #0c1a2e;
+  --color-info-text: #38bdf8;
+  --color-indigo-bg: #1a1a2e;
+  --color-indigo-text: #818cf8;
+  --color-banner-test: #d97706;
+  --color-banner-test-hover: #b45309;
+  --color-banner-presentation: #4f46e5;
+  --color-banner-presentation-hover: #4338ca;
+  --color-bg: #111111;
+  --color-text: #e5e5e5;
+  --color-text-secondary: #d4d4d4;
+  --color-surface: #161616;
+  --color-border: #333333;
+  --color-border-divider: #1f1f1f;
+  --color-border-header: #2a2a2a;
+  --color-input-bg: #1a1a1a;
+  --color-input-border: #2a2a2a;
+  --color-hover-row: #1a1a1a;
+}
+
+.dark input,
+.dark select:not(.appearance-none),
+.dark textarea {
+  background-color: #1a1a1a;
+  color: #e5e5e5;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #525252;
+}
+
+/* ─── Indicator dots (status, priority, legend) ─── */
+.dot-sm { width: 6px; height: 6px; border-radius: 99px; display: inline-block; flex-shrink: 0; }
+.dot    { width: 8px; height: 8px; border-radius: 99px; display: inline-block; flex-shrink: 0; }
+
+/* ─── Focus ring that follows accent at runtime ─── */
+.focus-accent:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--color-surface, #fff), 0 0 0 3px color-mix(in srgb, var(--color-accent) 50%, transparent);
+}
+
+/* Global keyboard-focus visibility for raw buttons and button-like elements.
+   Same accent ring as .focus-accent; :not(.focus-accent) keeps the two rules
+   from double-applying on elements that already opt in via the class. */
+button:focus-visible:not(.focus-accent),
+[role="button"]:focus-visible:not(.focus-accent) {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--color-surface, #fff), 0 0 0 3px color-mix(in srgb, var(--color-accent) 50%, transparent);
+}
+
+/* ─── FullCalendar overrides ─── */
+.fc-studio .fc {
+  --fc-border-color: var(--color-border-divider);
+  --fc-today-bg-color: transparent;
+  --fc-now-indicator-color: #dc2626;
+  --fc-event-border-color: transparent;
+  --fc-event-bg-color: color-mix(in srgb, var(--color-accent) 15%, white);
+  --fc-event-text-color: var(--color-accent);
+  font-size: 13px;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.fc-studio .fc .fc-button {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  text-transform: capitalize;
+  font-weight: 500;
+  box-shadow: none !important;
+}
+
+.fc-studio .fc .fc-button-primary {
+  background: transparent;
+  border: 1px solid var(--color-input-border);
+  color: var(--color-muted);
+}
+
+.fc-studio .fc .fc-button-primary:hover {
+  background: var(--color-hover-row);
+  border-color: var(--color-border-header);
+  color: var(--color-text);
+}
+
+.fc-studio .fc .fc-button-primary.fc-button-active,
+.fc-studio .fc .fc-button-primary:active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
+.fc-studio .fc .fc-col-header-cell {
+  padding: 8px 0;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-muted);
+}
+
+.fc-studio .fc .fc-daygrid-day-number {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.fc-studio .fc .fc-event {
+  border-radius: 99px;
+  cursor: grab;
+  border: none;
+  padding: 1px 6px;
+  font-size: 11px;
+}
+
+.fc-studio .fc .fc-timegrid-event {
+  border-radius: 6px;
+}
+
+.fc-studio .fc .fc-h-event {
+  border-radius: 4px;
+}
+
+/* Today: accent text on header + subtle column tint */
+.fc-studio .fc .fc-day-today .fc-daygrid-day-number {
+  background: transparent;
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.fc-studio .fc .fc-col-header-cell.fc-day-today {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.fc-studio .fc .fc-day-today {
+  background: color-mix(in srgb, var(--color-accent) 5%, transparent) !important;
+}
+
+.fc-studio .fc .fc-timegrid-col.fc-day-today {
+  background: color-mix(in srgb, var(--color-accent) 5%, transparent);
+}
+
+/* Other month days: faded */
+.fc-studio .fc .fc-day-other {
+  opacity: 0.3;
+}
+
+.fc-studio .fc .fc-event.fc-event-dragging,
+.fc-studio .fc .fc-event.fc-event-resizing {
+  cursor: grabbing;
+}
+
+/* Keep correct cursor everywhere while dragging or resizing */
+.fc-studio .fc.fc-event-dragging,
+.fc-studio .fc.fc-event-dragging * {
+  cursor: grabbing !important;
+}
+
+.fc-studio .fc.fc-event-resizing,
+.fc-studio .fc.fc-event-resizing * {
+  cursor: ns-resize !important;
+}
+
+.fc-studio .fc .fc-event.fc-priority-high {
+  --fc-event-bg-color: #fef2f2;
+  --fc-event-text-color: #dc2626;
+}
+
+.fc-studio .fc .fc-event.fc-priority-medium {
+  --fc-event-bg-color: #fefce8;
+  --fc-event-text-color: #ca8a04;
+}
+
+.fc-studio .fc .fc-event.fc-done {
+  --fc-event-bg-color: #f0fdf4;
+  --fc-event-text-color: #16a34a;
+}
+
+.fc-studio .fc .fc-event.fc-deadline {
+  --fc-event-bg-color: #fef2f2;
+  --fc-event-text-color: #b91c1c;
+}
+
+.fc-studio .fc .fc-event.fc-invoice-overdue {
+  --fc-event-bg-color: #fef2f2;
+  --fc-event-text-color: #dc2626;
+}
+
+.fc-studio .fc .fc-event.fc-invoice-sent {
+  --fc-event-bg-color: #fefce8;
+  --fc-event-text-color: #ca8a04;
+}
+
+.fc-studio .fc .fc-event.fc-quote-expiry {
+  --fc-event-bg-color: #fefce8;
+  --fc-event-text-color: #ca8a04;
+}
+
+.fc-studio .fc .fc-timegrid-slot {
+  height: 32px;
+}
+
+/* Thin separator between all-day and time grid */
+.fc-studio .fc .fc-timegrid-divider {
+  padding: 0;
+  border-top: 1px solid var(--color-border-divider);
+  border-bottom: none;
+  background: transparent;
+}
+
+/* Remove horizontal lines in time label column */
+.fc-studio .fc .fc-timegrid-slot-label {
+  border-top: none !important;
+}
+
+/* Remove bottom clipping — no border-radius on the calendar body */
+.fc-studio .fc .fc-view-harness {
+  border-radius: 0;
+  overflow: visible;
+}
+
+.fc-studio .fc .fc-scrollgrid {
+  border-radius: 0;
+}
+
+/* Title left-aligned with spacing after nav buttons */
+.fc-studio .fc .fc-toolbar-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-left: 8px !important;
+}
+
+.fc-studio .fc .fc-daygrid-more-link {
+  font-size: 10px;
+  color: var(--color-muted);
+}
+
+/* Dark mode */
+.dark .fc-studio .fc {
+  --fc-border-color: var(--color-border-divider);
+  --fc-today-bg-color: transparent;
+  --fc-page-bg-color: #111111;
+  --fc-neutral-bg-color: #1a1a1a;
+  --fc-event-bg-color: color-mix(in srgb, var(--color-accent) 25%, #1a1a1a);
+  --fc-event-text-color: color-mix(in srgb, var(--color-accent) 60%, white);
+}
+
+.dark .fc-studio .fc .fc-button-primary {
+  background: transparent;
+  border-color: var(--color-border-header);
+  color: var(--color-muted);
+}
+
+.dark .fc-studio .fc .fc-button-primary:hover {
+  background: var(--color-hover-row);
+  border-color: #444;
+  color: var(--color-text-secondary);
+}
+
+.dark .fc-studio .fc .fc-button-primary.fc-button-active,
+.dark .fc-studio .fc .fc-button-primary:active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
+.dark .fc-studio .fc .fc-col-header-cell {
+  color: var(--color-muted);
+}
+
+.dark .fc-studio .fc .fc-event.fc-priority-high {
+  --fc-event-bg-color: #451a1a;
+  --fc-event-text-color: #fca5a5;
+}
+
+.dark .fc-studio .fc .fc-event.fc-priority-medium {
+  --fc-event-bg-color: #422006;
+  --fc-event-text-color: #fde68a;
+}
+
+.dark .fc-studio .fc .fc-event.fc-done {
+  --fc-event-bg-color: #052e16;
+  --fc-event-text-color: #86efac;
+}
+
+.dark .fc-studio .fc .fc-event.fc-deadline {
+  --fc-event-bg-color: #451a1a;
+  --fc-event-text-color: #fca5a5;
+}
+
+.dark .fc-studio .fc .fc-event.fc-invoice-overdue {
+  --fc-event-bg-color: #451a1a;
+  --fc-event-text-color: #fca5a5;
+}
+
+.dark .fc-studio .fc .fc-event.fc-invoice-sent {
+  --fc-event-bg-color: #422006;
+  --fc-event-text-color: #fde68a;
+}
+
+.dark .fc-studio .fc .fc-event.fc-quote-expiry {
+  --fc-event-bg-color: #422006;
+  --fc-event-text-color: #fde68a;
+}
+
+/* ─── Animation tokens ─── */
+:root {
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --duration-fast: 0ms; --duration-normal: 0ms; --duration-slow: 0ms; }
+  .skeleton { animation: none; }
+}
+.reduce-motion { --duration-fast: 0ms; --duration-normal: 0ms; --duration-slow: 0ms; }
+.reduce-motion .skeleton { animation: none; }
+
+/* ─── Global transitions (Notion-like smooth feel) ─── */
+table tbody tr {
+  transition: background-color var(--duration-fast) ease;
+}
+
+button, a, select, [role="button"] {
+  transition: color var(--duration-fast) ease, background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, opacity var(--duration-fast) ease;
+}
+
+/* ─── Animations ─── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-in {
+  animation: fade-in var(--duration-normal) var(--ease-out);
+}
+
+/* Page transition */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.page-transition {
+  animation: page-enter var(--duration-normal) var(--ease-out);
+}
+
+/* Checkbox pop */
+@keyframes check-pop {
+  0% { transform: scale(0.8); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+.check-pop {
+  animation: check-pop var(--duration-normal) var(--ease-spring);
+}
+
+/* Checkmark stroke draw */
+@keyframes stroke-draw {
+  from { stroke-dashoffset: 20; }
+  to { stroke-dashoffset: 0; }
+}
+.stroke-draw {
+  stroke-dasharray: 20;
+  animation: stroke-draw var(--duration-normal) var(--ease-out);
+}
+
+/* Strikethrough sweep */
+@keyframes strike-sweep {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+/* Status pill crossfade */
+.status-transition {
+  transition: background-color var(--duration-normal) ease, color var(--duration-normal) ease;
+}
+
+/* Toast slide-in */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Modal open */
+@keyframes modal-open {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+.modal-animate {
+  animation: modal-open var(--duration-normal) var(--ease-out);
+}
+@keyframes bulk-bar-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.bulk-bar-animate {
+  animation: bulk-bar-in var(--duration-normal) var(--ease-spring);
+}
+
+/* Sidebar active indicator */
+.sidebar-indicator {
+  transition: transform var(--duration-normal) var(--ease-spring);
+}
+
+/* Staggered fade-in for dashboard widgets (opacity-only to avoid overriding grid transform) */
+@keyframes stagger-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.stagger-in {
+  opacity: 0;
+  animation: stagger-fade var(--duration-slow) var(--ease-out) forwards;
+}
+
+/* Task row exit animation (when checked off in filtered view) */
+@keyframes task-exit {
+  0% { opacity: 1; transform: translateX(0); max-height: 60px; }
+  60% { opacity: 0; transform: translateX(16px); max-height: 60px; }
+  100% { opacity: 0; transform: translateX(16px); max-height: 0; padding-top: 0; padding-bottom: 0; }
+}
+.task-exit {
+  animation: task-exit 500ms var(--ease-out) forwards;
+  overflow: hidden;
+}
+
+/* Side peek slide-in / slide-out (width + opacity for smooth card reflow) */
+@keyframes peek-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes peek-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+}
+.peek-enter {
+  animation: peek-in var(--duration-slow) var(--ease-out) forwards;
+}
+.peek-exit {
+  animation: peek-out var(--duration-slow) var(--ease-out) forwards;
+  pointer-events: none;
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--color-input-bg) 25%, var(--color-surface) 37%, var(--color-input-bg) 63%);
+  background-size: 800px 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* Drag item lift */
+.drag-lift {
+  transition: box-shadow var(--duration-fast) ease, transform var(--duration-fast) ease;
+}
+.drag-lift:active, .drag-lift.dragging {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transform: scale(1.02);
+}
+
+/* ─── Tiptap editor ─── */
+.tiptap-editor .ProseMirror {
+  outline: none;
+  min-height: 300px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-text);
+}
+.tiptap-editor .ProseMirror h1 { font-size: 1.5em; font-weight: 600; margin: 1em 0 0.5em; }
+.tiptap-editor .ProseMirror h2 { font-size: 1.25em; font-weight: 600; margin: 0.8em 0 0.4em; }
+.tiptap-editor .ProseMirror h3 { font-size: 1.1em; font-weight: 600; margin: 0.6em 0 0.3em; }
+.tiptap-editor .ProseMirror ul { list-style: disc; padding-left: 1.5em; margin: 0.5em 0; }
+.tiptap-editor .ProseMirror ol { list-style: decimal; padding-left: 1.5em; margin: 0.5em 0; }
+.tiptap-editor .ProseMirror a { color: var(--color-accent); text-decoration: underline; }
+.tiptap-editor .ProseMirror hr { border: none; border-top: 1px solid var(--color-border-divider); margin: 1em 0; }
+.tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-muted);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
+/* ─── Dashboard grid overrides ─── */
+.react-grid-item.react-grid-placeholder {
+  background: var(--color-accent);
+  opacity: 0.08;
+  border-radius: 8px;
+  border: 2px dashed var(--color-accent);
+}
+
+.react-grid-item.react-draggable-dragging {
+  user-select: none;
+  opacity: 0.85;
+}
+
+/* Prevent text selection across the ENTIRE page during grid drag or resize.
+   Class added/removed by DashboardPage via onDragStart/onResizeStart callbacks. */
+body.grid-interacting,
+body.grid-interacting * {
+  user-select: none !important;
+}
+body.grid-interacting textarea,
+body.grid-interacting input {
+  user-select: text !important;
+}
