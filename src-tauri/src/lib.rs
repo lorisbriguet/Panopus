@@ -1,4 +1,5 @@
 mod dbfiles;
+pub mod indexer;
 
 use tauri::Manager;
 use tauri_plugin_sql::Migration;
