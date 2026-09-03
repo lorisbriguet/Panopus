@@ -44,7 +44,7 @@ INSERT INTO settings (key, value) VALUES
 
 /// Global state: the active DB filename (default: "panopus.db").
 /// In test mode this switches to "panopus_test.db".
-struct ActiveDb(Mutex<String>);
+pub(crate) struct ActiveDb(pub(crate) Mutex<String>);
 
 /// A single SQL statement with optional bind parameters.
 #[derive(serde::Deserialize)]
@@ -367,6 +367,12 @@ async fn open_in_finder(path: String) -> Result<(), String> {
     }
 }
 
+/// Run a full font index (library + system dirs) against the active DB.
+#[tauri::command]
+fn index_library(app: tauri::AppHandle) -> Result<indexer::IndexReport, String> {
+    indexer::run_full_index(&app)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let migrations: Vec<Migration> = vec![
@@ -402,6 +408,7 @@ pub fn run() {
             has_snapshot,
             get_active_db,
             open_in_finder,
+            index_library,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

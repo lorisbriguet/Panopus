@@ -1,7 +1,16 @@
-//! Font file indexer: parse TTF/OTF metadata and scan directories.
+//! Font file indexer: parse TTF/OTF metadata, scan directories, and
+//! upsert results into the fonts table.
 
 use std::path::{Path, PathBuf};
 use ttf_parser::{name_id, Face};
+
+/// Result of a full index run.
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
+pub struct IndexReport {
+    pub indexed: u32,
+    pub quarantined: u32,
+    pub removed: u32,
+}
 
 /// Metadata extracted from a single font file.
 pub struct FontMeta {
@@ -77,4 +86,197 @@ pub fn scan_dir(dir: &Path, is_system: bool) -> Vec<(PathBuf, Result<FontMeta, S
                     || matches!(m, Ok(meta) if meta.family.starts_with("Noto"))))
         })
         .collect()
+}
+
+/// Source name for a library font = first path component under the library
+/// root (e.g. `opti`). Files sitting directly in the root fall back to
+/// `library`.
+fn library_source(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .ok()
+        .and_then(|rel| {
+            let mut comps = rel.components();
+            let first = comps.next()?;
+            // Only a directory component counts; a lone component is the
+            // filename itself (file directly under the root).
+            comps.next()?;
+            Some(first.as_os_str().to_string_lossy().into_owned())
+        })
+        .unwrap_or_else(|| "library".to_string())
+}
+
+/// Upsert one scanned file into `fonts`, counting real inserts/updates in
+/// `report`. Unknown sources are created on the fly ('rights unclear') so
+/// the fonts JOIN never orphans.
+fn upsert_one(
+    conn: &rusqlite::Connection,
+    path: &Path,
+    meta: &Result<FontMeta, String>,
+    source: &str,
+    is_system: bool,
+    report: &mut IndexReport,
+) -> Result<(), String> {
+    conn.execute(
+        "INSERT OR IGNORE INTO sources (name, licence_status) VALUES (?1, 'rights unclear')",
+        [source],
+    )
+    .map_err(|e| e.to_string())?;
+    let path_s = path.to_string_lossy();
+    match meta {
+        Ok(m) => {
+            // Hash-guarded upsert: unchanged files touch nothing (indexed
+            // stays incremental) and existing rows keep active/favorite.
+            let changed = conn
+                .execute(
+                    "INSERT INTO fonts (path, family, style, ps_name, source, format, glyph_count, hash, is_system, quarantined)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0)
+                     ON CONFLICT(path) DO UPDATE SET
+                       family = excluded.family, style = excluded.style,
+                       ps_name = excluded.ps_name, glyph_count = excluded.glyph_count,
+                       hash = excluded.hash, quarantined = excluded.quarantined
+                     WHERE fonts.hash != excluded.hash",
+                    rusqlite::params![
+                        path_s,
+                        m.family,
+                        m.style,
+                        m.ps_name,
+                        source,
+                        m.format,
+                        m.glyph_count,
+                        m.hash,
+                        is_system as i64
+                    ],
+                )
+                .map_err(|e| e.to_string())?;
+            report.indexed += changed as u32;
+        }
+        Err(_) => {
+            let family = path
+                .file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path_s.clone().into_owned());
+            let format = if path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.eq_ignore_ascii_case("otf"))
+                .unwrap_or(false)
+            {
+                "otf"
+            } else {
+                "ttf"
+            };
+            let changed = conn
+                .execute(
+                    "INSERT INTO fonts (path, family, style, ps_name, source, format, glyph_count, hash, is_system, quarantined)
+                     VALUES (?1, ?2, 'Regular', NULL, ?3, ?4, 0, '', ?5, 1)
+                     ON CONFLICT(path) DO NOTHING",
+                    rusqlite::params![path_s, family, source, format, is_system as i64],
+                )
+                .map_err(|e| e.to_string())?;
+            report.quarantined += changed as u32;
+        }
+    }
+    Ok(())
+}
+
+/// Index the library root and any system dirs into `fonts`, all inside one
+/// transaction. Library rows whose files vanished are removed; system rows
+/// are never deleted here.
+pub fn index_all(
+    conn: &rusqlite::Connection,
+    library_root: &Path,
+    system_dirs: &[PathBuf],
+) -> Result<IndexReport, String> {
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    let mut report = IndexReport::default();
+
+    // Track scanned library paths in a temp table so the stale-row DELETE
+    // never hits SQLite's bind-parameter limit on large libraries.
+    tx.execute_batch(
+        "CREATE TEMP TABLE IF NOT EXISTS scanned_paths (path TEXT PRIMARY KEY);
+         DELETE FROM scanned_paths;",
+    )
+    .map_err(|e| e.to_string())?;
+
+    for (path, meta) in scan_dir(library_root, false) {
+        let source = library_source(library_root, &path);
+        upsert_one(&tx, &path, &meta, &source, false, &mut report)?;
+        tx.execute(
+            "INSERT OR IGNORE INTO scanned_paths (path) VALUES (?1)",
+            [path.to_string_lossy()],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    for dir in system_dirs {
+        for (path, meta) in scan_dir(dir, true) {
+            upsert_one(&tx, &path, &meta, "system", true, &mut report)?;
+        }
+    }
+
+    let removed = tx
+        .execute(
+            "DELETE FROM fonts WHERE is_system = 0 AND path NOT IN (SELECT path FROM scanned_paths)",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+    report.removed = removed as u32;
+
+    tx.execute_batch("DROP TABLE IF EXISTS temp.scanned_paths")
+        .map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(report)
+}
+
+/// Expand a leading `~` (bare or `~/…`) to the current user's home dir.
+fn expand_tilde(p: &str) -> PathBuf {
+    if p == "~" || p.starts_with("~/") {
+        if let Some(home) = std::env::var_os("HOME") {
+            return PathBuf::from(home).join(p.trim_start_matches('~').trim_start_matches('/'));
+        }
+    }
+    PathBuf::from(p)
+}
+
+/// Full index against the app DB: opens the same DB file the SQL plugin
+/// uses (app data dir + active DB name), reads `library_path` from
+/// settings (expanding `~`), and indexes it plus the macOS system font
+/// dirs. Shared by the `index_library` command and the library watcher.
+pub fn run_full_index(app: &tauri::AppHandle) -> Result<IndexReport, String> {
+    use tauri::Manager;
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let db_name = app
+        .state::<crate::ActiveDb>()
+        .0
+        .lock()
+        .map_err(|e| format!("Lock error: {e}"))?
+        .clone();
+    let db_path = app_dir.join(&db_name);
+
+    let conn =
+        rusqlite::Connection::open(&db_path).map_err(|e| format!("Failed to open DB: {e}"))?;
+    conn.pragma_update(None, "foreign_keys", true)
+        .map_err(|e| format!("Failed to enable foreign_keys: {e}"))?;
+    conn.busy_timeout(std::time::Duration::from_millis(5000))
+        .map_err(|e| format!("Failed to set busy_timeout: {e}"))?;
+
+    let library_path: String = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'library_path'",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("Failed to read library_path: {e}"))?;
+    let library_root = expand_tilde(&library_path);
+
+    let system_dirs = vec![
+        PathBuf::from("/System/Library/Fonts"),
+        PathBuf::from("/Library/Fonts"),
+        expand_tilde("~/Library/Fonts"),
+    ];
+
+    index_all(&conn, &library_root, &system_dirs)
 }
