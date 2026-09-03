@@ -368,8 +368,10 @@ async fn open_in_finder(path: String) -> Result<(), String> {
 }
 
 /// Run a full font index (library + system dirs) against the active DB.
+/// Async so Tauri executes it on the async runtime instead of blocking the
+/// main thread while the full scan runs.
 #[tauri::command]
-fn index_library(app: tauri::AppHandle) -> Result<indexer::IndexReport, String> {
+async fn index_library(app: tauri::AppHandle) -> Result<indexer::IndexReport, String> {
     indexer::run_full_index(&app)
 }
 

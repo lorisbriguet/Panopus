@@ -34,3 +34,20 @@ fn upsert_preserves_flags_and_is_incremental() {
     let fav: i64 = conn.query_row("SELECT count(*) FROM fonts WHERE favorite=1", [], |r| r.get(0)).unwrap();
     assert!(fav >= 1);
 }
+
+#[test]
+fn missing_library_root_errors_without_wiping_rows() {
+    let conn = rusqlite::Connection::open_in_memory().unwrap();
+    conn.execute_batch(panopus_lib::MIGRATION_V1).unwrap();
+    panopus_lib::indexer::index_all(&conn, Path::new("tests/fixtures"), &[]).unwrap();
+    let before: i64 = conn
+        .query_row("SELECT count(*) FROM fonts WHERE is_system=0", [], |r| r.get(0))
+        .unwrap();
+    assert!(before >= 1);
+    let res = panopus_lib::indexer::index_all(&conn, Path::new("tests/fixtures/does-not-exist"), &[]);
+    assert!(res.is_err());
+    let after: i64 = conn
+        .query_row("SELECT count(*) FROM fonts WHERE is_system=0", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(before, after);
+}

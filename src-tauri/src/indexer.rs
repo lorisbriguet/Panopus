@@ -187,6 +187,12 @@ pub fn index_all(
     library_root: &Path,
     system_dirs: &[PathBuf],
 ) -> Result<IndexReport, String> {
+    // A missing/unmounted root scans as empty (walkdir errors are swallowed)
+    // and the stale-row DELETE below would then wipe every library row,
+    // cascading font_tags and losing favorites. Refuse before any DB write.
+    if !library_root.is_dir() {
+        return Err(format!("library root not found: {}", library_root.display()));
+    }
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     let mut report = IndexReport::default();
 
