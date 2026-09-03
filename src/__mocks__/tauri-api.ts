@@ -13,6 +13,9 @@ export async function invoke(cmd?: string, args?: Record<string, unknown>): Prom
   }
   return null;
 }
+export async function listen(): Promise<() => void> {
+  return () => {};
+}
 export async function appDataDir(): Promise<string> {
   return "/tmp/test-app-data";
 }

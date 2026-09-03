@@ -12,6 +12,7 @@ import { DesignersPage } from "./pages/DesignersPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { CommandPalette } from "./components/CommandPalette";
 import { useErrorNotifications } from "./hooks/useErrorNotifications";
+import { useLibraryChanged } from "./hooks/useFonts";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useUndoStore } from "./stores/undo-store";
 import { getLabels, notifyError } from "./lib/notifyError";
@@ -20,6 +21,8 @@ import { queryClient } from "./lib/queryClient";
 
 function StartupChecks() {
   useErrorNotifications();
+  // Global Tauri event listener: watcher re-index → refresh fonts query
+  useLibraryChanged();
 
   // Suppress native WebView context menu globally (Tauri renders its own).
   // Uses bubble phase so React onContextMenu handlers fire first (on #root),
