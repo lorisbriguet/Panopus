@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { Star } from "lucide-react";
 import { Badge } from "../ui/Badge";
 import type { BadgeVariant } from "../ui/Badge";
@@ -10,7 +10,7 @@ import { useT } from "../../i18n/useT";
 import type { FontRow } from "../../lib/fontFilters";
 import { ensureFontFace } from "./FontFaceLoader";
 
-const LICENCE_VARIANTS: Record<string, BadgeVariant> = {
+export const LICENCE_VARIANTS: Record<string, BadgeVariant> = {
   free: "success",
   donationware: "info",
   "personal use": "warning",
@@ -22,6 +22,13 @@ interface FontCardProps {
   font: FontRow;
   proofText: string;
   proofSize: number;
+  /**
+   * Open the detail panel for this font. Fired on card clicks that do NOT
+   * originate from an interactive control (checkbox, star, toggle, links) —
+   * those keep their own behaviour. Must be referentially stable (the card
+   * is memoized).
+   */
+  onOpenDetail?: (id: number) => void;
 }
 
 /**
@@ -31,7 +38,12 @@ interface FontCardProps {
  * once; `content-visibility: auto` additionally lets the browser skip
  * layout/paint for off-screen cards.
  */
-export const FontCard = memo(function FontCard({ font, proofText, proofSize }: FontCardProps) {
+export const FontCard = memo(function FontCard({
+  font,
+  proofText,
+  proofSize,
+  onOpenDetail,
+}: FontCardProps) {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const [family, setFamily] = useState<string | null>(null);
@@ -67,10 +79,22 @@ export const FontCard = memo(function FontCard({ font, proofText, proofSize }: F
   const isSystem = font.is_system === 1;
   const isFavorite = font.favorite === 1;
 
+  // Card click → detail panel, EXCEPT when the click originated on an
+  // interactive control (checkbox, star, activation toggle, links): those
+  // must keep their own behaviour without also opening the panel.
+  const handleCardClick = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (!onOpenDetail) return;
+    if ((e.target as HTMLElement).closest("button, input, a")) return;
+    onOpenDetail(font.id);
+  };
+
   return (
     <div
       ref={ref}
-      className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-divider)] p-4 [content-visibility:auto] [contain-intrinsic-size:auto_190px]"
+      onClick={handleCardClick}
+      className={`rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-divider)] p-4 [content-visibility:auto] [contain-intrinsic-size:auto_190px] ${
+        onOpenDetail ? "cursor-pointer hover:border-[var(--color-border)]" : ""
+      }`}
     >
       <div
         className="overflow-hidden break-words leading-tight"

@@ -124,6 +124,26 @@ const ui = {
     select_all_shown: "Select all shown",
     select_font: "Select font",
     active_label: "active",
+
+    // Font detail panel (T11)
+    detail_info: "Info",
+    detail_glyphs: "Glyphs",
+    detail_waterfall: "Waterfall",
+    detail_styles: "Styles",
+    detail_glyph_count: "Glyph count",
+    detail_format: "Format",
+    detail_source: "Source",
+    detail_licence: "Licence",
+    detail_designer: "Designer",
+    detail_path: "Path",
+    detail_tags: "Tags",
+    reveal_in_finder: "Reveal in Finder",
+    reveal_failed: "Could not reveal the file in Finder",
+    new_tag_placeholder: "New tag...",
+    add_tag_button: "Add",
+    glyphs_basic_latin: "Basic Latin",
+    glyphs_latin_1: "Latin-1 Supplement",
+    glyphs_punctuation: "Punctuation & symbols",
   },
   fr: {
     // Sidebar / Nav
@@ -248,6 +268,26 @@ const ui = {
     select_all_shown: "Selectionner les polices affichees",
     select_font: "Selectionner la police",
     active_label: "actives",
+
+    // Font detail panel (T11)
+    detail_info: "Infos",
+    detail_glyphs: "Glyphes",
+    detail_waterfall: "Cascade",
+    detail_styles: "Styles",
+    detail_glyph_count: "Nombre de glyphes",
+    detail_format: "Format",
+    detail_source: "Source",
+    detail_licence: "Licence",
+    detail_designer: "Designer",
+    detail_path: "Chemin",
+    detail_tags: "Etiquettes",
+    reveal_in_finder: "Afficher dans le Finder",
+    reveal_failed: "Impossible d'afficher le fichier dans le Finder",
+    new_tag_placeholder: "Nouvelle etiquette...",
+    add_tag_button: "Ajouter",
+    glyphs_basic_latin: "Latin de base",
+    glyphs_latin_1: "Supplement Latin-1",
+    glyphs_punctuation: "Ponctuation et symboles",
   },
 } as const;
 
