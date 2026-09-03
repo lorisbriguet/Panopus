@@ -1,3 +1,4 @@
+pub mod activation;
 mod dbfiles;
 pub mod indexer;
 
@@ -411,6 +412,7 @@ pub fn run() {
             get_active_db,
             open_in_finder,
             index_library,
+            activation::set_fonts_active,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -419,6 +421,26 @@ pub fn run() {
                         .level(log::LevelFilter::Info)
                         .build(),
                 )?;
+            }
+            // Re-register active fonts with CoreText on startup. The SQL
+            // plugin has already run migrations (plugin init precedes
+            // setup). Non-fatal: log and continue on any error.
+            match app
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("app data dir: {e}"))
+                .and_then(|dir| {
+                    let db_name = app
+                        .state::<ActiveDb>()
+                        .0
+                        .lock()
+                        .map_err(|e| format!("lock: {e}"))?
+                        .clone();
+                    rusqlite::Connection::open(dir.join(&db_name))
+                        .map_err(|e| format!("open DB: {e}"))
+                }) {
+                Ok(conn) => activation::reactivate_all(&conn),
+                Err(e) => eprintln!("startup font reactivation skipped: {e}"),
             }
             Ok(())
         })

@@ -2996,6 +2996,7 @@ dependencies = [
 name = "panopus"
 version = "1.15.2"
 dependencies = [
+ "core-foundation",
  "log",
  "md5",
  "rusqlite",
