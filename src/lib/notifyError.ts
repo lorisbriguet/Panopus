@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { useAppStore } from "../stores/app-store";
-import { uiLabels } from "../i18n/ui";
+import ui from "../i18n/ui";
 import { logError } from "./log";
 
 /**
@@ -9,7 +9,7 @@ import { logError } from "./log";
  * directly, same pattern as appleCalendar.ts reading calendarName.
  */
 export function getLabels() {
-  return uiLabels[useAppStore.getState().language];
+  return ui[useAppStore.getState().language];
 }
 
 // Deduplicate identical toasts for a short window so repeated failures

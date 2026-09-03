@@ -10,6 +10,7 @@ import { LibraryPage } from "./pages/LibraryPage";
 import { ComparePage } from "./pages/ComparePage";
 import { DesignersPage } from "./pages/DesignersPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { CommandPalette } from "./components/CommandPalette";
 import { useErrorNotifications } from "./hooks/useErrorNotifications";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useUndoStore } from "./stores/undo-store";
@@ -114,6 +115,7 @@ export default function App() {
               <Route path="settings" element={<SettingsPage />} />
             </Route>
           </Routes>
+          <CommandPalette />
         </ErrorBoundary>
       </BrowserRouter>
       <Toaster position="bottom-right" />

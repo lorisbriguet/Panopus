@@ -17,7 +17,7 @@ describe("dirty-guard", () => {
   };
 
   beforeEach(() => {
-    useAppStore.setState({ language: "EN" });
+    useAppStore.setState({ language: "en" });
     vi.mocked(ask).mockReset();
     while (unregisters.length) unregisters.pop()!();
   });
