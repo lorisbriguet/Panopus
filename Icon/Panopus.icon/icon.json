@@ -1,6 +1,6 @@
 {
   "fill": {
-    "solid": "display-p3:0.40392,0.45098,0.53725,1.00000"
+    "automatic-gradient": "display-p3:0.13333,0.13333,0.12941,1.00000"
   },
   "groups": [
     {
@@ -8,10 +8,30 @@
         {
           "glass": false,
           "hidden": false,
+          "image-name": "rim.svg",
+          "name": "Rim",
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "extended-gray:1.00000,1.00000"
+              }
+            }
+          ],
+          "glass": false,
+          "hidden": false,
           "image-name": "iconPanopus.svg",
           "name": "Panopus",
           "position": {
-            "scale": 0.8,
+            "scale": 7.5,
             "translation-in-points": [
               0,
               0

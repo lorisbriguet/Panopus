@@ -8,6 +8,9 @@ import { useFonts } from "../hooks/useFonts";
 import type { FontRow } from "../lib/fontFilters";
 import { ensureFontFace } from "./fonts/FontFaceLoader";
 
+/** Dingbat/ornament families would render the letters as symbols — skip them. */
+const SYMBOL_FAMILY = /dingbat|ornament|symbol|bats\b|icons?\b|border|frames?\b|pi\b/i;
+
 /** One random library pick per letter, chosen once per mount (= per reload). */
 function useLetterFonts(count: number): (FontRow | null)[] {
   const { data: rows } = useFonts();
@@ -15,7 +18,9 @@ function useLetterFonts(count: number): (FontRow | null)[] {
 
   useEffect(() => {
     if (picks !== null) return;
-    const library = (rows ?? []).filter((r) => r.is_system === 0);
+    const library = (rows ?? []).filter(
+      (r) => r.is_system === 0 && r.glyph_count >= 80 && !SYMBOL_FAMILY.test(r.family),
+    );
     if (library.length === 0) return;
     setPicks(
       Array.from({ length: count }, () => library[Math.floor(Math.random() * library.length)]),
