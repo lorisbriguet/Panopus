@@ -24,6 +24,10 @@ interface ProofToolbarProps {
    * source or licence filter narrows the grid.
    */
   onSelectAllShown?: () => void;
+  /** Unfold every family group currently shown in the grid. */
+  onExpandAll?: () => void;
+  /** Fold every family group back to its representative card. */
+  onCollapseAll?: () => void;
 }
 
 /**
@@ -31,7 +35,14 @@ interface ProofToolbarProps {
  * text, presets, size) and query controls (search, sort, source/licence,
  * active/favorite gates). All state lives in the app store's library slice.
  */
-export function ProofToolbar({ sources, licences, tags, onSelectAllShown }: ProofToolbarProps) {
+export function ProofToolbar({
+  sources,
+  licences,
+  tags,
+  onSelectAllShown,
+  onExpandAll,
+  onCollapseAll,
+}: ProofToolbarProps) {
   const t = useT();
   const proofText = useAppStore((s) => s.proofText);
   const proofSize = useAppStore((s) => s.proofSize);
@@ -91,6 +102,16 @@ export function ProofToolbar({ sources, licences, tags, onSelectAllShown }: Proo
           <option value="family_asc">{t.sort_family_asc}</option>
           <option value="family_desc">{t.sort_family_desc}</option>
         </Select>
+        {onExpandAll && (
+          <Button variant="ghost" size="sm" onClick={onExpandAll}>
+            {t.expand_all_families}
+          </Button>
+        )}
+        {onCollapseAll && (
+          <Button variant="ghost" size="sm" onClick={onCollapseAll}>
+            {t.collapse_all_families}
+          </Button>
+        )}
         <Select
           fullWidth={false}
           value={libraryQuery.source ?? ""}

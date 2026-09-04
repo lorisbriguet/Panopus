@@ -117,6 +117,13 @@ const ui = {
     font_label: "font",
     fonts_label: "fonts",
 
+    // Family groups
+    styles_label: "styles",
+    expand_all_families: "Expand all",
+    collapse_all_families: "Collapse all",
+    expand_family: "Expand family",
+    collapse_family: "Collapse family",
+
     // Bulk activation (T10)
     bulk_selected: "selected",
     bulk_activate: "Activate",
@@ -302,6 +309,13 @@ const ui = {
     system_font_locked: "Les polices systeme restent actives",
     font_label: "police",
     fonts_label: "polices",
+
+    // Family groups
+    styles_label: "styles",
+    expand_all_families: "Tout deplier",
+    collapse_all_families: "Tout replier",
+    expand_family: "Deplier la famille",
+    collapse_family: "Replier la famille",
 
     // Bulk activation (T10)
     bulk_selected: "selectionnees",

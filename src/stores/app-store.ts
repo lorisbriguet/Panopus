@@ -207,6 +207,12 @@ export interface AppState {
    */
   selectedIds: number[];
   /**
+   * Library grouping: family names currently expanded in the grid. Stored as
+   * string[] (plain data, like selectedIds) and ephemeral — an unfolded group
+   * has no meaning across launches, so nothing is persisted.
+   */
+  expandedFamilies: string[];
+  /**
    * Pinned fonts for the compare view: font ids in display order.
    * Persisted to localStorage so the compare view preserves pins across launches.
    */
@@ -232,6 +238,10 @@ export interface AppState {
   clearSelection: () => void;
   /** REPLACE the selection with the given ids ("select all shown"). */
   selectMany: (ids: number[]) => void;
+  /** Fold/unfold one family group in the library grid. */
+  toggleFamily: (family: string) => void;
+  /** REPLACE the expansion set: every group's family ("expand all") or null ("collapse all"). */
+  setAllFamiliesExpanded: (families: string[] | null) => void;
   /** Append a font id to pinnedIds (no-op if already pinned). */
   pinFont: (id: number) => void;
   /** Remove a font id from pinnedIds. */
@@ -337,6 +347,7 @@ export const useAppStore = create<AppState>((set) => ({
   libraryQuery: EMPTY_FONT_QUERY,
   librarySort: (localStorage.getItem("librarySort") as LibrarySortOption) ?? "family_asc",
   selectedIds: [],
+  expandedFamilies: [],
   pinnedIds: (() => {
     try {
       const raw = localStorage.getItem("pinnedIds");
@@ -390,6 +401,14 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   clearSelection: () => set({ selectedIds: [] }),
   selectMany: (ids) => set({ selectedIds: [...ids] }),
+  toggleFamily: (family) =>
+    set((s) => ({
+      expandedFamilies: s.expandedFamilies.includes(family)
+        ? s.expandedFamilies.filter((f) => f !== family)
+        : [...s.expandedFamilies, family],
+    })),
+  setAllFamiliesExpanded: (families) =>
+    set({ expandedFamilies: families === null ? [] : [...families] }),
   pinFont: (id) =>
     set((s) => {
       const next = s.pinnedIds.includes(id)

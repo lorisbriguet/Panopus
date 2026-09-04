@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { Badge, EmptyState, PageHeader, PageSpinner } from "../components/ui";
 import { BulkBar } from "../components/fonts/BulkBar";
+import { FamilyGroup } from "../components/fonts/FamilyGroup";
 import { FontCard } from "../components/fonts/FontCard";
 import { FontDetail } from "../components/fonts/FontDetail";
 import { ProofToolbar } from "../components/fonts/ProofToolbar";
 import { useFonts } from "../hooks/useFonts";
 import { useTags } from "../hooks/useTags";
+import { groupByFamily, isFamilyGroup } from "../lib/familyGroups";
 import { filterFonts } from "../lib/fontFilters";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
@@ -19,6 +21,7 @@ export function LibraryPage() {
   const proofText = useAppStore((s) => s.proofText);
   const proofSize = useAppStore((s) => s.proofSize);
   const selectMany = useAppStore((s) => s.selectMany);
+  const setAllFamiliesExpanded = useAppStore((s) => s.setAllFamiliesExpanded);
   // Detail slide-over: id of the inspected font, null = closed. Ephemeral
   // page state — no store slice needed, and useState's setter is stable so
   // the memoized cards never re-render because of it.
@@ -45,6 +48,11 @@ export function LibraryPage() {
     return out;
   }, [rows, libraryQuery, librarySort]);
 
+  // Mixed render list: 2+ style families fold into a FamilyGroup, singles
+  // stay bare rows. Grouping runs AFTER filter+sort so it inherits the
+  // family order (asc AND desc) and never changes what matches.
+  const grouped = useMemo(() => groupByFamily(filtered), [filtered]);
+
   const activeCount = useMemo(
     () => (rows ?? []).filter((r) => r.active === 1).length,
     [rows]
@@ -70,6 +78,10 @@ export function LibraryPage() {
         onSelectAllShown={() =>
           selectMany(filtered.filter((f) => f.is_system !== 1).map((f) => f.id))
         }
+        onExpandAll={() =>
+          setAllFamiliesExpanded(grouped.filter(isFamilyGroup).map((g) => g.family))
+        }
+        onCollapseAll={() => setAllFamiliesExpanded(null)}
       />
       <BulkBar />
       {isLoading ? (
@@ -80,15 +92,25 @@ export function LibraryPage() {
         />
       ) : (
         <div className="mt-4 flex flex-col gap-3">
-          {filtered.map((f) => (
-            <FontCard
-              key={f.id}
-              font={f}
-              proofText={proofText}
-              proofSize={proofSize}
-              onOpenDetail={setDetailId}
-            />
-          ))}
+          {grouped.map((entry) =>
+            isFamilyGroup(entry) ? (
+              <FamilyGroup
+                key={entry.family}
+                group={entry}
+                proofText={proofText}
+                proofSize={proofSize}
+                onOpenDetail={setDetailId}
+              />
+            ) : (
+              <FontCard
+                key={entry.id}
+                font={entry}
+                proofText={proofText}
+                proofSize={proofSize}
+                onOpenDetail={setDetailId}
+              />
+            )
+          )}
         </div>
       )}
       <FontDetail
