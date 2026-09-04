@@ -249,25 +249,7 @@ pub fn expand_tilde(p: &str) -> PathBuf {
 /// settings (expanding `~`), and indexes it plus the macOS system font
 /// dirs. Shared by the `index_library` command and the library watcher.
 pub fn run_full_index(app: &tauri::AppHandle) -> Result<IndexReport, String> {
-    use tauri::Manager;
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    let db_name = app
-        .state::<crate::ActiveDb>()
-        .0
-        .lock()
-        .map_err(|e| format!("Lock error: {e}"))?
-        .clone();
-    let db_path = app_dir.join(&db_name);
-
-    let conn =
-        rusqlite::Connection::open(&db_path).map_err(|e| format!("Failed to open DB: {e}"))?;
-    conn.pragma_update(None, "foreign_keys", true)
-        .map_err(|e| format!("Failed to enable foreign_keys: {e}"))?;
-    conn.busy_timeout(std::time::Duration::from_millis(5000))
-        .map_err(|e| format!("Failed to set busy_timeout: {e}"))?;
+    let conn = crate::open_app_db(app)?;
 
     let library_path: String = conn
         .query_row(

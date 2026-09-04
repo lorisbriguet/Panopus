@@ -164,6 +164,23 @@ const ui = {
     designer_fonts_by: "Fonts by this designer",
     designer_no_fonts: "No fonts from this designer in the library",
     designer_bio_placeholder: "Write this designer's biography...",
+
+    // Settings / Library (T14)
+    library_folder: "Library Folder",
+    choose_folder: "Choose Folder...",
+    library_folder_restart_note:
+      "Changes take effect after restarting the app — the folder watcher keeps the previous folder until then.",
+    choose_folder_failed: "Could not open the folder picker",
+    library_path_update_failed: "Could not update the library folder",
+    reindex_library: "Re-index Library",
+    reindex_failed: "Indexing failed",
+    report_indexed: "indexed",
+    report_quarantined: "quarantined",
+    report_removed: "removed",
+    problems: "Problems",
+    problems_desc:
+      "Files that could not be parsed; they are quarantined and excluded from the library.",
+    problems_empty: "No problem files",
   },
   fr: {
     // Sidebar / Nav
@@ -328,6 +345,23 @@ const ui = {
     designer_fonts_by: "Polices de ce designer",
     designer_no_fonts: "Aucune police de ce designer dans la bibliotheque",
     designer_bio_placeholder: "Rediger la biographie de ce designer...",
+
+    // Settings / Library (T14)
+    library_folder: "Dossier de la bibliotheque",
+    choose_folder: "Choisir un dossier...",
+    library_folder_restart_note:
+      "Les changements prennent effet apres redemarrage de l'application — la surveillance du dossier conserve l'ancien chemin jusque-la.",
+    choose_folder_failed: "Impossible d'ouvrir le selecteur de dossier",
+    library_path_update_failed: "Impossible de mettre a jour le dossier de la bibliotheque",
+    reindex_library: "Reindexer la bibliotheque",
+    reindex_failed: "Echec de l'indexation",
+    report_indexed: "indexees",
+    report_quarantined: "en quarantaine",
+    report_removed: "supprimees",
+    problems: "Problemes",
+    problems_desc:
+      "Fichiers illisibles ; ils sont mis en quarantaine et exclus de la bibliotheque.",
+    problems_empty: "Aucun fichier a probleme",
   },
 } as const;
 

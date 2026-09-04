@@ -1,4 +1,5 @@
 pub mod activation;
+mod bootstrap;
 mod dbfiles;
 pub mod indexer;
 pub mod watcher;
@@ -6,7 +7,6 @@ pub mod watcher;
 use tauri::Manager;
 use tauri_plugin_sql::Migration;
 use serde_json::Value as JsonValue;
-use std::path::PathBuf;
 use std::sync::Mutex;
 
 /// Panopus v1 initial schema migration
@@ -123,9 +123,46 @@ INSERT INTO designers (name, slug, content_json, links) VALUES
 INSERT INTO designer_sources (designer_id, source) SELECT id, slug FROM designers;
 "#;
 
+/// All schema migrations in order: (version, description, sql). Single
+/// source of truth shared by the SQL plugin registration in `run()` and the
+/// setup() bootstrap (`bootstrap::ensure_schema`) — the two MUST stay
+/// identical, since sqlx validates a SHA-384 checksum of the exact SQL
+/// string against its `_sqlx_migrations` ledger.
+pub(crate) const MIGRATIONS: [(i64, &str, &str); 2] = [
+    (1, "panopus_initial", MIGRATION_V1),
+    (2, "panopus_seed_designers", MIGRATION_V2),
+];
+
 /// Global state: the active DB filename (default: "panopus.db").
 /// In test mode this switches to "panopus_test.db".
 pub(crate) struct ActiveDb(pub(crate) Mutex<String>);
+
+/// Open the active app DB (app data dir + `ActiveDb` name) with the
+/// standard connection setup: parent dir created if missing (rusqlite
+/// creates the DB file but not its directory — first boot), foreign keys
+/// enforced (rusqlite default is OFF), and a busy timeout so concurrent
+/// plugin connections wait instead of failing.
+pub(crate) fn open_app_db(app: &tauri::AppHandle) -> Result<rusqlite::Connection, String> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    std::fs::create_dir_all(&app_dir)
+        .map_err(|e| format!("Failed to create app data dir: {e}"))?;
+    let db_name = app
+        .state::<ActiveDb>()
+        .0
+        .lock()
+        .map_err(|e| format!("Lock error: {e}"))?
+        .clone();
+    let conn = rusqlite::Connection::open(app_dir.join(&db_name))
+        .map_err(|e| format!("Failed to open DB: {e}"))?;
+    conn.pragma_update(None, "foreign_keys", true)
+        .map_err(|e| format!("Failed to enable foreign_keys: {e}"))?;
+    conn.busy_timeout(std::time::Duration::from_millis(5000))
+        .map_err(|e| format!("Failed to set busy_timeout: {e}"))?;
+    Ok(conn)
+}
 
 /// A single SQL statement with optional bind parameters.
 #[derive(serde::Deserialize)]
@@ -153,23 +190,7 @@ fn execute_batch(
             statements.len()
         ));
     }
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    let active_db = app.state::<ActiveDb>();
-    let db_name = active_db.0.lock().map_err(|e| format!("Lock error: {e}"))?.clone();
-    let db_path: PathBuf = app_dir.join(&db_name);
-
-    let conn =
-        rusqlite::Connection::open(&db_path).map_err(|e| format!("Failed to open DB: {e}"))?;
-
-    // Enforce foreign keys (rusqlite default is OFF) and wait instead of
-    // failing immediately if another connection holds the write lock.
-    conn.pragma_update(None, "foreign_keys", true)
-        .map_err(|e| format!("Failed to enable foreign_keys: {e}"))?;
-    conn.busy_timeout(std::time::Duration::from_millis(5000))
-        .map_err(|e| format!("Failed to set busy_timeout: {e}"))?;
+    let conn = open_app_db(&app)?;
 
     conn.execute_batch("BEGIN")
         .map_err(|e| format!("BEGIN failed: {e}"))?;
@@ -458,20 +479,15 @@ async fn index_library(app: tauri::AppHandle) -> Result<indexer::IndexReport, St
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let migrations: Vec<Migration> = vec![
-        Migration {
-            version: 1,
-            description: "panopus_initial",
-            sql: MIGRATION_V1,
+    let migrations: Vec<Migration> = MIGRATIONS
+        .iter()
+        .map(|&(version, description, sql)| Migration {
+            version,
+            description,
+            sql,
             kind: tauri_plugin_sql::MigrationKind::Up,
-        },
-        Migration {
-            version: 2,
-            description: "panopus_seed_designers",
-            sql: MIGRATION_V2,
-            kind: tauri_plugin_sql::MigrationKind::Up,
-        },
-    ];
+        })
+        .collect();
 
     tauri::Builder::default()
         .manage(ActiveDb(Mutex::new("panopus.db".to_string())))
@@ -508,58 +524,36 @@ pub fn run() {
                         .build(),
                 )?;
             }
-            // Re-register active fonts with CoreText on startup. The SQL
-            // plugin has already run migrations (plugin init precedes
-            // setup). Non-fatal: log and continue on any error.
-            match app
-                .path()
-                .app_data_dir()
-                .map_err(|e| format!("app data dir: {e}"))
-                .and_then(|dir| {
-                    let db_name = app
-                        .state::<ActiveDb>()
-                        .0
-                        .lock()
-                        .map_err(|e| format!("lock: {e}"))?
-                        .clone();
-                    rusqlite::Connection::open(dir.join(&db_name))
-                        .map_err(|e| format!("open DB: {e}"))
-                }) {
-                Ok(conn) => activation::reactivate_all(&conn),
-                Err(e) => eprintln!("startup font reactivation skipped: {e}"),
-            }
-            // Spawn the library watcher thread. Non-fatal on any error: log and skip.
-            // Read library_path from settings (with tilde expansion) and spawn the watcher.
-            match app
-                .path()
-                .app_data_dir()
-                .map_err(|e| format!("app data dir: {e}"))
-                .and_then(|dir| {
-                    let db_name = app
-                        .state::<ActiveDb>()
-                        .0
-                        .lock()
-                        .map_err(|e| format!("lock: {e}"))?
-                        .clone();
-                    rusqlite::Connection::open(dir.join(&db_name))
-                        .map_err(|e| format!("open DB: {e}"))
-                })
-                .and_then(|conn| {
-                    let library_path: String = conn
-                        .query_row(
-                            "SELECT value FROM settings WHERE key = 'library_path'",
-                            [],
-                            |r| r.get(0),
-                        )
-                        .map_err(|e| format!("Failed to read library_path: {e}"))?;
-                    Ok(library_path)
-                }) {
-                Ok(library_path) => {
-                    // Reuse the expand_tilde helper from indexer module
-                    let library_root = indexer::expand_tilde(&library_path);
-                    watcher::spawn(app.handle().clone(), library_root);
+            // Launch order: DB bootstrap (migrations) → CoreText
+            // reactivation → library watcher. The SQL plugin only applies
+            // migrations lazily on the frontend's first Database.load, so
+            // on a fresh install NOTHING below would find a schema without
+            // the explicit bootstrap (see bootstrap.rs for how it stays
+            // compatible with the plugin's _sqlx_migrations ledger).
+            // Everything here is non-fatal: log and continue.
+            match open_app_db(app.handle()) {
+                Ok(conn) => {
+                    if let Err(e) = bootstrap::ensure_schema(&conn) {
+                        eprintln!("startup schema bootstrap failed: {e}");
+                    }
+                    // Re-register active fonts with CoreText — user-scope
+                    // registrations don't reliably survive restarts.
+                    activation::reactivate_all(&conn);
+                    // Read library_path (tilde-expanded) and spawn the
+                    // watcher thread against it.
+                    match conn.query_row(
+                        "SELECT value FROM settings WHERE key = 'library_path'",
+                        [],
+                        |r| r.get::<_, String>(0),
+                    ) {
+                        Ok(library_path) => {
+                            let library_root = indexer::expand_tilde(&library_path);
+                            watcher::spawn(app.handle().clone(), library_root);
+                        }
+                        Err(e) => eprintln!("library watcher setup skipped: {e}"),
+                    }
                 }
-                Err(e) => eprintln!("library watcher setup skipped: {e}"),
+                Err(e) => eprintln!("startup DB setup skipped: {e}"),
             }
             Ok(())
         })

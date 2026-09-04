@@ -128,26 +128,6 @@ pub fn reactivate_all(conn: &rusqlite::Connection) {
     }
 }
 
-/// Open the active app DB the same way `run_full_index` does.
-fn open_app_db(app: &tauri::AppHandle) -> Result<rusqlite::Connection, String> {
-    use tauri::Manager;
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    let db_name = app
-        .state::<crate::ActiveDb>()
-        .0
-        .lock()
-        .map_err(|e| format!("Lock error: {e}"))?
-        .clone();
-    let conn = rusqlite::Connection::open(app_dir.join(&db_name))
-        .map_err(|e| format!("Failed to open DB: {e}"))?;
-    conn.busy_timeout(std::time::Duration::from_millis(5000))
-        .map_err(|e| format!("Failed to set busy_timeout: {e}"))?;
-    Ok(conn)
-}
-
 /// Activate or deactivate a batch of fonts. Async so bulk CoreText calls
 /// run on the async runtime instead of blocking the main thread.
 #[tauri::command]
@@ -156,7 +136,7 @@ pub async fn set_fonts_active(
     ids: Vec<i64>,
     active: bool,
 ) -> Result<Vec<FontActivationResult>, String> {
-    let conn = open_app_db(&app)?;
+    let conn = crate::open_app_db(&app)?;
 
     // Resolve id → path, keeping ids without a row as immediate errors.
     let mut found: Vec<(i64, PathBuf)> = Vec::new();
