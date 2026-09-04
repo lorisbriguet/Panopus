@@ -87,7 +87,7 @@ export function LibraryPage() {
         }
         onCollapseAll={() => setAllFamiliesExpanded(null)}
       />
-      <BulkBar />
+      <BulkBar rows={rows ?? []} />
       {isLoading ? (
         <PageSpinner label={t.loading_fonts} />
       ) : filtered.length === 0 ? (

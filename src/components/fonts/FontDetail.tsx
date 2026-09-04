@@ -9,7 +9,7 @@ import { useFonts, useToggleFavorite } from "../../hooks/useFonts";
 import { useAssignTag, useCreateTag, useTags, useUnassignTag } from "../../hooks/useTags";
 import { useT } from "../../i18n/useT";
 import { notifyError } from "../../lib/notifyError";
-import { getTagColor, TAG_COLOR_NAMES } from "../../lib/tagColors";
+import { getStoredTagColor, TAG_COLOR_NAMES } from "../../lib/tagColors";
 import type { FontRow } from "../../lib/fontFilters";
 import { useAppStore } from "../../stores/app-store";
 import { Badge } from "../ui/Badge";
@@ -89,7 +89,9 @@ function TagEditor({ font }: { font: FontRow }) {
       <div className="flex flex-wrap gap-1.5">
         {(tags ?? []).map((tag) => {
           const on = assigned.has(tag.id);
-          const color = getTagColor(tag.name, darkMode);
+          // Stored color (tags.color), not the name hash — a rename or an
+          // explicit color change in the TagManager must show everywhere.
+          const color = getStoredTagColor(tag.color, darkMode);
           return (
             <button
               key={tag.id}

@@ -1,8 +1,11 @@
+import { useState } from "react";
+import { Pencil } from "lucide-react";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { SearchBar } from "../ui/SearchBar";
 import { Select } from "../ui/Select";
 import { Toggle } from "../ui/Toggle";
+import { TagManager } from "./TagManager";
 import { useAppStore, DEFAULT_PROOF_TEXT } from "../../stores/app-store";
 import type { LibrarySortOption, LibraryColumnsOption } from "../../stores/app-store";
 import type { TagRow } from "../../hooks/useTags";
@@ -54,6 +57,8 @@ export function ProofToolbar({
   const setLibraryQuery = useAppStore((s) => s.setLibraryQuery);
   const setLibrarySort = useAppStore((s) => s.setLibrarySort);
   const setLibraryColumns = useAppStore((s) => s.setLibraryColumns);
+  // Tag manager modal: ephemeral open state, like FontDetail's detailId.
+  const [tagManagerOpen, setTagManagerOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-3">
@@ -174,6 +179,15 @@ export function ProofToolbar({
             </option>
           ))}
         </Select>
+        <button
+          type="button"
+          onClick={() => setTagManagerOpen(true)}
+          aria-label={t.manage_tags}
+          title={t.manage_tags}
+          className="text-muted hover:text-[var(--color-text-secondary)] focus-accent rounded p-1"
+        >
+          <Pencil size={14} aria-hidden="true" />
+        </button>
         {onSelectAllShown &&
           (libraryQuery.source !== null || libraryQuery.licence !== null) && (
             <Button variant="ghost" size="sm" onClick={onSelectAllShown}>
@@ -197,6 +211,7 @@ export function ProofToolbar({
           {t.only_favorites}
         </label>
       </div>
+      <TagManager open={tagManagerOpen} onClose={() => setTagManagerOpen(false)} />
     </div>
   );
 }

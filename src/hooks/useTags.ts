@@ -39,6 +39,17 @@ export function useRenameTag() {
   });
 }
 
+export function useUpdateTagColor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, color }: { id: number; color: TagColorName }) => {
+      const db = await getDb();
+      await db.execute("UPDATE tags SET color = $2 WHERE id = $1", [id, color]);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tags"] }),
+  });
+}
+
 export function useDeleteTag() {
   const qc = useQueryClient();
   return useMutation({
@@ -81,6 +92,44 @@ export function useUnassignTag() {
         fontId,
         tagId,
       ]);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["fonts"] }),
+  });
+}
+
+/**
+ * Bulk-assign one tag to many fonts in ONE statement: a VALUES row per font
+ * id, every value bound as a $ parameter (SQLite numbered params may repeat,
+ * so $1 carries the tag id for every row — no id is ever interpolated).
+ */
+export function useAssignTagBulk() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ fontIds, tagId }: { fontIds: number[]; tagId: number }) => {
+      if (fontIds.length === 0) return;
+      const db = await getDb();
+      const values = fontIds.map((_, i) => `($${i + 2}, $1)`).join(", ");
+      await db.execute(
+        `INSERT OR IGNORE INTO font_tags (font_id, tag_id) VALUES ${values}`,
+        [tagId, ...fontIds]
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["fonts"] }),
+  });
+}
+
+/** Bulk-unassign one tag from many fonts in ONE statement (bound IN list). */
+export function useUnassignTagBulk() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ fontIds, tagId }: { fontIds: number[]; tagId: number }) => {
+      if (fontIds.length === 0) return;
+      const db = await getDb();
+      const placeholders = fontIds.map((_, i) => `$${i + 2}`).join(", ");
+      await db.execute(
+        `DELETE FROM font_tags WHERE tag_id = $1 AND font_id IN (${placeholders})`,
+        [tagId, ...fontIds]
+      );
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["fonts"] }),
   });

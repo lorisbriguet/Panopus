@@ -8,6 +8,14 @@ vi.mock("../../../hooks/useActivation", () => ({
   useSetActive: () => ({ mutate, isPending: false }),
 }));
 
+// BulkBar's tag menu pulls these react-query hooks; mock the module so the
+// bar renders without a QueryClient (menu behavior is covered in bulktag).
+vi.mock("../../../hooks/useTags", () => ({
+  useTags: () => ({ data: [] }),
+  useAssignTagBulk: () => ({ mutate: vi.fn(), isPending: false }),
+  useUnassignTagBulk: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
 beforeEach(() => {
   mutate.mockClear();
   useAppStore.setState({ selectedIds: [] });
