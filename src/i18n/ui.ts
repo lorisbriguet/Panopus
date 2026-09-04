@@ -144,6 +144,7 @@ const ui = {
     glyphs_basic_latin: "Basic Latin",
     glyphs_latin_1: "Latin-1 Supplement",
     glyphs_punctuation: "Punctuation & symbols",
+    open_details: "Open details",
   },
   fr: {
     // Sidebar / Nav
@@ -288,6 +289,7 @@ const ui = {
     glyphs_basic_latin: "Latin de base",
     glyphs_latin_1: "Supplement Latin-1",
     glyphs_punctuation: "Ponctuation et symboles",
+    open_details: "Ouvrir les details",
   },
 } as const;
 

@@ -1,4 +1,11 @@
-import { memo, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  memo,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { Star } from "lucide-react";
 import { Badge } from "../ui/Badge";
 import type { BadgeVariant } from "../ui/Badge";
@@ -23,10 +30,10 @@ interface FontCardProps {
   proofText: string;
   proofSize: number;
   /**
-   * Open the detail panel for this font. Fired on card clicks that do NOT
-   * originate from an interactive control (checkbox, star, toggle, links) —
-   * those keep their own behaviour. Must be referentially stable (the card
-   * is memoized).
+   * Open the detail panel for this font. Fired on card clicks and on
+   * Enter/Space while the card root is focused, but NOT from an inner
+   * interactive control (checkbox, star, toggle, links) — those keep their
+   * own behaviour. Must be referentially stable (the card is memoized).
    */
   onOpenDetail?: (id: number) => void;
 }
@@ -88,12 +95,33 @@ export const FontCard = memo(function FontCard({
     onOpenDetail(font.id);
   };
 
+  // Keyboard access (I1): Enter/Space on the FOCUSED CARD opens the panel.
+  // Keys forwarded (bubbled) from inner controls — star, toggle, checkbox —
+  // have e.target !== the card root and keep their own behaviour.
+  const handleCardKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!onOpenDetail) return;
+    if (e.key !== "Enter" && e.key !== " ") return;
+    if (e.target !== e.currentTarget) return;
+    e.preventDefault(); // Space would scroll the page
+    onOpenDetail(font.id);
+  };
+
   return (
     <div
       ref={ref}
       onClick={handleCardClick}
+      // Actionable-card semantics only when a detail handler exists
+      // (compare/other embeddings render a plain, non-focusable card).
+      {...(onOpenDetail
+        ? {
+            role: "button",
+            tabIndex: 0,
+            "aria-label": `${t.open_details}: ${font.family} ${font.style}`,
+            onKeyDown: handleCardKeyDown,
+          }
+        : {})}
       className={`rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-divider)] p-4 [content-visibility:auto] [contain-intrinsic-size:auto_190px] ${
-        onOpenDetail ? "cursor-pointer hover:border-[var(--color-border)]" : ""
+        onOpenDetail ? "cursor-pointer hover:border-[var(--color-border)] focus-accent" : ""
       }`}
     >
       <div
