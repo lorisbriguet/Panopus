@@ -130,6 +130,8 @@ export function SettingsPage() {
           </Button>
         </div>
         <p className="mt-1.5 text-xs text-muted">{t.library_folder_restart_note}</p>
+        {/* Asset protocol scope is compile-time fixed — see tauri.conf.json. */}
+        <p className="mt-1 text-xs text-muted">{t.library_scope_note}</p>
       </div>
 
       <div>

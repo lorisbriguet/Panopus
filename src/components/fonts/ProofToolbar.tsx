@@ -5,6 +5,7 @@ import { Select } from "../ui/Select";
 import { Toggle } from "../ui/Toggle";
 import { useAppStore, DEFAULT_PROOF_TEXT } from "../../stores/app-store";
 import type { LibrarySortOption } from "../../stores/app-store";
+import type { TagRow } from "../../hooks/useTags";
 import { useT } from "../../i18n/useT";
 
 const ALPHABET = "abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -15,6 +16,8 @@ interface ProofToolbarProps {
   sources: string[];
   /** Distinct licence statuses present in the loaded rows (for the licence filter). */
   licences: string[];
+  /** All tags (for the tag filter) — same props pattern as sources/licences. */
+  tags: TagRow[];
   /**
    * Bulk affordance: replace the selection with every currently-shown font
    * ("activate all for a source/licence"). Only offered while a specific
@@ -28,7 +31,7 @@ interface ProofToolbarProps {
  * text, presets, size) and query controls (search, sort, source/licence,
  * active/favorite gates). All state lives in the app store's library slice.
  */
-export function ProofToolbar({ sources, licences, onSelectAllShown }: ProofToolbarProps) {
+export function ProofToolbar({ sources, licences, tags, onSelectAllShown }: ProofToolbarProps) {
   const t = useT();
   const proofText = useAppStore((s) => s.proofText);
   const proofSize = useAppStore((s) => s.proofSize);
@@ -111,6 +114,22 @@ export function ProofToolbar({ sources, licences, onSelectAllShown }: ProofToolb
           {licences.map((l) => (
             <option key={l} value={l}>
               {l}
+            </option>
+          ))}
+        </Select>
+        <Select
+          fullWidth={false}
+          // Select values are strings: "" ↔ null, otherwise the tag id parsed back.
+          value={libraryQuery.tagId === null ? "" : String(libraryQuery.tagId)}
+          onChange={(e) =>
+            setLibraryQuery({ tagId: e.target.value === "" ? null : Number(e.target.value) })
+          }
+          aria-label={t.all_tags}
+        >
+          <option value="">{t.all_tags}</option>
+          {tags.map((tag) => (
+            <option key={tag.id} value={tag.id}>
+              {tag.name}
             </option>
           ))}
         </Select>

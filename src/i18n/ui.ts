@@ -104,6 +104,7 @@ const ui = {
     sort_family_desc: "Family Z-A",
     all_sources: "All sources",
     all_licences: "All licences",
+    all_tags: "All tags",
     only_active: "Active only",
     only_favorites: "Favorites only",
     loading_fonts: "Loading fonts...",
@@ -124,6 +125,8 @@ const ui = {
     select_all_shown: "Select all shown",
     select_font: "Select font",
     active_label: "active",
+    activation_partial_failed: "{count} fonts could not be activated",
+    deactivation_partial_failed: "{count} fonts could not be deactivated",
 
     // Font detail panel (T11)
     detail_info: "Info",
@@ -170,6 +173,8 @@ const ui = {
     choose_folder: "Choose Folder...",
     library_folder_restart_note:
       "Changes take effect after restarting the app — the folder watcher keeps the previous folder until then.",
+    library_scope_note:
+      "In this version, previews only work while the library stays under ~/Documents/GitHub/panopus-library.",
     choose_folder_failed: "Could not open the folder picker",
     library_path_update_failed: "Could not update the library folder",
     reindex_library: "Re-index Library",
@@ -285,6 +290,7 @@ const ui = {
     sort_family_desc: "Famille Z-A",
     all_sources: "Toutes les sources",
     all_licences: "Toutes les licences",
+    all_tags: "Toutes les etiquettes",
     only_active: "Actives uniquement",
     only_favorites: "Favoris uniquement",
     loading_fonts: "Chargement des polices...",
@@ -305,6 +311,8 @@ const ui = {
     select_all_shown: "Selectionner les polices affichees",
     select_font: "Selectionner la police",
     active_label: "actives",
+    activation_partial_failed: "{count} polices n'ont pas pu etre activees",
+    deactivation_partial_failed: "{count} polices n'ont pas pu etre desactivees",
 
     // Font detail panel (T11)
     detail_info: "Infos",
@@ -351,6 +359,8 @@ const ui = {
     choose_folder: "Choisir un dossier...",
     library_folder_restart_note:
       "Les changements prennent effet apres redemarrage de l'application — la surveillance du dossier conserve l'ancien chemin jusque-la.",
+    library_scope_note:
+      "Dans cette version, les apercus ne fonctionnent que si la bibliotheque reste sous ~/Documents/GitHub/panopus-library.",
     choose_folder_failed: "Impossible d'ouvrir le selecteur de dossier",
     library_path_update_failed: "Impossible de mettre a jour le dossier de la bibliotheque",
     reindex_library: "Reindexer la bibliotheque",

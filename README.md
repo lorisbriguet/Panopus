@@ -87,6 +87,11 @@ src-tauri/              # Rust backend
   src/bootstrap.rs      # First-boot schema bootstrap
 ```
 
+## Limitations
+
+- **Library location is fixed for previews** — the asset protocol scope is compile-time limited to `~/Documents/GitHub/panopus-library` (plus the system font directories). Choosing a library folder outside that path in Settings breaks font previews in this version.
+- **Auto-updater is unwired** — the updater plugin is not registered; updates are manual (see RELEASING.md).
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).

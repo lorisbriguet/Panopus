@@ -5,6 +5,7 @@ import { FontCard } from "../components/fonts/FontCard";
 import { FontDetail } from "../components/fonts/FontDetail";
 import { ProofToolbar } from "../components/fonts/ProofToolbar";
 import { useFonts } from "../hooks/useFonts";
+import { useTags } from "../hooks/useTags";
 import { filterFonts } from "../lib/fontFilters";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
@@ -12,6 +13,7 @@ import { useT } from "../i18n/useT";
 export function LibraryPage() {
   const t = useT();
   const { data: rows, isLoading } = useFonts();
+  const { data: tags } = useTags();
   const libraryQuery = useAppStore((s) => s.libraryQuery);
   const librarySort = useAppStore((s) => s.librarySort);
   const proofText = useAppStore((s) => s.proofText);
@@ -61,6 +63,7 @@ export function LibraryPage() {
       <ProofToolbar
         sources={sources}
         licences={licences}
+        tags={tags ?? []}
         // "Activate all for a source/licence": tick every currently-filtered
         // row (system fonts excluded — they can't be toggled) so the BulkBar
         // can act on the whole set with one click.
