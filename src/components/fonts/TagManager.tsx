@@ -106,8 +106,8 @@ function TagManagerRow({
       <button
         type="button"
         onClick={confirming ? onDelete : onArmDelete}
-        aria-label={`${t.delete_tag} ${tag.name}`}
-        title={t.delete_tag}
+        aria-label={`${confirming ? t.confirm_delete_tag : t.delete_tag} ${tag.name}`}
+        title={confirming ? t.confirm_delete_tag : t.delete_tag}
         className={`ml-auto shrink-0 flex items-center gap-1 text-xs focus-accent rounded p-0.5 ${
           confirming
             ? "text-[var(--color-danger-text)] font-medium"
@@ -162,8 +162,15 @@ export function TagManager({ open, onClose }: TagManagerProps) {
     });
   };
 
+  // Disarm any pending delete confirmation when the modal closes, so a
+  // reopened manager never carries a live one-click delete from last time.
+  const handleClose = () => {
+    setConfirmId(null);
+    onClose();
+  };
+
   return (
-    <Modal open={open} onClose={onClose} title={t.manage_tags}>
+    <Modal open={open} onClose={handleClose} title={t.manage_tags}>
       <form onSubmit={handleCreate} className="flex items-center gap-2">
         <Input
           value={newTag}
