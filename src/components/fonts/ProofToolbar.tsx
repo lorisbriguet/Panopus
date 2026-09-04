@@ -4,7 +4,7 @@ import { SearchBar } from "../ui/SearchBar";
 import { Select } from "../ui/Select";
 import { Toggle } from "../ui/Toggle";
 import { useAppStore, DEFAULT_PROOF_TEXT } from "../../stores/app-store";
-import type { LibrarySortOption } from "../../stores/app-store";
+import type { LibrarySortOption, LibraryColumnsOption } from "../../stores/app-store";
 import type { TagRow } from "../../hooks/useTags";
 import { useT } from "../../i18n/useT";
 
@@ -48,10 +48,12 @@ export function ProofToolbar({
   const proofSize = useAppStore((s) => s.proofSize);
   const libraryQuery = useAppStore((s) => s.libraryQuery);
   const librarySort = useAppStore((s) => s.librarySort);
+  const libraryColumns = useAppStore((s) => s.libraryColumns);
   const setProofText = useAppStore((s) => s.setProofText);
   const setProofSize = useAppStore((s) => s.setProofSize);
   const setLibraryQuery = useAppStore((s) => s.setLibraryQuery);
   const setLibrarySort = useAppStore((s) => s.setLibrarySort);
+  const setLibraryColumns = useAppStore((s) => s.setLibraryColumns);
 
   return (
     <div className="flex flex-col gap-3">
@@ -101,6 +103,24 @@ export function ProofToolbar({
         >
           <option value="family_asc">{t.sort_family_asc}</option>
           <option value="family_desc">{t.sort_family_desc}</option>
+        </Select>
+        <Select
+          fullWidth={false}
+          // Option values are strings: "auto" stays, "1"/"2"/"3" parse back to numbers.
+          value={String(libraryColumns)}
+          onChange={(e) =>
+            setLibraryColumns(
+              e.target.value === "auto"
+                ? "auto"
+                : (Number(e.target.value) as LibraryColumnsOption)
+            )
+          }
+          aria-label={t.columns_label}
+        >
+          <option value="auto">{t.columns_auto}</option>
+          <option value="1">{t.columns_one}</option>
+          <option value="2">{t.columns_two}</option>
+          <option value="3">{t.columns_three}</option>
         </Select>
         {onExpandAll && (
           <Button variant="ghost" size="sm" onClick={onExpandAll}>

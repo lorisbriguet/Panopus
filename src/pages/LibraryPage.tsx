@@ -8,6 +8,7 @@ import { ProofToolbar } from "../components/fonts/ProofToolbar";
 import { useFonts } from "../hooks/useFonts";
 import { useTags } from "../hooks/useTags";
 import { groupByFamily, isFamilyGroup } from "../lib/familyGroups";
+import { gridTemplateForColumns } from "../lib/gridColumns";
 import { filterFonts } from "../lib/fontFilters";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
@@ -21,6 +22,9 @@ export function LibraryPage() {
   const proofText = useAppStore((s) => s.proofText);
   const proofSize = useAppStore((s) => s.proofSize);
   const selectMany = useAppStore((s) => s.selectMany);
+  // Selector returns the derived template STRING (a primitive), so the page
+  // only re-renders when the setting actually changes the template.
+  const gridTemplate = useAppStore((s) => gridTemplateForColumns(s.libraryColumns));
   const setAllFamiliesExpanded = useAppStore((s) => s.setAllFamiliesExpanded);
   // Detail slide-over: id of the inspected font, null = closed. Ephemeral
   // page state — no store slice needed, and useState's setter is stable so
@@ -91,7 +95,10 @@ export function LibraryPage() {
           message={(rows ?? []).length === 0 ? t.library_empty : t.no_fonts_match}
         />
       ) : (
-        <div className="mt-4 flex flex-col gap-3">
+        <div
+          className="mt-4 grid gap-3"
+          style={{ gridTemplateColumns: gridTemplate }}
+        >
           {grouped.map((entry) =>
             isFamilyGroup(entry) ? (
               <FamilyGroup

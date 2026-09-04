@@ -123,7 +123,10 @@ export const FontCard = memo(function FontCard({
             onKeyDown: handleCardKeyDown,
           }
         : {})}
-      className={`rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-divider)] p-4 [content-visibility:auto] [contain-intrinsic-size:auto_190px] ${
+      // min-w-0: as a grid child (multi-column library) the card must be
+      // allowed to shrink below its content width; the preview's
+      // overflow-hidden + break-words then handles long proof text.
+      className={`min-w-0 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border-divider)] p-4 [content-visibility:auto] [contain-intrinsic-size:auto_190px] ${
         onOpenDetail ? "cursor-pointer hover:border-[var(--color-border)] focus-accent" : ""
       }`}
     >

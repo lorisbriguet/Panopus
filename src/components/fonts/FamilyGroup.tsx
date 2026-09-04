@@ -4,6 +4,7 @@ import { FontCard } from "./FontCard";
 import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
 import type { FamilyGroup as FamilyGroupData } from "../../lib/familyGroups";
+import { gridTemplateForColumns } from "../../lib/gridColumns";
 
 interface FamilyGroupProps {
   group: FamilyGroupData;
@@ -30,11 +31,17 @@ export const FamilyGroup = memo(function FamilyGroup({
   const t = useT();
   const expanded = useAppStore((s) => s.expandedFamilies.includes(group.family));
   const toggleFamily = useAppStore((s) => s.toggleFamily);
+  // Same primitive-selector trick as `expanded`: the derived template STRING
+  // only changes when the column setting does, so the memoized group stays put.
+  const gridTemplate = useAppStore((s) => gridTemplateForColumns(s.libraryColumns));
   // The representative stands in for the rest — hint counts the HIDDEN styles.
   const hiddenCount = group.rows.length - 1;
 
   return (
-    <div className="flex flex-col gap-2">
+    // The group spans the FULL library grid; its cards flow in an internal
+    // grid with the IDENTICAL template + gap so columns line up with the
+    // surrounding single-font cards.
+    <div className="col-span-full flex flex-col gap-2">
       <button
         type="button"
         onClick={() => toggleFamily(group.family)}
@@ -52,34 +59,39 @@ export const FamilyGroup = memo(function FamilyGroup({
           {group.rows.length} {t.styles_label}
         </span>
       </button>
-      {expanded ? (
-        group.rows.map((f) => (
-          <FontCard
-            key={f.id}
-            font={f}
-            proofText={proofText}
-            proofSize={proofSize}
-            onOpenDetail={onOpenDetail}
-          />
-        ))
-      ) : (
-        <div className="relative">
-          <FontCard
-            font={group.representative}
-            proofText={proofText}
-            proofSize={proofSize}
-            onOpenDetail={onOpenDetail}
-          />
-          {/* Decorative hint (the header button is the interactive control);
-              pointer-events-none so clicks fall through to the card. */}
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute right-3 top-3 rounded-full bg-accent-light px-2 py-0.5 text-xs font-medium text-accent tabular-nums"
-          >
-            +{hiddenCount} {hiddenCount === 1 ? t.style_label : t.styles_label}
-          </span>
-        </div>
-      )}
+      <div className="grid gap-3" style={{ gridTemplateColumns: gridTemplate }}>
+        {expanded ? (
+          group.rows.map((f) => (
+            <FontCard
+              key={f.id}
+              font={f}
+              proofText={proofText}
+              proofSize={proofSize}
+              onOpenDetail={onOpenDetail}
+            />
+          ))
+        ) : (
+          // Collapsed: the representative still sits in the group's own grid,
+          // so it occupies ONE column-width cell (left-aligned), not a
+          // full-width stretch.
+          <div className="relative min-w-0">
+            <FontCard
+              font={group.representative}
+              proofText={proofText}
+              proofSize={proofSize}
+              onOpenDetail={onOpenDetail}
+            />
+            {/* Decorative hint (the header button is the interactive control);
+                pointer-events-none so clicks fall through to the card. */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute right-3 top-3 rounded-full bg-accent-light px-2 py-0.5 text-xs font-medium text-accent tabular-nums"
+            >
+              +{hiddenCount} {hiddenCount === 1 ? t.style_label : t.styles_label}
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   );
 });

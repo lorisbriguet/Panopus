@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { AppLanguage } from "../i18n/ui";
 import type { FontQuery } from "../lib/fontFilters";
+import type { LibraryColumnsOption } from "../lib/gridColumns";
 import { getThemeById } from "../lib/themes";
 import type { ThemeDefinition } from "../types/theme";
 
@@ -114,6 +115,17 @@ function getInitialAccent(): AccentPreset {
 }
 
 export type LibrarySortOption = "family_asc" | "family_desc";
+export type { LibraryColumnsOption };
+
+// Mixed string/number union, so a plain `as` cast (the librarySort pattern)
+// can't restore it — validate the raw string and fall back to "auto".
+function loadLibraryColumns(): LibraryColumnsOption {
+  const raw = localStorage.getItem("libraryColumns");
+  if (raw === "1" || raw === "2" || raw === "3") {
+    return Number(raw) as 1 | 2 | 3;
+  }
+  return "auto";
+}
 
 /** Default proof line: the classic French mini-pangram used by the toolbar's "pangram" preset. */
 export const DEFAULT_PROOF_TEXT = "Grand Hôtel du Chien Savant";
@@ -200,6 +212,8 @@ export interface AppState {
   libraryQuery: FontQuery;
   /** Library grid sort — remembered across launches like clientsSortKey. */
   librarySort: LibrarySortOption;
+  /** Library grid column override — persisted like librarySort; "auto" = responsive auto-fill. */
+  libraryColumns: LibraryColumnsOption;
   /**
    * Bulk-selection for the library grid: font ids with a ticked checkbox.
    * Stored as number[] (not Set) so zustand shallow snapshots stay plain data;
@@ -232,6 +246,7 @@ export interface AppState {
   /** Merge a partial patch into libraryQuery (spread-merge, like setContext). */
   setLibraryQuery: (patch: Partial<FontQuery>) => void;
   setLibrarySort: (sort: LibrarySortOption) => void;
+  setLibraryColumns: (cols: LibraryColumnsOption) => void;
   /** Tick/untick one font in the bulk selection. */
   toggleSelected: (id: number) => void;
   /** Empty the bulk selection (hides the BulkBar). */
@@ -346,6 +361,7 @@ export const useAppStore = create<AppState>((set) => ({
   proofSize: Number(localStorage.getItem("proofSize")) || 34,
   libraryQuery: EMPTY_FONT_QUERY,
   librarySort: (localStorage.getItem("librarySort") as LibrarySortOption) ?? "family_asc",
+  libraryColumns: loadLibraryColumns(),
   selectedIds: [],
   expandedFamilies: [],
   pinnedIds: (() => {
@@ -392,6 +408,10 @@ export const useAppStore = create<AppState>((set) => ({
   setLibrarySort: (sort) => {
     localStorage.setItem("librarySort", sort);
     set({ librarySort: sort });
+  },
+  setLibraryColumns: (cols) => {
+    localStorage.setItem("libraryColumns", String(cols));
+    set({ libraryColumns: cols });
   },
   toggleSelected: (id) =>
     set((s) => ({
