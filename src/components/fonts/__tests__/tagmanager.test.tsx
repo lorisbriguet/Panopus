@@ -72,8 +72,8 @@ describe("TagManager", () => {
     // First click arms the confirm state — nothing deleted yet.
     fireEvent.click(screen.getByLabelText("Delete tag Display"));
     expect(deleteMutate).not.toHaveBeenCalled();
-    // Second click (now labelled as confirm) performs the delete.
-    fireEvent.click(screen.getByLabelText("Delete tag Display"));
+    // Second click — the armed state is announced in the accessible name.
+    fireEvent.click(screen.getByLabelText("Delete? Display"));
     expect(deleteMutate).toHaveBeenCalledTimes(1);
     expect(deleteMutate.mock.calls[0][0]).toBe(2);
     // Deleted tag was the active filter -> reset to null.
@@ -84,7 +84,7 @@ describe("TagManager", () => {
     useAppStore.setState({ libraryQuery: { ...EMPTY_FONT_QUERY, tagId: 2 } });
     render(<TagManager open onClose={() => {}} />);
     fireEvent.click(screen.getByLabelText("Delete tag Serif"));
-    fireEvent.click(screen.getByLabelText("Delete tag Serif"));
+    fireEvent.click(screen.getByLabelText("Delete? Serif"));
     expect(deleteMutate.mock.calls[0][0]).toBe(1);
     expect(useAppStore.getState().libraryQuery.tagId).toBe(2);
   });
