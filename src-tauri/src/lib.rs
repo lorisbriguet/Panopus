@@ -123,14 +123,22 @@ INSERT INTO designers (name, slug, content_json, links) VALUES
 INSERT INTO designer_sources (designer_id, source) SELECT id, slug FROM designers;
 "#;
 
+/// Velvetyne is a libre foundry (SIL OFL 1.1); the indexer's default for
+/// unknown sources is 'rights unclear', so seed/repair the row explicitly.
+pub const MIGRATION_V3: &str = r#"
+INSERT INTO sources (name, licence_status) VALUES ('velvetyne', 'free')
+  ON CONFLICT(name) DO UPDATE SET licence_status = 'free';
+"#;
+
 /// All schema migrations in order: (version, description, sql). Single
 /// source of truth shared by the SQL plugin registration in `run()` and the
 /// setup() bootstrap (`bootstrap::ensure_schema`) — the two MUST stay
 /// identical, since sqlx validates a SHA-384 checksum of the exact SQL
 /// string against its `_sqlx_migrations` ledger.
-pub(crate) const MIGRATIONS: [(i64, &str, &str); 2] = [
+pub(crate) const MIGRATIONS: [(i64, &str, &str); 3] = [
     (1, "panopus_initial", MIGRATION_V1),
     (2, "panopus_seed_designers", MIGRATION_V2),
+    (3, "panopus_velvetyne_source", MIGRATION_V3),
 ];
 
 /// Global state: the active DB filename (default: "panopus.db").

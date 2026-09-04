@@ -140,7 +140,10 @@ mod tests {
             .query_row("SELECT value FROM settings WHERE key = 'library_path'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(library_path, "~/Documents/GitHub/panopus-library");
-        assert_eq!(count(&conn, "SELECT count(*) FROM _sqlx_migrations WHERE success = 1"), 2);
+        assert_eq!(
+            count(&conn, "SELECT count(*) FROM _sqlx_migrations WHERE success = 1"),
+            crate::MIGRATIONS.len() as i64
+        );
     }
 
     #[test]
@@ -169,7 +172,10 @@ mod tests {
         ensure_schema(&conn).unwrap();
         ensure_schema(&conn).unwrap();
         assert_eq!(count(&conn, "SELECT count(*) FROM designers"), 10);
-        assert_eq!(count(&conn, "SELECT count(*) FROM _sqlx_migrations"), 2);
+        assert_eq!(
+            count(&conn, "SELECT count(*) FROM _sqlx_migrations"),
+            crate::MIGRATIONS.len() as i64
+        );
     }
 
     #[test]
@@ -194,7 +200,10 @@ mod tests {
             .unwrap();
         assert_eq!(v1_checksum, vec![0xabu8], "pre-existing ledger row rewritten");
         assert_eq!(count(&conn, "SELECT count(*) FROM designers"), 10, "v2 not applied");
-        assert_eq!(count(&conn, "SELECT count(*) FROM _sqlx_migrations"), 2);
+        assert_eq!(
+            count(&conn, "SELECT count(*) FROM _sqlx_migrations"),
+            crate::MIGRATIONS.len() as i64
+        );
     }
 
     #[test]

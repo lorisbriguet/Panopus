@@ -12,3 +12,22 @@ fn migration_v1_creates_schema() {
     conn.execute("INSERT INTO fonts (path,family,style,ps_name,source,format,glyph_count,hash,is_system) \
                   VALUES ('/x.ttf','X','Regular','X-Reg','opti','otf',220,'abc',0)", []).unwrap();
 }
+
+#[test]
+fn migration_v3_seeds_velvetyne_as_free_and_is_idempotent() {
+    let conn = Connection::open_in_memory().unwrap();
+    conn.execute_batch(panopus_lib::MIGRATION_V1).unwrap();
+    conn.execute_batch(panopus_lib::MIGRATION_V3).unwrap();
+    let status: String = conn
+        .query_row("SELECT licence_status FROM sources WHERE name='velvetyne'", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(status, "free");
+
+    // Repairs an indexer-created 'rights unclear' row without erroring.
+    conn.execute("UPDATE sources SET licence_status='rights unclear' WHERE name='velvetyne'", []).unwrap();
+    conn.execute_batch(panopus_lib::MIGRATION_V3).unwrap();
+    let status: String = conn
+        .query_row("SELECT licence_status FROM sources WHERE name='velvetyne'", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(status, "free");
+}
