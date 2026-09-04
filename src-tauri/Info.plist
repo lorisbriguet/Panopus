@@ -5,6 +5,6 @@
 	<!-- Points macOS 26+ at the Liquid Glass icon compiled into Assets.car
 	     (see scripts/compile-icon.sh). CFBundleIconFile stays managed by Tauri. -->
 	<key>CFBundleIconName</key>
-	<string>StudioManager</string>
+	<string>Panopus</string>
 </dict>
 </plist>

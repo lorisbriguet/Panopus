@@ -39,7 +39,7 @@ describe("Sidebar", () => {
 
   it("renders the wordmark logo", () => {
     renderSidebar();
-    expect(screen.getByRole("img", { name: "StudioManager" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Panopus" })).toBeInTheDocument();
     expect(screen.getByTestId("brand-wordmark")).toBeInTheDocument();
   });
 
