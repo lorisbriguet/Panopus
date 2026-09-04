@@ -1,3 +1,129 @@
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { useMemo } from "react";
+import { EmptyState, PageHeader } from "../components/ui";
+import { useFonts } from "../hooks/useFonts";
+import { useAppStore } from "../stores/app-store";
+import { useT } from "../i18n/useT";
+import { SortableRow } from "../components/fonts/SortableRow";
+
 export function ComparePage() {
-  return <div>Compare</div>;
+  const t = useT();
+  const { data: rows } = useFonts();
+  const pinnedIds = useAppStore((s) => s.pinnedIds);
+  const setPinnedIds = useAppStore((s) => s.setPinnedIds);
+  const unpinFont = useAppStore((s) => s.unpinFont);
+  const proofText = useAppStore((s) => s.proofText);
+  const proofSize = useAppStore((s) => s.proofSize);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Map row ids by id for fast lookup
+  const rowMap = useMemo(
+    () => new Map((rows ?? []).map((r) => [r.id, r])),
+    [rows]
+  );
+
+  // Filter pinnedIds to only include fonts still in the library
+  const visiblePinnedIds = useMemo(
+    () => pinnedIds.filter((id) => rowMap.has(id)),
+    [pinnedIds, rowMap]
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = visiblePinnedIds.indexOf(active.id as number);
+    const newIndex = visiblePinnedIds.indexOf(over.id as number);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const newOrder = arrayMove(visiblePinnedIds, oldIndex, newIndex);
+    setPinnedIds(newOrder);
+  };
+
+  if (visiblePinnedIds.length === 0) {
+    return (
+      <>
+        <PageHeader title={t.compare} />
+        <EmptyState message={t.compare_empty} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PageHeader title={t.compare} />
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-b border-[var(--color-border-divider)]">
+              <th className="w-8 px-3 py-2 text-left text-xs font-medium text-muted"></th>
+              <th className="px-4 py-2 text-left text-sm font-medium">
+                Font
+              </th>
+              <th className="px-4 py-2 text-left text-sm font-medium">
+                Proof
+              </th>
+              <th className="w-16 px-3 py-2 text-center text-xs font-medium text-muted">
+                Active
+              </th>
+              <th className="w-8 px-3 py-2"></th>
+            </tr>
+          </thead>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={visiblePinnedIds}
+              strategy={verticalListSortingStrategy}
+            >
+              <tbody>
+                {visiblePinnedIds.map((fontId) => {
+                  const font = rowMap.get(fontId);
+                  if (!font) return null;
+
+                  return (
+                    <SortableRow
+                      key={fontId}
+                      fontId={fontId}
+                      font={font}
+                      proofText={proofText}
+                      proofSize={proofSize}
+                      onUnpin={() => unpinFont(fontId)}
+                    />
+                  );
+                })}
+              </tbody>
+            </SortableContext>
+          </DndContext>
+        </table>
+      </div>
+    </>
+  );
 }

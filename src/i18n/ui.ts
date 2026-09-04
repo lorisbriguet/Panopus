@@ -145,6 +145,11 @@ const ui = {
     glyphs_latin_1: "Latin-1 Supplement",
     glyphs_punctuation: "Punctuation & symbols",
     open_details: "Open details",
+
+    // Compare view (T12)
+    compare_empty: "No fonts pinned. Pin fonts from the library to compare them.",
+    pin_font: "Pin font",
+    unpin_font: "Unpin font",
   },
   fr: {
     // Sidebar / Nav
@@ -290,6 +295,11 @@ const ui = {
     glyphs_latin_1: "Supplement Latin-1",
     glyphs_punctuation: "Ponctuation et symboles",
     open_details: "Ouvrir les details",
+
+    // Compare view (T12)
+    compare_empty: "Aucune police epinglee. Epinglez des polices de la bibliotheque pour les comparer.",
+    pin_font: "Epingler la police",
+    unpin_font: "Deepin la police",
   },
 } as const;
 

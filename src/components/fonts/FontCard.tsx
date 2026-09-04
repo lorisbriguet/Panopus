@@ -6,7 +6,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import { Star } from "lucide-react";
+import { Star, Pin, PinOff } from "lucide-react";
 import { Badge } from "../ui/Badge";
 import type { BadgeVariant } from "../ui/Badge";
 import { Toggle } from "../ui/Toggle";
@@ -60,6 +60,9 @@ export const FontCard = memo(function FontCard({
   // not on every selection change across a 6'345-row library.
   const selected = useAppStore((s) => s.selectedIds.includes(font.id));
   const toggleSelected = useAppStore((s) => s.toggleSelected);
+  const isPinned = useAppStore((s) => s.pinnedIds.includes(font.id));
+  const pinFont = useAppStore((s) => s.pinFont);
+  const unpinFont = useAppStore((s) => s.unpinFont);
 
   useEffect(() => {
     if (family) return;
@@ -171,6 +174,27 @@ export const FontCard = memo(function FontCard({
               className={isFavorite ? "text-warning fill-current" : "text-muted"}
               aria-hidden="true"
             />
+          </button>
+          <button
+            type="button"
+            onClick={() => (isPinned ? unpinFont(font.id) : pinFont(font.id))}
+            aria-label={isPinned ? t.unpin_font : t.pin_font}
+            aria-pressed={isPinned}
+            className="focus-accent rounded p-0.5"
+          >
+            {isPinned ? (
+              <Pin
+                size={16}
+                className="text-accent fill-current"
+                aria-hidden="true"
+              />
+            ) : (
+              <PinOff
+                size={16}
+                className="text-muted"
+                aria-hidden="true"
+              />
+            )}
           </button>
           <span title={isSystem ? t.system_font_locked : undefined}>
             <Toggle

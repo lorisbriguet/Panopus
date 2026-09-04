@@ -206,6 +206,11 @@ export interface AppState {
    * ephemeral like libraryQuery — a selection has no meaning across launches.
    */
   selectedIds: number[];
+  /**
+   * Pinned fonts for the compare view: font ids in display order.
+   * Persisted to localStorage so the compare view preserves pins across launches.
+   */
+  pinnedIds: number[];
   activeTimer: ActiveTimer | null;
   currentContext: {
     clientId?: string;
@@ -227,6 +232,12 @@ export interface AppState {
   clearSelection: () => void;
   /** REPLACE the selection with the given ids ("select all shown"). */
   selectMany: (ids: number[]) => void;
+  /** Add a font id to pinnedIds (or move to end if already pinned). */
+  pinFont: (id: number) => void;
+  /** Remove a font id from pinnedIds. */
+  unpinFont: (id: number) => void;
+  /** REPLACE pinnedIds with the given ids in order (reorder operation). */
+  setPinnedIds: (ids: number[]) => void;
   setLanguage: (lang: AppLanguage) => void;
   setExportLanguage: (lang: AppLanguage) => void;
   setCalendarView: (view: CalendarViewOption) => void;
@@ -326,6 +337,16 @@ export const useAppStore = create<AppState>((set) => ({
   libraryQuery: EMPTY_FONT_QUERY,
   librarySort: (localStorage.getItem("librarySort") as LibrarySortOption) ?? "family_asc",
   selectedIds: [],
+  pinnedIds: (() => {
+    try {
+      const raw = localStorage.getItem("pinnedIds");
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  })(),
   activeTimer: loadActiveTimer(),
   currentContext: {},
   // Overwrites any existing timer — callers that care about the running
@@ -369,6 +390,24 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   clearSelection: () => set({ selectedIds: [] }),
   selectMany: (ids) => set({ selectedIds: [...ids] }),
+  pinFont: (id) =>
+    set((s) => {
+      const next = s.pinnedIds.includes(id)
+        ? s.pinnedIds
+        : [...s.pinnedIds, id];
+      localStorage.setItem("pinnedIds", JSON.stringify(next));
+      return { pinnedIds: next };
+    }),
+  unpinFont: (id) =>
+    set((s) => {
+      const next = s.pinnedIds.filter((x) => x !== id);
+      localStorage.setItem("pinnedIds", JSON.stringify(next));
+      return { pinnedIds: next };
+    }),
+  setPinnedIds: (ids) => {
+    localStorage.setItem("pinnedIds", JSON.stringify(ids));
+    set({ pinnedIds: [...ids] });
+  },
   setLanguage: (lang) => {
     localStorage.setItem("appLanguage", lang);
     set({ language: lang });
