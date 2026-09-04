@@ -154,6 +154,15 @@ const ui = {
     compare_proof: "Proof",
     compare_active: "Active",
     drag_reorder: "Drag to reorder",
+
+    // Designer wiki (T13)
+    loading_designers: "Loading designers...",
+    designers_empty: "No designers yet",
+    designer_not_found: "Designer not found",
+    back_to_designers: "Back to designers",
+    designer_links: "Links",
+    designer_fonts_by: "Fonts by this designer",
+    designer_bio_placeholder: "Write this designer's biography...",
   },
   fr: {
     // Sidebar / Nav
@@ -308,6 +317,15 @@ const ui = {
     compare_proof: "Epreuve",
     compare_active: "Active",
     drag_reorder: "Glisser pour reordonner",
+
+    // Designer wiki (T13)
+    loading_designers: "Chargement des designers...",
+    designers_empty: "Aucun designer pour le moment",
+    designer_not_found: "Designer introuvable",
+    back_to_designers: "Retour aux designers",
+    designer_links: "Liens",
+    designer_fonts_by: "Polices de ce designer",
+    designer_bio_placeholder: "Rediger la biographie de ce designer...",
   },
 } as const;
 

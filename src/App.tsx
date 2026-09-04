@@ -9,6 +9,7 @@ import { GlobalShortcuts } from "./components/GlobalShortcuts";
 import { LibraryPage } from "./pages/LibraryPage";
 import { ComparePage } from "./pages/ComparePage";
 import { DesignersPage } from "./pages/DesignersPage";
+import { DesignerDetailPage } from "./pages/DesignerDetailPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { CommandPalette } from "./components/CommandPalette";
 import { useErrorNotifications } from "./hooks/useErrorNotifications";
@@ -115,6 +116,7 @@ export default function App() {
               <Route path="library" element={<LibraryPage />} />
               <Route path="compare" element={<ComparePage />} />
               <Route path="designers" element={<DesignersPage />} />
+              <Route path="designers/:slug" element={<DesignerDetailPage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
           </Routes>

@@ -44,6 +44,85 @@ INSERT INTO settings (key, value) VALUES
  ('proof_text', 'Grand Hôtel du Chien Savant'), ('proof_size', '34');
 "#;
 
+/// Panopus v1 designer wiki seed (Task 13). Ten designers/foundries with
+/// researched bios as Tiptap doc JSON and real source URLs; the
+/// designer_sources rows map each wiki entry to its fonts.source value.
+/// Sources: panopus-library LICENSING.md + scrape-log.md.
+pub const MIGRATION_V2: &str = r#"
+INSERT INTO designers (name, slug, content_json, links) VALUES
+('Dieter Steffmann', 'steffmann',
+ '{"type":"doc","content":[
+   {"type":"paragraph","content":[{"type":"text","text":"Dieter Steffmann is a retired German typesetter from Kreuztal, trained in traditional letterpress composition before the trade moved to photo and then digital typesetting."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"In retirement he digitized several hundred historical typefaces, with a particular focus on blackletter and Fraktur styles, Victorian and Art Nouveau display faces, and other material from the German printing tradition. His Dafont catalogue accounts for the roughly two hundred files in this library."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"Steffmann regards these typefaces as cultural heritage rather than commercial property: he grants free use of his digitizations, including commercial use."}]}
+ ]}',
+ '["https://www.dafont.com/dieter-steffmann.d253","http://www.moorstation.org/typoasis"]'),
+('Manfred Klein', 'klein',
+ '{"type":"doc","content":[
+   {"type":"paragraph","content":[{"type":"text","text":"Manfred Klein (1932-2018) was a German typographer who trained as a typesetter in the 1950s and spent his career in advertising as a typographer and creative director, writing about type along the way."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"In retirement he became one of the most prolific hobbyist type designers of the early digital era, releasing thousands of fonts: experimental text faces, historical revivals and a vast body of playful dingbats. His work was hosted for years on the typOasis site and survives in large mirrored collections on Fontspace and Dafont."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"Klein released his fonts as freeware; for commercial use he asked not for payment to himself but for a donation to charity."}]}
+ ]}',
+ '["https://www.fontspace.com/manfred-klein","https://www.dafont.com/manfred-klein.d302","http://www.moorstation.org/typoasis"]'),
+('Dick Pape', 'pape',
+ '{"type":"doc","content":[
+   {"type":"paragraph","content":[{"type":"text","text":"Dick Pape is an American font digitizer who took up type digitization in retirement and produced work at a scale few professionals match: this library holds close to two thousand of his files."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"Rather than drawing new letterforms, Pape revives material that would otherwise stay locked in books: nineteenth-century specimen alphabets, ornamental and pictorial initials, and decorative lettering from public-domain archival sources."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"His collections are distributed freely through Luc Devroye''s type archive, which hosts a dedicated mirror of his output; much of it digitizes public-domain nineteenth-century material."}]}
+ ]}',
+ '["https://luc.devroye.org/pape/","https://luc.devroye.org/"]'),
+('Nick Curtis', 'nickcurtis',
+ '{"type":"doc","content":[
+   {"type":"paragraph","content":[{"type":"text","text":"Nick Curtis is an American type designer who came to type through a career in advertising and graphic design, publishing under the Nick''s Fonts label from the 1990s onward."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"His speciality is reviving vintage commercial lettering: sign painting, showcard and Art Deco styles, wood type, and lettering lifted from old advertisements and packaging, typically issued under punning names. The catalogue runs to hundreds of families."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"Alongside commercial releases, Curtis published a large freeware set; the Fontspace mirror of that freeware collection is what this library holds."}]}
+ ]}',
+ '["https://www.fontspace.com/nicks-fonts","http://www.nicksfonts.com"]'),
+('Igino Marini', 'im-fell',
+ '{"type":"doc","content":[
+   {"type":"paragraph","content":[{"type":"text","text":"Igino Marini is an Italian engineer best known for digitizing the Fell Types: the seventeenth-century punches and matrices acquired by Bishop John Fell for Oxford University Press."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"Beginning in the 2000s, Marini produced digitizations that deliberately preserve the irregular, inked character of the original printing rather than smoothing it away. He is also the author of iKern, a mathematical letterfitting service used by many independent foundries for spacing and kerning."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"The Fell Types digitizations are free to use with attribution to Igino Marini, and are also distributed through Google Fonts."}]}
+ ]}',
+ '["https://iginomarini.com/fell/","https://fonts.google.com"]'),
+('Peter Wiegel', 'wiegel',
+ '{"type":"doc","content":[
+   {"type":"paragraph","content":[{"type":"text","text":"Peter Wiegel is a German type designer who published his catalogue of well over three hundred fonts on his own site, peter-wiegel.de."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"His work centres on the German printing tradition: blackletter and Fraktur faces, Kurrent and other historical German scripts, and revivals of display material from old specimens, alongside original designs."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"Wiegel released his fonts under open licences, chiefly the SIL Open Font License, so they are free to use commercially and to modify."}]}
+ ]}',
+ '["http://www.peter-wiegel.de/fonts2.html","http://www.peter-wiegel.de/Fonts/index.html"]'),
+('Fredrick Nader (Apostrophic Labs)', 'apostrophic',
+ '{"type":"doc","content":[
+   {"type":"paragraph","content":[{"type":"text","text":"Apostrophic Laboratories was a type collective active around the turn of the millennium, led by Fredrick Nader, who worked under the alias Apostrophe."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"The Labs released hundreds of free families in a few intensely productive years: techno and display experiments, text faces and extensive dingbat sets, produced by Nader together with collaborators around the world."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"The fonts were released as freeware permitting free use but not modification or resale. After the original site went offline, the catalogue survived through archives such as Fontspace and Dafont."}]}
+ ]}',
+ '["https://www.fontspace.com/apostrophic-lab","https://www.dafont.com/apostrophic-labs.d128"]'),
+('Castcraft / OPTI', 'opti',
+ '{"type":"doc","content":[
+   {"type":"paragraph","content":[{"type":"text","text":"Castcraft Software, publisher of the OPTIfonts library, was a Chicago type house rooted in the phototypesetting era. Under the OPTI prefix it digitized an enormous catalogue of display and text faces, including many designs that originated with phototype suppliers such as Filmotype, VGC and Alphabet Innovations."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"The company disappeared without transferring its rights, and many OPTI faces were themselves digitizations of other foundries'' designs, so there is no one left to licence the library from."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"The fonts now circulate as abandonware with no valid licence and their rights remain unclear. For published work, licensed equivalent revivals exist from foundries such as Canada Type and Photo-Lettering."}]}
+ ]}',
+ '["http://abfonts.freehostia.com/opti/","https://luc.devroye.org/fonts-27506.html"]'),
+('Bitstream', 'bitstream',
+ '{"type":"doc","content":[
+   {"type":"paragraph","content":[{"type":"text","text":"Bitstream Inc., founded in 1981 in Cambridge, Massachusetts by Matthew Carter, Mike Parker and colleagues, was the first major independent digital type foundry, selling type as software unbundled from typesetting hardware."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"Its library combined originals such as Carter''s Charter with versions of classic faces issued under Bitstream naming (Swiss 721, Dutch 801 and so on). Charter and Courier 10 Pitch were donated to the X Consortium in the early 1990s under permissive terms."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"Monotype acquired Bitstream''s font business in 2012, and the library is licensed commercially through MyFonts. The files in this collection were format-shifted from a personal 1990 floppy archive for archival use and must not be redistributed."}]}
+ ]}',
+ '["https://en.wikipedia.org/wiki/Bitstream_Inc.","https://www.myfonts.com/pages/linotype-bitstream-foundry/"]'),
+('Astigmatic (Brian J. Bonislawsky)', 'astigmatic',
+ '{"type":"doc","content":[
+   {"type":"paragraph","content":[{"type":"text","text":"Astigmatic, in full the Astigmatic One Eye Typographic Institute, is the foundry of American type designer Brian J. Bonislawsky, active since the mid-1990s."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"Its output is display-driven: Western and Victorian wood-type styles, grunge, novelty and sign-painting faces, produced in large numbers. A substantial set of Astigmatic families was later released as open source through Google Fonts, which is where this collection''s files come from."}]},
+   {"type":"paragraph","content":[{"type":"text","text":"The Google Fonts releases are licensed under the SIL Open Font License or the Apache License and are free for commercial use."}]}
+ ]}',
+ '["https://fonts.google.com","http://www.astigmatic.com"]');
+INSERT INTO designer_sources (designer_id, source) SELECT id, slug FROM designers;
+"#;
+
 /// Global state: the active DB filename (default: "panopus.db").
 /// In test mode this switches to "panopus_test.db".
 pub(crate) struct ActiveDb(pub(crate) Mutex<String>);
@@ -384,6 +463,12 @@ pub fn run() {
             version: 1,
             description: "panopus_initial",
             sql: MIGRATION_V1,
+            kind: tauri_plugin_sql::MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "panopus_seed_designers",
+            sql: MIGRATION_V2,
             kind: tauri_plugin_sql::MigrationKind::Up,
         },
     ];
