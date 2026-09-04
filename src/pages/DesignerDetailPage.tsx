@@ -4,7 +4,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import TiptapLink from "@tiptap/extension-link";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { getDb } from "../db";
 import { FontCard } from "../components/fonts/FontCard";
@@ -88,10 +87,12 @@ function BioEditor({ designer }: { designer: DesignerRow }) {
   const editor = useEditor(
     {
       extensions: [
-        StarterKit,
+        // Tiptap v3 StarterKit already bundles Link — configure it HERE.
+        // A separate @tiptap/extension-link entry would register a
+        // duplicate whose default openOnClick:true wins and would
+        // window.open links inside the app webview.
+        StarterKit.configure({ link: { openOnClick: false } }),
         Placeholder.configure({ placeholder: t.designer_bio_placeholder }),
-        // Never auto-navigate the app webview from stored content
-        TiptapLink.configure({ openOnClick: false }),
       ],
       content: parseBio(designer.content_json),
       onUpdate: ({ editor: ed }) => debouncedSave(JSON.stringify(ed.getJSON())),
@@ -201,7 +202,7 @@ export function DesignerDetailPage() {
           {t.designer_fonts_by}
         </h2>
         {designerFonts.length === 0 ? (
-          <EmptyState message={t.library_empty} />
+          <EmptyState message={t.designer_no_fonts} />
         ) : (
           <div className="flex flex-col gap-3">
             {designerFonts.map((f) => (

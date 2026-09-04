@@ -162,6 +162,7 @@ const ui = {
     back_to_designers: "Back to designers",
     designer_links: "Links",
     designer_fonts_by: "Fonts by this designer",
+    designer_no_fonts: "No fonts from this designer in the library",
     designer_bio_placeholder: "Write this designer's biography...",
   },
   fr: {
@@ -325,6 +326,7 @@ const ui = {
     back_to_designers: "Retour aux designers",
     designer_links: "Liens",
     designer_fonts_by: "Polices de ce designer",
+    designer_no_fonts: "Aucune police de ce designer dans la bibliotheque",
     designer_bio_placeholder: "Rediger la biographie de ce designer...",
   },
 } as const;
