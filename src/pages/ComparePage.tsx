@@ -14,7 +14,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { useMemo } from "react";
-import { EmptyState, PageHeader } from "../components/ui";
+import { EmptyState, PageHeader, PageSpinner } from "../components/ui";
 import { useFonts } from "../hooks/useFonts";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
@@ -22,7 +22,7 @@ import { SortableRow } from "../components/fonts/SortableRow";
 
 export function ComparePage() {
   const t = useT();
-  const { data: rows } = useFonts();
+  const { data: rows, isLoading } = useFonts();
   const pinnedIds = useAppStore((s) => s.pinnedIds);
   const setPinnedIds = useAppStore((s) => s.setPinnedIds);
   const unpinFont = useAppStore((s) => s.unpinFont);
@@ -65,6 +65,17 @@ export function ComparePage() {
     setPinnedIds(newOrder);
   };
 
+  // While the fonts query is loading, every pin looks "removed" — show a
+  // spinner instead of a misleading empty state (same pattern as LibraryPage).
+  if (isLoading) {
+    return (
+      <>
+        <PageHeader title={t.compare} />
+        <PageSpinner label={t.loading_fonts} />
+      </>
+    );
+  }
+
   if (visiblePinnedIds.length === 0) {
     return (
       <>
@@ -83,13 +94,13 @@ export function ComparePage() {
             <tr className="border-b border-[var(--color-border-divider)]">
               <th className="w-8 px-3 py-2 text-left text-xs font-medium text-muted"></th>
               <th className="px-4 py-2 text-left text-sm font-medium">
-                Font
+                {t.compare_font}
               </th>
               <th className="px-4 py-2 text-left text-sm font-medium">
-                Proof
+                {t.compare_proof}
               </th>
               <th className="w-16 px-3 py-2 text-center text-xs font-medium text-muted">
-                Active
+                {t.compare_active}
               </th>
               <th className="w-8 px-3 py-2"></th>
             </tr>

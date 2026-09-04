@@ -5,6 +5,7 @@ import { Grip, X } from "lucide-react";
 import { Toggle } from "../ui/Toggle";
 import { useSetActive } from "../../hooks/useActivation";
 import { useT } from "../../i18n/useT";
+import { DEFAULT_PROOF_TEXT } from "../../stores/app-store";
 import type { FontRow } from "../../lib/fontFilters";
 import { ensureFontFace } from "./FontFaceLoader";
 
@@ -43,13 +44,15 @@ export const SortableRow = memo(function SortableRow({
   // Ensure the font face is registered (idempotent)
   const family = ensureFontFace(fontId, font.path);
 
+  // Same fallback as Waterfall: an all-whitespace proof line renders nothing,
+  // so substitute the default pangram.
+  const text = proofText.trim() === "" ? DEFAULT_PROOF_TEXT : proofText;
+
   return (
     <tr
       ref={setNodeRef}
       style={style}
-      className={`border-b border-[var(--color-border-divider)] hover:bg-[var(--color-surface-hover)] ${
-        isDragging ? "opacity-50" : ""
-      }`}
+      className="border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)]"
     >
       {/* Drag handle */}
       <td className="px-2 py-2 text-center">
@@ -58,7 +61,7 @@ export const SortableRow = memo(function SortableRow({
           {...attributes}
           {...listeners}
           className="cursor-grab active:cursor-grabbing text-muted hover:text-[var(--color-text)] focus-accent rounded p-0.5 inline-flex"
-          aria-label="Drag to reorder"
+          aria-label={t.drag_reorder}
         >
           <Grip size={16} aria-hidden="true" />
         </button>
@@ -79,7 +82,7 @@ export const SortableRow = memo(function SortableRow({
             fontSize: proofSize,
           }}
         >
-          {proofText}
+          {text}
         </div>
       </td>
 

@@ -232,7 +232,7 @@ export interface AppState {
   clearSelection: () => void;
   /** REPLACE the selection with the given ids ("select all shown"). */
   selectMany: (ids: number[]) => void;
-  /** Add a font id to pinnedIds (or move to end if already pinned). */
+  /** Append a font id to pinnedIds (no-op if already pinned). */
   pinFont: (id: number) => void;
   /** Remove a font id from pinnedIds. */
   unpinFont: (id: number) => void;

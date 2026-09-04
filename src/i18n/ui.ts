@@ -150,6 +150,10 @@ const ui = {
     compare_empty: "No fonts pinned. Pin fonts from the library to compare them.",
     pin_font: "Pin font",
     unpin_font: "Unpin font",
+    compare_font: "Font",
+    compare_proof: "Proof",
+    compare_active: "Active",
+    drag_reorder: "Drag to reorder",
   },
   fr: {
     // Sidebar / Nav
@@ -299,7 +303,11 @@ const ui = {
     // Compare view (T12)
     compare_empty: "Aucune police epinglee. Epinglez des polices de la bibliotheque pour les comparer.",
     pin_font: "Epingler la police",
-    unpin_font: "Deepin la police",
+    unpin_font: "Depingler la police",
+    compare_font: "Police",
+    compare_proof: "Epreuve",
+    compare_active: "Active",
+    drag_reorder: "Glisser pour reordonner",
   },
 } as const;
 
