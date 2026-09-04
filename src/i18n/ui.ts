@@ -119,6 +119,7 @@ const ui = {
 
     // Family groups
     styles_label: "styles",
+    style_label: "style",
     expand_all_families: "Expand all",
     collapse_all_families: "Collapse all",
     expand_family: "Expand family",
@@ -312,6 +313,7 @@ const ui = {
 
     // Family groups
     styles_label: "styles",
+    style_label: "style",
     expand_all_families: "Tout deplier",
     collapse_all_families: "Tout replier",
     expand_family: "Deplier la famille",

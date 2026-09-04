@@ -40,7 +40,7 @@ export const FamilyGroup = memo(function FamilyGroup({
         onClick={() => toggleFamily(group.family)}
         aria-expanded={expanded}
         aria-label={`${expanded ? t.collapse_family : t.expand_family}: ${group.family}`}
-        className="flex items-center gap-2 self-start max-w-full rounded-lg px-1.5 py-1 text-left cursor-pointer focus-accent hover:bg-[var(--color-surface)]"
+        className="flex items-center gap-2 self-start max-w-full rounded-lg px-1.5 py-1 text-left cursor-pointer focus-accent hover:bg-[var(--color-hover-row)]"
       >
         <ChevronRight
           size={14}
@@ -76,7 +76,7 @@ export const FamilyGroup = memo(function FamilyGroup({
             aria-hidden="true"
             className="pointer-events-none absolute right-3 top-3 rounded-full bg-accent-light px-2 py-0.5 text-xs font-medium text-accent tabular-nums"
           >
-            +{hiddenCount} {t.styles_label}
+            +{hiddenCount} {hiddenCount === 1 ? t.style_label : t.styles_label}
           </span>
         </div>
       )}
