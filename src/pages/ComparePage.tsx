@@ -88,8 +88,19 @@ export function ComparePage() {
   return (
     <>
       <PageHeader title={t.compare} />
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse">
+      {/* DndContext lives OUTSIDE the table: it renders an inline a11y
+          announcement <div>, which is invalid DOM inside <table>. */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={visiblePinnedIds}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-[var(--color-border-divider)]">
               <th className="w-8 px-3 py-2 text-left text-xs font-medium text-muted"></th>
@@ -105,15 +116,6 @@ export function ComparePage() {
               <th className="w-8 px-3 py-2"></th>
             </tr>
           </thead>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={visiblePinnedIds}
-              strategy={verticalListSortingStrategy}
-            >
               <tbody>
                 {visiblePinnedIds.map((fontId) => {
                   const font = rowMap.get(fontId);
@@ -131,10 +133,10 @@ export function ComparePage() {
                   );
                 })}
               </tbody>
-            </SortableContext>
-          </DndContext>
-        </table>
-      </div>
+            </table>
+          </div>
+        </SortableContext>
+      </DndContext>
     </>
   );
 }
