@@ -115,7 +115,14 @@ function getInitialAccent(): AccentPreset {
 }
 
 export type LibrarySortOption = "family_asc" | "family_desc";
+export type LibraryViewOption = "list" | "grid";
 export type { LibraryColumnsOption };
+
+// Persisted like librarySort; anything but the literal "grid" (including
+// null on first launch) falls back to the DEFAULT "list" specimen view.
+function loadLibraryView(): LibraryViewOption {
+  return localStorage.getItem("libraryView") === "grid" ? "grid" : "list";
+}
 
 // Mixed string/number union, so a plain `as` cast (the librarySort pattern)
 // can't restore it — validate the raw string and fall back to "auto".
@@ -214,6 +221,8 @@ export interface AppState {
   librarySort: LibrarySortOption;
   /** Library grid column override — persisted like librarySort; "auto" = responsive auto-fill. */
   libraryColumns: LibraryColumnsOption;
+  /** Library display mode — persisted like librarySort; "list" = specimen rows (default), "grid" = cards. */
+  libraryView: LibraryViewOption;
   /**
    * Bulk-selection for the library grid: font ids with a ticked checkbox.
    * Stored as number[] (not Set) so zustand shallow snapshots stay plain data;
@@ -247,6 +256,7 @@ export interface AppState {
   setLibraryQuery: (patch: Partial<FontQuery>) => void;
   setLibrarySort: (sort: LibrarySortOption) => void;
   setLibraryColumns: (cols: LibraryColumnsOption) => void;
+  setLibraryView: (view: LibraryViewOption) => void;
   /** Tick/untick one font in the bulk selection. */
   toggleSelected: (id: number) => void;
   /** Empty the bulk selection (hides the BulkBar). */
@@ -362,6 +372,7 @@ export const useAppStore = create<AppState>((set) => ({
   libraryQuery: EMPTY_FONT_QUERY,
   librarySort: (localStorage.getItem("librarySort") as LibrarySortOption) ?? "family_asc",
   libraryColumns: loadLibraryColumns(),
+  libraryView: loadLibraryView(),
   selectedIds: [],
   expandedFamilies: [],
   pinnedIds: (() => {
@@ -412,6 +423,10 @@ export const useAppStore = create<AppState>((set) => ({
   setLibraryColumns: (cols) => {
     localStorage.setItem("libraryColumns", String(cols));
     set({ libraryColumns: cols });
+  },
+  setLibraryView: (view) => {
+    localStorage.setItem("libraryView", view);
+    set({ libraryView: view });
   },
   toggleSelected: (id) =>
     set((s) => ({

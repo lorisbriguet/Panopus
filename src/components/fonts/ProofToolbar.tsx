@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pencil } from "lucide-react";
+import { LayoutGrid, List, Pencil } from "lucide-react";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { SearchBar } from "../ui/SearchBar";
@@ -52,11 +52,13 @@ export function ProofToolbar({
   const libraryQuery = useAppStore((s) => s.libraryQuery);
   const librarySort = useAppStore((s) => s.librarySort);
   const libraryColumns = useAppStore((s) => s.libraryColumns);
+  const libraryView = useAppStore((s) => s.libraryView);
   const setProofText = useAppStore((s) => s.setProofText);
   const setProofSize = useAppStore((s) => s.setProofSize);
   const setLibraryQuery = useAppStore((s) => s.setLibraryQuery);
   const setLibrarySort = useAppStore((s) => s.setLibrarySort);
   const setLibraryColumns = useAppStore((s) => s.setLibraryColumns);
+  const setLibraryView = useAppStore((s) => s.setLibraryView);
   // Tag manager modal: ephemeral open state, like FontDetail's detailId.
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
 
@@ -109,24 +111,58 @@ export function ProofToolbar({
           <option value="family_asc">{t.sort_family_asc}</option>
           <option value="family_desc">{t.sort_family_desc}</option>
         </Select>
-        <Select
-          fullWidth={false}
-          // Option values are strings: "auto" stays, "1"/"2"/"3" parse back to numbers.
-          value={String(libraryColumns)}
-          onChange={(e) =>
-            setLibraryColumns(
-              e.target.value === "auto"
-                ? "auto"
-                : (Number(e.target.value) as LibraryColumnsOption)
-            )
-          }
-          aria-label={t.columns_label}
-        >
-          <option value="auto">{t.columns_auto}</option>
-          <option value="1">{t.columns_one}</option>
-          <option value="2">{t.columns_two}</option>
-          <option value="3">{t.columns_three}</option>
-        </Select>
+        {/* Segmented list/grid switch — list is the default specimen view. */}
+        <div className="flex items-center rounded-lg border border-[var(--color-border-divider)] p-0.5 gap-0.5">
+          <button
+            type="button"
+            onClick={() => setLibraryView("list")}
+            aria-label={t.view_list}
+            aria-pressed={libraryView === "list"}
+            title={t.view_list}
+            className={`rounded-md p-1.5 focus-accent ${
+              libraryView === "list"
+                ? "bg-accent-light text-accent"
+                : "text-muted hover:text-[var(--color-text-secondary)]"
+            }`}
+          >
+            <List size={14} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setLibraryView("grid")}
+            aria-label={t.view_grid}
+            aria-pressed={libraryView === "grid"}
+            title={t.view_grid}
+            className={`rounded-md p-1.5 focus-accent ${
+              libraryView === "grid"
+                ? "bg-accent-light text-accent"
+                : "text-muted hover:text-[var(--color-text-secondary)]"
+            }`}
+          >
+            <LayoutGrid size={14} aria-hidden="true" />
+          </button>
+        </div>
+        {/* Column override only means something for the card grid. */}
+        {libraryView === "grid" && (
+          <Select
+            fullWidth={false}
+            // Option values are strings: "auto" stays, "1"/"2"/"3" parse back to numbers.
+            value={String(libraryColumns)}
+            onChange={(e) =>
+              setLibraryColumns(
+                e.target.value === "auto"
+                  ? "auto"
+                  : (Number(e.target.value) as LibraryColumnsOption)
+              )
+            }
+            aria-label={t.columns_label}
+          >
+            <option value="auto">{t.columns_auto}</option>
+            <option value="1">{t.columns_one}</option>
+            <option value="2">{t.columns_two}</option>
+            <option value="3">{t.columns_three}</option>
+          </Select>
+        )}
         {onExpandAll && (
           <Button variant="ghost" size="sm" onClick={onExpandAll}>
             {t.expand_all_families}
