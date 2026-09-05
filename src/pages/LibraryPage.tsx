@@ -96,7 +96,7 @@ export function LibraryPage() {
         />
       ) : (
         <div
-          className="mt-4 grid gap-3"
+          className="mt-4 grid gap-3 items-start"
           style={{ gridTemplateColumns: gridTemplate }}
         >
           {grouped.map((entry) =>

@@ -38,10 +38,12 @@ export const FamilyGroup = memo(function FamilyGroup({
   const hiddenCount = group.rows.length - 1;
 
   return (
-    // The group spans the FULL library grid; its cards flow in an internal
-    // grid with the IDENTICAL template + gap so columns line up with the
-    // surrounding single-font cards.
-    <div className="col-span-full flex flex-col gap-2">
+    // Collapsed: the group is a NORMAL grid cell (header + representative
+    // stacked) flowing with the single-font cards — a full-width band for
+    // one card left ugly dead zones. Expanded: it spans the full grid and
+    // lays its style cards out in an internal grid with the IDENTICAL
+    // template + gap so columns line up with the surrounding cells.
+    <div className={expanded ? "col-span-full flex flex-col gap-2" : "flex flex-col gap-2 min-w-0"}>
       <button
         type="button"
         onClick={() => toggleFamily(group.family)}
@@ -59,9 +61,9 @@ export const FamilyGroup = memo(function FamilyGroup({
           {group.rows.length} {t.styles_label}
         </span>
       </button>
-      <div className="grid gap-3" style={{ gridTemplateColumns: gridTemplate }}>
-        {expanded ? (
-          group.rows.map((f) => (
+      {expanded ? (
+        <div className="grid gap-3 items-start" style={{ gridTemplateColumns: gridTemplate }}>
+          {group.rows.map((f) => (
             <FontCard
               key={f.id}
               font={f}
@@ -69,29 +71,26 @@ export const FamilyGroup = memo(function FamilyGroup({
               proofSize={proofSize}
               onOpenDetail={onOpenDetail}
             />
-          ))
-        ) : (
-          // Collapsed: the representative still sits in the group's own grid,
-          // so it occupies ONE column-width cell (left-aligned), not a
-          // full-width stretch.
-          <div className="relative min-w-0">
-            <FontCard
-              font={group.representative}
-              proofText={proofText}
-              proofSize={proofSize}
-              onOpenDetail={onOpenDetail}
-            />
-            {/* Decorative hint (the header button is the interactive control);
-                pointer-events-none so clicks fall through to the card. */}
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute right-3 top-3 rounded-full bg-accent-light px-2 py-0.5 text-xs font-medium text-accent tabular-nums"
-            >
-              +{hiddenCount} {hiddenCount === 1 ? t.style_label : t.styles_label}
-            </span>
-          </div>
-        )}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="relative min-w-0">
+          <FontCard
+            font={group.representative}
+            proofText={proofText}
+            proofSize={proofSize}
+            onOpenDetail={onOpenDetail}
+          />
+          {/* Decorative hint (the header button is the interactive control);
+              pointer-events-none so clicks fall through to the card. */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute right-3 top-3 rounded-full bg-accent-light px-2 py-0.5 text-xs font-medium text-accent tabular-nums"
+          >
+            +{hiddenCount} {hiddenCount === 1 ? t.style_label : t.styles_label}
+          </span>
+        </div>
+      )}
     </div>
   );
 });

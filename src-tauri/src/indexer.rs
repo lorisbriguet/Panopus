@@ -34,9 +34,16 @@ fn name(face: &Face, id: u16) -> Option<String> {
         .find_map(|n| n.to_string())
 }
 
-/// How many mapped codepoints a specimen sample collects. ~24 characters
+/// How many mapped codepoints a specimen sample keeps. ~24 characters
 /// fill a grid card line at the default proof size without overflowing.
 const SAMPLE_LEN: usize = 24;
+
+/// How many candidate codepoints the collection passes gather before the
+/// letters-first selection. System faces map dozens of Latin punctuation
+/// marks and digits BEFORE their actual script blocks (Arabic U+0600+,
+/// Armenian U+0531+, ...), so the window must reach well past them for the
+/// specimen to lead with letters instead of `!"'()./:`.
+const CANDIDATE_LEN: usize = 160;
 
 /// A codepoint usable in a specimen: >= U+0021, a valid scalar value
 /// (`char::from_u32` already rejects the surrogate range), and not
@@ -53,18 +60,18 @@ fn sampleable_char(cp: u32) -> Option<char> {
     Some(ch)
 }
 
-/// Collect up to `SAMPLE_LEN` distinct sampleable codepoints mapped to a
-/// real glyph by `subtable` into `seen`/`sample`. Subtable-level
+/// Collect up to `CANDIDATE_LEN` distinct sampleable codepoints mapped to a
+/// real glyph by `subtable` into `seen`/`candidates`. Subtable-level
 /// `glyph_index` is used on purpose: `Face::glyph_index` only consults
 /// Unicode subtables, which would reject every symbol-encoded codepoint,
 /// and `Subtable::codepoints` may list codepoints whose glyph is 0.
 fn collect_specimen(
     subtable: &ttf_parser::cmap::Subtable,
     seen: &mut std::collections::BTreeSet<u32>,
-    sample: &mut String,
+    candidates: &mut Vec<char>,
 ) {
     subtable.codepoints(|cp| {
-        if seen.len() >= SAMPLE_LEN {
+        if seen.len() >= CANDIDATE_LEN {
             return;
         }
         let Some(ch) = sampleable_char(cp) else { return };
@@ -72,9 +79,18 @@ fn collect_specimen(
             return;
         }
         if seen.insert(cp) {
-            sample.push(ch);
+            candidates.push(ch);
         }
     });
+}
+
+/// Letters-first selection: keep alphabetic candidates in order, then pad
+/// with the non-alphabetic ones, capped at `SAMPLE_LEN`. Symbol/dingbat
+/// fonts (all-PUA, nothing alphabetic) are unaffected.
+fn pick_sample(candidates: &[char]) -> String {
+    let letters = candidates.iter().filter(|c| c.is_alphabetic());
+    let rest = candidates.iter().filter(|c| !c.is_alphabetic());
+    letters.chain(rest).take(SAMPLE_LEN).collect()
 }
 
 /// Build the specimen fallback for a face that maps no Latin letters.
@@ -94,27 +110,28 @@ fn latin_sample(face: &Face) -> Option<String> {
     }
     let cmap = face.tables().cmap?;
     let mut seen = std::collections::BTreeSet::new();
-    let mut sample = String::new();
+    let mut candidates = Vec::new();
     for subtable in cmap.subtables {
         if !subtable.is_unicode() {
             continue;
         }
-        collect_specimen(&subtable, &mut seen, &mut sample);
-        if seen.len() >= SAMPLE_LEN {
+        collect_specimen(&subtable, &mut seen, &mut candidates);
+        if seen.len() >= CANDIDATE_LEN {
             break;
         }
     }
-    if sample.is_empty() {
+    if candidates.is_empty() {
         for subtable in cmap.subtables {
             if !(subtable.platform_id == PlatformId::Windows && subtable.encoding_id == 0) {
                 continue;
             }
-            collect_specimen(&subtable, &mut seen, &mut sample);
-            if seen.len() >= SAMPLE_LEN {
+            collect_specimen(&subtable, &mut seen, &mut candidates);
+            if seen.len() >= CANDIDATE_LEN {
                 break;
             }
         }
     }
+    let sample = pick_sample(&candidates);
     if sample.is_empty() {
         None
     } else {
@@ -335,7 +352,19 @@ pub fn index_all(
 
 #[cfg(test)]
 mod tests {
-    use super::sampleable_char;
+    use super::{pick_sample, sampleable_char};
+
+    #[test]
+    fn pick_sample_prefers_letters_over_punctuation() {
+        let candidates: Vec<char> = "!\"'()./:«°»ابجد".chars().collect();
+        let s = pick_sample(&candidates);
+        assert!(s.starts_with("ابجد"), "letters must lead: {s}");
+        assert!(s.contains('!'), "punctuation pads after letters");
+
+        // All-PUA dingbat candidates are untouched by the preference.
+        let pua: Vec<char> = ['\u{F021}', '\u{F022}'].into();
+        assert_eq!(pick_sample(&pua), "\u{F021}\u{F022}");
+    }
 
     #[test]
     fn sampleable_char_accepts_pua_and_rejects_invisibles() {
