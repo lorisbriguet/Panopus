@@ -2,7 +2,7 @@
 //! upsert results into the fonts table.
 
 use std::path::{Path, PathBuf};
-use ttf_parser::{name_id, Face};
+use ttf_parser::{name_id, Face, PlatformId};
 
 /// Result of a full index run.
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
@@ -38,15 +38,56 @@ fn name(face: &Face, id: u16) -> Option<String> {
 /// fill a grid card line at the default proof size without overflowing.
 const SAMPLE_LEN: usize = 24;
 
+/// A codepoint usable in a specimen: >= U+0021, a valid scalar value
+/// (`char::from_u32` already rejects the surrogate range), and not
+/// whitespace/control. PUA characters (e.g. U+F020–F0FF from symbol-encoded
+/// dingbat cmaps) pass — WebKit renders them through the same cmap.
+fn sampleable_char(cp: u32) -> Option<char> {
+    if cp < 0x21 {
+        return None;
+    }
+    let ch = char::from_u32(cp)?;
+    if ch.is_whitespace() || ch.is_control() {
+        return None;
+    }
+    Some(ch)
+}
+
+/// Collect up to `SAMPLE_LEN` distinct sampleable codepoints mapped to a
+/// real glyph by `subtable` into `seen`/`sample`. Subtable-level
+/// `glyph_index` is used on purpose: `Face::glyph_index` only consults
+/// Unicode subtables, which would reject every symbol-encoded codepoint,
+/// and `Subtable::codepoints` may list codepoints whose glyph is 0.
+fn collect_specimen(
+    subtable: &ttf_parser::cmap::Subtable,
+    seen: &mut std::collections::BTreeSet<u32>,
+    sample: &mut String,
+) {
+    subtable.codepoints(|cp| {
+        if seen.len() >= SAMPLE_LEN {
+            return;
+        }
+        let Some(ch) = sampleable_char(cp) else { return };
+        if subtable.glyph_index(cp).is_none() {
+            return;
+        }
+        if seen.insert(cp) {
+            sample.push(ch);
+        }
+    });
+}
+
 /// Build the specimen fallback for a face that maps no Latin letters.
 ///
 /// Returns None when the face covers Latin ('A' or 'a' has a glyph) — the
-/// normal case, where the proof text renders fine. Otherwise walks the
-/// Unicode cmap subtables collecting the first `SAMPLE_LEN` distinct
-/// codepoints that are visible characters: >= U+0021, valid scalar values
-/// (`char::from_u32` already rejects surrogates), not whitespace/control,
-/// and actually mapped to a real glyph (`Subtable::codepoints` may list
-/// codepoints whose glyph is 0 — re-checked via `Face::glyph_index`).
+/// normal case, where the proof text renders fine. Otherwise collects the
+/// first `SAMPLE_LEN` distinct mapped visible codepoints, in two passes:
+///
+/// 1. Unicode cmap subtables (Arabic/Hebrew system faces and friends);
+/// 2. only if pass 1 found nothing: symbol-encoded subtables (Windows
+///    platform 3, encoding 0) — legacy dingbat/pi fonts map their glyphs
+///    at U+F020–F0FF in the PUA there and have no Unicode subtable at
+///    all, so pass 1 alone would leave them blank.
 fn latin_sample(face: &Face) -> Option<String> {
     if face.glyph_index('A').is_some() || face.glyph_index('a').is_some() {
         return None;
@@ -58,23 +99,20 @@ fn latin_sample(face: &Face) -> Option<String> {
         if !subtable.is_unicode() {
             continue;
         }
-        subtable.codepoints(|cp| {
-            if seen.len() >= SAMPLE_LEN || cp < 0x21 {
-                return;
-            }
-            let Some(ch) = char::from_u32(cp) else { return };
-            if ch.is_whitespace() || ch.is_control() {
-                return;
-            }
-            if face.glyph_index(ch).is_none() {
-                return;
-            }
-            if seen.insert(cp) {
-                sample.push(ch);
-            }
-        });
+        collect_specimen(&subtable, &mut seen, &mut sample);
         if seen.len() >= SAMPLE_LEN {
             break;
+        }
+    }
+    if sample.is_empty() {
+        for subtable in cmap.subtables {
+            if !(subtable.platform_id == PlatformId::Windows && subtable.encoding_id == 0) {
+                continue;
+            }
+            collect_specimen(&subtable, &mut seen, &mut sample);
+            if seen.len() >= SAMPLE_LEN {
+                break;
+            }
         }
     }
     if sample.is_empty() {
@@ -293,6 +331,31 @@ pub fn index_all(
         .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
     Ok(report)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sampleable_char;
+
+    #[test]
+    fn sampleable_char_accepts_pua_and_rejects_invisibles() {
+        // Symbol-encoded dingbat cmaps map glyphs at U+F020–F0FF (PUA):
+        // these MUST pass or the fallback pass collects nothing.
+        assert_eq!(sampleable_char(0xF021), Some('\u{F021}'));
+        assert_eq!(sampleable_char(0xF0FF), Some('\u{F0FF}'));
+        // Ordinary visible characters pass too.
+        assert_eq!(sampleable_char(0x21), Some('!'));
+        assert_eq!(sampleable_char(0x5D0), Some('א'));
+        // Below U+0021: controls and space.
+        assert_eq!(sampleable_char(0x00), None);
+        assert_eq!(sampleable_char(0x20), None);
+        // Surrogates are not scalar values (char::from_u32 rejects them).
+        assert_eq!(sampleable_char(0xD800), None);
+        // Visible-range exclusions: whitespace and control past U+0021.
+        assert_eq!(sampleable_char(0x00A0), None, "no-break space");
+        assert_eq!(sampleable_char(0x2028), None, "line separator");
+        assert_eq!(sampleable_char(0x009F), None, "C1 control");
+    }
 }
 
 /// Expand a leading `~` (bare or `~/…`) to the current user's home dir.
