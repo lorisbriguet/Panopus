@@ -66,10 +66,17 @@ describe("FontListRow", () => {
     expect(screen.getByText("Proof")).toBeInTheDocument();
   });
 
-  it("prefers the indexed specimen over the proof text", () => {
+  it("prefers the indexed specimen over the proof text and flags it", () => {
     renderRow({ sample_text: "Специмен" });
     expect(screen.getByText("Специмен")).toBeInTheDocument();
     expect(screen.queryByText("Proof")).not.toBeInTheDocument();
+    // The substitution is flagged (FontCard's specimen_label precedent).
+    expect(screen.getByText("specimen")).toBeInTheDocument();
+  });
+
+  it("shows no specimen flag when the proof text renders", () => {
+    renderRow();
+    expect(screen.queryByText("specimen")).not.toBeInTheDocument();
   });
 
   it("opens the detail on a plain row click", () => {
@@ -110,15 +117,18 @@ describe("FontListRow", () => {
 });
 
 describe("FamilyListRows folding", () => {
+  // Representative is Regular-preferred and deliberately NOT rows[0] here:
+  // collapsed shows id 2, expanded leads with id 1 — guaranteed remount, the
+  // exact case the focus-restore effect must survive.
   const rows: FontRow[] = [
-    { ...font, id: 1, style: "Regular" },
-    { ...font, id: 2, style: "Bold" },
+    { ...font, id: 1, style: "Bold" },
+    { ...font, id: 2, style: "Regular" },
     { ...font, id: 3, style: "Italic" },
   ];
   const group: FamilyGroup = {
     family: "Alpha",
     rows,
-    representative: rows[0],
+    representative: rows[1],
   };
 
   function renderGroup() {
@@ -149,6 +159,17 @@ describe("FamilyListRows folding", () => {
     expect(screen.getAllByRole("button", { name: /open details/i })).toHaveLength(3);
     const chip = screen.getByRole("button", { name: "Collapse family: Alpha" });
     expect(chip).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("keeps focus on the chip across the expand/collapse remounts", () => {
+    renderGroup();
+    // Expanding swaps the representative row for the style rows — the
+    // pressed chip unmounts; FamilyListRows must re-focus the new chip.
+    fireEvent.click(screen.getByRole("button", { name: "Expand family: Alpha" }));
+    expect(screen.getByRole("button", { name: "Collapse family: Alpha" })).toHaveFocus();
+    // And back: collapsing must land focus on the "+N" chip again.
+    fireEvent.click(screen.getByRole("button", { name: "Collapse family: Alpha" }));
+    expect(screen.getByRole("button", { name: "Expand family: Alpha" })).toHaveFocus();
   });
 
   it("clicking the collapse chip folds back to the representative", () => {
