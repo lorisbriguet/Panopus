@@ -27,6 +27,7 @@ const font: FontRow = {
   favorite: 0,
   quarantined: 0,
   licence_status: "free",
+  sample_text: null,
   tag_ids: "",
 };
 

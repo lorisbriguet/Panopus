@@ -11,6 +11,31 @@ fn parses_valid_ttf() {
 }
 
 #[test]
+fn latin_font_gets_no_sample_text() {
+    // Rye maps 'A'/'a', so the specimen fallback must stay off: the grid
+    // keeps rendering the user's proof text for ordinary Latin fonts.
+    let m = parse_font(Path::new("tests/fixtures/valid.ttf")).unwrap();
+    assert_eq!(m.sample_text, None);
+}
+
+#[test]
+fn sample_text_column_persists_through_index_all() {
+    let conn = rusqlite::Connection::open_in_memory().unwrap();
+    conn.execute_batch(panopus_lib::MIGRATION_V1).unwrap();
+    conn.execute_batch(panopus_lib::MIGRATION_V4).unwrap();
+    panopus_lib::indexer::index_all(&conn, Path::new("tests/fixtures"), &[]).unwrap();
+    // The Latin fixture writes NULL — column exists, no bogus specimen.
+    let sample: Option<String> = conn
+        .query_row(
+            "SELECT sample_text FROM fonts WHERE family = 'Rye'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(sample, None);
+}
+
+#[test]
 fn corrupt_font_errors() {
     assert!(parse_font(Path::new("tests/fixtures/corrupt.ttf")).is_err());
 }
@@ -26,6 +51,7 @@ fn scan_filters_noto_when_system() {
 fn upsert_preserves_flags_and_is_incremental() {
     let conn = rusqlite::Connection::open_in_memory().unwrap();
     conn.execute_batch(panopus_lib::MIGRATION_V1).unwrap();
+    conn.execute_batch(panopus_lib::MIGRATION_V4).unwrap();
     let r1 = panopus_lib::indexer::index_all(&conn, Path::new("tests/fixtures"), &[]).unwrap();
     assert!(r1.indexed >= 1 && r1.quarantined >= 1);
     conn.execute("UPDATE fonts SET favorite=1", []).unwrap();
@@ -39,6 +65,7 @@ fn upsert_preserves_flags_and_is_incremental() {
 fn missing_library_root_errors_without_wiping_rows() {
     let conn = rusqlite::Connection::open_in_memory().unwrap();
     conn.execute_batch(panopus_lib::MIGRATION_V1).unwrap();
+    conn.execute_batch(panopus_lib::MIGRATION_V4).unwrap();
     panopus_lib::indexer::index_all(&conn, Path::new("tests/fixtures"), &[]).unwrap();
     let before: i64 = conn
         .query_row("SELECT count(*) FROM fonts WHERE is_system=0", [], |r| r.get(0))

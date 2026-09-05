@@ -130,15 +130,24 @@ INSERT INTO sources (name, licence_status) VALUES ('velvetyne', 'free')
   ON CONFLICT(name) DO UPDATE SET licence_status = 'free';
 "#;
 
+/// Specimen fallback for fonts with no Latin letters (Arabic/Hebrew system
+/// faces, dingbat collections): the indexer stores a short string of
+/// codepoints the font ACTUALLY maps, and the grid renders it in place of
+/// the proof text. NULL = font covers Latin, use the proof text.
+pub const MIGRATION_V4: &str = r#"
+ALTER TABLE fonts ADD COLUMN sample_text TEXT;
+"#;
+
 /// All schema migrations in order: (version, description, sql). Single
 /// source of truth shared by the SQL plugin registration in `run()` and the
 /// setup() bootstrap (`bootstrap::ensure_schema`) — the two MUST stay
 /// identical, since sqlx validates a SHA-384 checksum of the exact SQL
 /// string against its `_sqlx_migrations` ledger.
-pub(crate) const MIGRATIONS: [(i64, &str, &str); 3] = [
+pub(crate) const MIGRATIONS: [(i64, &str, &str); 4] = [
     (1, "panopus_initial", MIGRATION_V1),
     (2, "panopus_seed_designers", MIGRATION_V2),
     (3, "panopus_velvetyne_source", MIGRATION_V3),
+    (4, "panopus_font_sample_text", MIGRATION_V4),
 ];
 
 /// Global state: the active DB filename (default: "panopus.db").

@@ -138,8 +138,14 @@ export const FontCard = memo(function FontCard({
           minHeight: Math.ceil(proofSize * 1.25),
         }}
       >
-        {proofText}
+        {/* Specimen fallback: fonts mapping no Latin letters would render
+            the proof text as a blank line — show their indexed specimen
+            instead, flagged by the tiny label below. */}
+        {font.sample_text ?? proofText}
       </div>
+      {font.sample_text != null && (
+        <div className="mt-1 text-xs text-muted">{t.specimen_label}</div>
+      )}
       <div className="mt-3 pt-2 border-t border-[var(--color-border-divider)] flex items-center justify-between gap-3">
         <div className="min-w-0 flex items-center gap-2.5">
           {/* System fonts can't be (de)activated, so bulk-selecting them

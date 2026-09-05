@@ -20,6 +20,10 @@ pub struct FontMeta {
     pub glyph_count: u16,
     pub format: String,
     pub hash: String,
+    /// Specimen fallback: for fonts mapping no Latin letters (neither 'A'
+    /// nor 'a'), a short string of codepoints the font ACTUALLY maps so the
+    /// grid's proof line doesn't render blank. None = Latin is covered.
+    pub sample_text: Option<String>,
 }
 
 /// First unicode name-table entry with the given name ID.
@@ -28,6 +32,56 @@ fn name(face: &Face, id: u16) -> Option<String> {
         .into_iter()
         .filter(|n| n.name_id == id && n.is_unicode())
         .find_map(|n| n.to_string())
+}
+
+/// How many mapped codepoints a specimen sample collects. ~24 characters
+/// fill a grid card line at the default proof size without overflowing.
+const SAMPLE_LEN: usize = 24;
+
+/// Build the specimen fallback for a face that maps no Latin letters.
+///
+/// Returns None when the face covers Latin ('A' or 'a' has a glyph) — the
+/// normal case, where the proof text renders fine. Otherwise walks the
+/// Unicode cmap subtables collecting the first `SAMPLE_LEN` distinct
+/// codepoints that are visible characters: >= U+0021, valid scalar values
+/// (`char::from_u32` already rejects surrogates), not whitespace/control,
+/// and actually mapped to a real glyph (`Subtable::codepoints` may list
+/// codepoints whose glyph is 0 — re-checked via `Face::glyph_index`).
+fn latin_sample(face: &Face) -> Option<String> {
+    if face.glyph_index('A').is_some() || face.glyph_index('a').is_some() {
+        return None;
+    }
+    let cmap = face.tables().cmap?;
+    let mut seen = std::collections::BTreeSet::new();
+    let mut sample = String::new();
+    for subtable in cmap.subtables {
+        if !subtable.is_unicode() {
+            continue;
+        }
+        subtable.codepoints(|cp| {
+            if seen.len() >= SAMPLE_LEN || cp < 0x21 {
+                return;
+            }
+            let Some(ch) = char::from_u32(cp) else { return };
+            if ch.is_whitespace() || ch.is_control() {
+                return;
+            }
+            if face.glyph_index(ch).is_none() {
+                return;
+            }
+            if seen.insert(cp) {
+                sample.push(ch);
+            }
+        });
+        if seen.len() >= SAMPLE_LEN {
+            break;
+        }
+    }
+    if sample.is_empty() {
+        None
+    } else {
+        Some(sample)
+    }
 }
 
 /// Parse a font file into `FontMeta`. Errors on unreadable or corrupt files.
@@ -52,6 +106,7 @@ pub fn parse_font(path: &Path) -> Result<FontMeta, String> {
         glyph_count: face.number_of_glyphs(),
         format: if ext == "otf" { "otf".into() } else { "ttf".into() },
         hash: format!("{:x}", md5::compute(&data)),
+        sample_text: latin_sample(&face),
     })
 }
 
@@ -126,15 +181,20 @@ fn upsert_one(
         Ok(m) => {
             // Hash-guarded upsert: unchanged files touch nothing (indexed
             // stays incremental) and existing rows keep active/favorite.
+            // The sample_text IS NOT clause lets rows indexed before
+            // migration v4 backfill their specimen on the next run (their
+            // hashes are unchanged); once written it never fires again.
             let changed = conn
                 .execute(
-                    "INSERT INTO fonts (path, family, style, ps_name, source, format, glyph_count, hash, is_system, quarantined)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0)
+                    "INSERT INTO fonts (path, family, style, ps_name, source, format, glyph_count, hash, is_system, quarantined, sample_text)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10)
                      ON CONFLICT(path) DO UPDATE SET
                        family = excluded.family, style = excluded.style,
                        ps_name = excluded.ps_name, glyph_count = excluded.glyph_count,
-                       hash = excluded.hash, quarantined = excluded.quarantined
-                     WHERE fonts.hash != excluded.hash",
+                       hash = excluded.hash, quarantined = excluded.quarantined,
+                       sample_text = excluded.sample_text
+                     WHERE fonts.hash != excluded.hash
+                        OR fonts.sample_text IS NOT excluded.sample_text",
                     rusqlite::params![
                         path_s,
                         m.family,
@@ -144,7 +204,8 @@ fn upsert_one(
                         m.format,
                         m.glyph_count,
                         m.hash,
-                        is_system as i64
+                        is_system as i64,
+                        m.sample_text
                     ],
                 )
                 .map_err(|e| e.to_string())?;

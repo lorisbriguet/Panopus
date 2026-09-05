@@ -121,6 +121,7 @@ const ui = {
     system_font_locked: "System fonts stay active",
     font_label: "font",
     fonts_label: "fonts",
+    specimen_label: "specimen",
 
     // Family groups
     styles_label: "styles",
@@ -327,6 +328,7 @@ const ui = {
     system_font_locked: "Les polices systeme restent actives",
     font_label: "police",
     fonts_label: "polices",
+    specimen_label: "specimen",
 
     // Family groups
     styles_label: "styles",

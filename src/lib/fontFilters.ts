@@ -19,6 +19,12 @@ export type FontRow = {
   favorite: 0 | 1;
   quarantined: 0 | 1;
   licence_status: string;
+  /**
+   * Specimen fallback for fonts mapping no Latin letters: a short string
+   * of codepoints the font ACTUALLY maps (written by the Rust indexer).
+   * null = Latin covered, render the normal proof text.
+   */
+  sample_text: string | null;
   tag_ids: string; // comma-separated tag ids, "" when untagged
 };
 

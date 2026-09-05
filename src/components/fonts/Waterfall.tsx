@@ -10,6 +10,11 @@ interface WaterfallProps {
   id: number;
   /** fonts.path — loaded through ensureFontFace on mount. */
   path: string;
+  /**
+   * fonts.sample_text — specimen for fonts mapping no Latin letters. When
+   * set, it replaces the proof text (which would render blank in the font).
+   */
+  sampleText?: string | null;
 }
 
 /**
@@ -18,7 +23,7 @@ interface WaterfallProps {
  * ladder of sizes in the font's own pf<id> face. Only mounted when the
  * Waterfall tab is first selected — strictly opt-in.
  */
-export function Waterfall({ id, path }: WaterfallProps) {
+export function Waterfall({ id, path, sampleText }: WaterfallProps) {
   const proofText = useAppStore((s) => s.proofText);
   const family = `pf${id}`;
 
@@ -26,7 +31,8 @@ export function Waterfall({ id, path }: WaterfallProps) {
     ensureFontFace(id, path);
   }, [id, path]);
 
-  const text = proofText.trim() === "" ? DEFAULT_PROOF_TEXT : proofText;
+  const text =
+    sampleText ?? (proofText.trim() === "" ? DEFAULT_PROOF_TEXT : proofText);
 
   return (
     <div className="flex flex-col gap-3">

@@ -45,8 +45,11 @@ export const SortableRow = memo(function SortableRow({
   const family = ensureFontFace(fontId, font.path);
 
   // Same fallback as Waterfall: an all-whitespace proof line renders nothing,
-  // so substitute the default pangram.
-  const text = proofText.trim() === "" ? DEFAULT_PROOF_TEXT : proofText;
+  // so substitute the default pangram. Fonts without Latin letters override
+  // both with their indexed specimen (sample_text) — the proof text would
+  // render blank in them.
+  const text =
+    font.sample_text ?? (proofText.trim() === "" ? DEFAULT_PROOF_TEXT : proofText);
 
   return (
     <tr

@@ -363,7 +363,9 @@ export function FontDetail({ fontId, onClose, onSelectFont }: FontDetailProps) {
             <InfoTab font={font} siblings={siblings} onSelectFont={onSelectFont} />
           )}
           {tab === "glyphs" && <GlyphMap id={font.id} path={font.path} />}
-          {tab === "waterfall" && <Waterfall id={font.id} path={font.path} />}
+          {tab === "waterfall" && (
+            <Waterfall id={font.id} path={font.path} sampleText={font.sample_text} />
+          )}
         </div>
       </div>
     </div>
