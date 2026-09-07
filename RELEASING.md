@@ -20,6 +20,13 @@ npx tsc --noEmit                  # zero errors
 npm test                          # all tests green
 npm run lint                      # exit 0, zero findings
 (cd src-tauri && cargo test)      # all Rust tests green
+npm run parity                    # preview/export pixel parity, all PASS
+```
+
+`npm run parity` renders every Finish effect through the real WebGL2 preview executor (Playwright chromium) and diffs it against the wgpu goldens in `test/parity/goldens/`. If shaders changed on purpose, regenerate the goldens first and eyeball them:
+
+```bash
+(cd src-tauri && cargo test --test parity_goldens -- --ignored)
 ```
 
 - Working tree contains only the changes meant for this release; no debug code, `console.log` leftovers, or commented-out hacks.

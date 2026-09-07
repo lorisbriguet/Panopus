@@ -31,6 +31,7 @@ Built with **Tauri v2** (Rust backend) and **React** (TypeScript frontend).
 - **Designer wiki** — editable bios (Tiptap) for the designers and foundries behind the library's sources, seeded with researched entries and links
 - **Problems list** — files that fail to parse are quarantined, listed in Settings and excluded from the library
 - **Licence tracking** — every font belongs to a source with a licence status (free / personal use / commercial / rights unclear)
+- **Projects & Finish** — group fonts per poster project, activate them (plain or exclusive), attach the returned artwork and post-process it in a node editor with live WebGL2 preview; export print-ready files
 - **Bilingual UI** — English and French; light/dark themes and accent colors
 
 ## Tech Stack
@@ -67,6 +68,26 @@ cargo test           # Rust tests (run in src-tauri/)
 ```
 
 The font library itself lives in a separate folder (default `~/Documents/GitHub/panopus-library`, configurable in Settings). Panopus never modifies the font files; it only reads them and registers them with CoreText.
+
+## Projects & Finish
+
+A project is a poster's dossier: its font selection, the returned artwork, and a Finish node graph.
+
+**Workflow** — create a project, add fonts from the library (BulkBar → Add to project), activate them plain or *exclusively* (deactivates everything else), attach the artwork (PNG/TIFF), then chain effects in the Finish tab: source → effects → output, with a live preview and per-node parameters. The graph autosaves. Export renders the graph at print resolution and writes PNG / TIFF (deflate) / PDF.
+
+**F4 constant** — exports target the Swiss F4 poster format: **10571 × 15118 px** (300 dpi) on an **895 × 1280 mm** PDF page, full bleed. Artwork whose aspect ratio is more than 1% off F4 gets cover-cropped (the export dialog warns).
+
+**Effect folder convention** — each effect lives in `shaders/<id>/`:
+
+```
+shaders/<id>/
+  effect.json     # manifest: id, label, inputs, passes, params
+  *.frag          # one GLSL fragment shader per pass (no #version/precision;
+                  # the hosts inject their headers)
+  *.png           # optional texture assets referenced by passes
+```
+
+The same folder feeds both renderers: the WebGL2 preview in the webview and the wgpu/naga export engine in Rust. `npm run parity` (see RELEASING.md) diffs the two against committed goldens; shaders must stay bit-stable across compilers (integer hashes, no `fract(sin(...))`).
 
 ## Project Structure
 
