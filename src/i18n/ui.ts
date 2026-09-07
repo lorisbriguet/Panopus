@@ -245,6 +245,12 @@ const ui = {
     project_pick_artwork: "Choose artwork...",
     artwork_missing: "Artwork file not found — choose it again to relink",
     finish_tab: "Finish",
+
+    // Finish tab (Finish T10)
+    finish_add_node: "Add",
+    finish_params_empty: "No parameters",
+    cycle_rejected: "Cannot connect: would create a cycle",
+    finish_no_artwork: "Loading artwork...",
   },
   fr: {
     // Sidebar / Nav
@@ -491,6 +497,12 @@ const ui = {
     artwork_missing:
       "Fichier de maquette introuvable — choisissez-le a nouveau pour le relier",
     finish_tab: "Finition",
+
+    // Finish tab (Finish T10)
+    finish_add_node: "Ajouter",
+    finish_params_empty: "Aucun parametre",
+    cycle_rejected: "Impossible de connecter : creerait un cycle",
+    finish_no_artwork: "Chargement de la maquette...",
   },
 } as const;
 

@@ -8,6 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ArrowLeft, X } from "lucide-react";
 import { FontListRow } from "../components/fonts/FontListRow";
+import { FinishTab } from "../components/finish/FinishTab";
 import { Button, EmptyState, Input, Modal, PageSpinner } from "../components/ui";
 import { useSetActive } from "../hooks/useActivation";
 import { useFonts } from "../hooks/useFonts";
@@ -20,6 +21,7 @@ import {
 } from "../hooks/useProjects";
 import { useT } from "../i18n/useT";
 import { notifyError } from "../lib/notifyError";
+import { parseGraph } from "../lib/finishGraph";
 import { DEFAULT_PROOF_TEXT, useAppStore } from "../stores/app-store";
 
 /**
@@ -45,6 +47,7 @@ export function ProjectDetailPage() {
   const [draft, setDraft] = useState("");
   const [confirmExclusive, setConfirmExclusive] = useState(false);
   const [artworkMissing, setArtworkMissing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"fonts" | "finish">("fonts");
 
   // Liveness probe: read_artwork_bytes rejection means the file moved or
   // vanished since it was attached → show the relink prompt. The bytes are
@@ -273,33 +276,52 @@ export function ProjectDetailPage() {
         </div>
       </section>
 
-      {/* Present-but-inert tab strip: signals the Finish surface exists once
-          artwork is attached. Fonts is the (only) selected tab; Finish is
-          aria-disabled and swaps no content — Task 10 wires it up. */}
+      {/* Tab strip: Fonts | Finish (Finish gated on artwork) */}
       {artworkPath && (
-        <div
-          role="tablist"
-          aria-label={t.finish_tab}
-          className="mt-6 flex gap-1 border-b border-[var(--color-border)]"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected="true"
-            className="px-3 py-1.5 text-sm font-medium border-b-2 border-accent text-[var(--color-text-secondary)]"
+        <>
+          <div
+            role="tablist"
+            aria-label={t.finish_tab}
+            className="mt-6 flex gap-1 border-b border-[var(--color-border)]"
           >
-            {t.project_fonts_title}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected="false"
-            aria-disabled="true"
-            className="px-3 py-1.5 text-sm text-muted cursor-default border-b-2 border-transparent"
-          >
-            {t.finish_tab}
-          </button>
-        </div>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "fonts"}
+              onClick={() => setActiveTab("fonts")}
+              className={`px-3 py-1.5 text-sm font-medium border-b-2 ${
+                activeTab === "fonts"
+                  ? "border-accent text-[var(--color-text-secondary)]"
+                  : "border-transparent text-muted hover:text-[var(--color-text-secondary)]"
+              }`}
+            >
+              {t.project_fonts_title}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "finish"}
+              onClick={() => setActiveTab("finish")}
+              className={`px-3 py-1.5 text-sm font-medium border-b-2 ${
+                activeTab === "finish"
+                  ? "border-accent text-[var(--color-text-secondary)]"
+                  : "border-transparent text-muted hover:text-[var(--color-text-secondary)]"
+              }`}
+            >
+              {t.finish_tab}
+            </button>
+          </div>
+
+          {activeTab === "finish" && (
+            <div className="mt-4 h-[600px]">
+              <FinishTab
+                projectId={project.id}
+                artworkPath={artworkPath}
+                graph={parseGraph(project.graph_json)}
+              />
+            </div>
+          )}
+        </>
       )}
     </>
   );

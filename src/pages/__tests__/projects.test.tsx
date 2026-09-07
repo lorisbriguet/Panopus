@@ -11,6 +11,7 @@ const deleteMutate = vi.fn();
 const renameMutate = vi.fn();
 const removeMutate = vi.fn();
 const setArtworkMutate = vi.fn();
+const saveGraphMutate = vi.fn();
 
 // invoke (the read_artwork_bytes liveness probe) and open (the artwork file
 // picker) both live in the shared src/__mocks__/tauri-api.ts stub — the
@@ -77,6 +78,7 @@ vi.mock("../../hooks/useProjects", () => ({
   useProjectFontIds: () => ({ data: [1], isLoading: false }),
   useRemoveFontFromProject: () => ({ mutate: removeMutate, isPending: false }),
   useSetProjectArtwork: () => ({ mutate: setArtworkMutate, isPending: false }),
+  useSaveProjectGraph: () => ({ mutate: saveGraphMutate, isPending: false }),
 }));
 
 const mockFontRows: FontRow[] = [
@@ -329,10 +331,12 @@ describe("ProjectDetailPage artwork (Task 6)", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders an inert Finish tab only when artwork is set", async () => {
+  it("renders a functional Finish tab when artwork is set", async () => {
     renderDetail(3);
     const finishTab = await screen.findByRole("tab", { name: "Finish" });
-    expect(finishTab).toHaveAttribute("aria-disabled", "true");
+    expect(finishTab).toBeInTheDocument();
+    // Tab is now functional (Task 10), not inert
+    expect(finishTab).not.toHaveAttribute("aria-disabled");
   });
 
   it("has no Finish tab and no probe when artwork is unset", () => {
