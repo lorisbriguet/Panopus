@@ -21,6 +21,13 @@ vi.mock("../../../hooks/useTags", () => ({
   useUnassignTagBulk: () => ({ mutate: unassignMutate, isPending: false }),
 }));
 
+// The project menu pulls react-query hooks too; mock the module so the bar
+// renders without a QueryClient (menu behavior is covered in bulkproject).
+vi.mock("../../../hooks/useProjects", () => ({
+  useProjects: () => ({ data: [] }),
+  useAddFontsToProject: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
 function makeRow(id: number, tagIds: string): FontRow {
   return {
     id,

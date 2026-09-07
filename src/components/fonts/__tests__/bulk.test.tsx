@@ -16,6 +16,12 @@ vi.mock("../../../hooks/useTags", () => ({
   useUnassignTagBulk: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
+// Same for the project menu (menu behavior is covered in bulkproject).
+vi.mock("../../../hooks/useProjects", () => ({
+  useProjects: () => ({ data: [] }),
+  useAddFontsToProject: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
 beforeEach(() => {
   mutate.mockClear();
   useAppStore.setState({ selectedIds: new Set<number>() });

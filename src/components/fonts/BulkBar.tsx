@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { Button } from "../ui/Button";
 import { useSetActive } from "../../hooks/useActivation";
+import { useAddFontsToProject, useProjects } from "../../hooks/useProjects";
 import { useAssignTagBulk, useTags, useUnassignTagBulk } from "../../hooks/useTags";
 import type { FontRow } from "../../lib/fontFilters";
 import { getStoredTagColor } from "../../lib/tagColors";
@@ -115,6 +116,79 @@ function TagMenu({ rows, selectedIds }: { rows: FontRow[]; selectedIds: Set<numb
 }
 
 /**
+ * "Add to project" menu — same anchored-popover pattern as TagMenu (trigger
+ * with aria-haspopup, Escape/outside-mousedown close). Plain menuitems (no
+ * checkbox state): clicking a project bulk-adds every selected font to it
+ * (INSERT OR IGNORE makes repeats harmless). The menu stays open and the
+ * selection is KEPT so the same set can be added to several projects.
+ */
+function ProjectMenu({ selectedIds }: { selectedIds: Set<number> }) {
+  const t = useT();
+  const { data: projects } = useProjects();
+  const addFonts = useAddFontsToProject();
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const clickHandler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", clickHandler);
+    document.addEventListener("keydown", keyHandler);
+    return () => {
+      document.removeEventListener("mousedown", clickHandler);
+      document.removeEventListener("keydown", keyHandler);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <Button
+        size="sm"
+        variant="secondary"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {t.bulk_project_menu}
+      </Button>
+      {open && (
+        <div
+          role="menu"
+          aria-label={t.bulk_project_menu}
+          className="absolute right-0 top-full mt-1 z-40 min-w-[10rem] rounded-xl border border-[var(--color-border-header)] bg-[var(--color-surface)] py-1 shadow-[0_8px_24px_rgba(0,0,0,0.4)] animate-in fade-in duration-100"
+        >
+          {(projects ?? []).length === 0 ? (
+            <p className="px-3 py-1.5 text-xs text-muted">{t.no_projects_yet}</p>
+          ) : (
+            (projects ?? []).map((project) => (
+              <button
+                key={project.id}
+                type="button"
+                role="menuitem"
+                disabled={addFonts.isPending}
+                onClick={() =>
+                  addFonts.mutate({ projectId: project.id, fontIds: Array.from(selectedIds) })
+                }
+                className="w-full px-3 py-1.5 text-xs text-left text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] disabled:opacity-50 outline-none focus-visible:bg-[var(--color-hover-row)]"
+              >
+                <span className="block min-w-0 truncate">{project.name}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * Action strip for the library's bulk selection. Renders nothing while the
  * selection is empty. Activate/Deactivate fire ONE `set_fonts_active` call
  * with every selected id; the selection is intentionally KEPT after the
@@ -152,6 +226,7 @@ export function BulkBar({ rows = [] }: BulkBarProps) {
           {t.bulk_deactivate}
         </Button>
         <TagMenu rows={rows} selectedIds={selectedIds} />
+        <ProjectMenu selectedIds={selectedIds} />
         <Button size="sm" variant="ghost" onClick={clearSelection}>
           {t.bulk_clear}
         </Button>
