@@ -13,6 +13,8 @@ describe("ensureFontFace", () => {
     const sheet = document.getElementById("panopus-fontfaces") as HTMLStyleElement;
     expect(sheet.sheet!.cssRules).toHaveLength(1);
     expect(sheet.sheet!.cssRules[0].cssText).toContain("asset://");
+  // The swap descriptor is the anti-blank guarantee — pin it.
+  expect(sheet.sheet!.cssRules[0].cssText).toContain("font-display: swap");
   });
 
   test("distinct ids get distinct rules in the same singleton sheet", () => {

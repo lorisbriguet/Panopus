@@ -42,7 +42,7 @@ interface FontListRowProps {
   proofSize: number;
   /** Same contract as FontCard.onOpenDetail — referentially stable, memoized row. */
   onOpenDetail?: (id: number) => void;
-  /** Present only on a family's lead row (see FamilyListRows). */
+  /** Present only on a family's lead row (built by flattenLibrary). */
   familyChip?: FamilyChip;
 }
 
