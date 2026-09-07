@@ -59,6 +59,10 @@ export function LibraryPage() {
 
   return (
     <>
+      {/* Pinned control strip (SM task 925/374): sticks to the top of the
+          scroll container; negative margins span the container's p-8 padding
+          so scrolled content passes behind an opaque, full-width bar. */}
+      <div className="sticky top-0 z-20 -mx-8 -mt-8 px-8 pt-8 pb-3 bg-[var(--color-bg)] border-b border-[var(--color-border-divider)]">
       <PageHeader title={t.library}>
         <Badge variant="success">
           {activeCount} {activeCount === 1 ? t.active_label_one : t.active_label}
@@ -83,6 +87,7 @@ export function LibraryPage() {
         onCollapseAll={() => setAllFamiliesExpanded(null)}
       />
       <BulkBar rows={rows ?? []} />
+      </div>
       {isLoading ? (
         <PageSpinner label={t.loading_fonts} />
       ) : filtered.length === 0 ? (

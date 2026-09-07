@@ -19,6 +19,8 @@ import { ensureFontFace } from "./FontFaceLoader";
 
 export const LICENCE_VARIANTS: Record<string, BadgeVariant> = {
   free: "success",
+  // A licence the studio has purchased — full commercial use, receipt on file.
+  bought: "success",
   donationware: "info",
   "personal use": "warning",
   commercial: "warning",
