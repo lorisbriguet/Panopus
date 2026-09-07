@@ -47,6 +47,7 @@ export function ProjectDetailPage() {
   const [draft, setDraft] = useState("");
   const [confirmExclusive, setConfirmExclusive] = useState(false);
   const [artworkMissing, setArtworkMissing] = useState(false);
+  // Default to "fonts" so the fonts section shows when no artwork is set (no tabs)
   const [activeTab, setActiveTab] = useState<"fonts" | "finish">("fonts");
 
   // Liveness probe: read_artwork_bytes rejection means the file moved or
@@ -175,57 +176,62 @@ export function ProjectDetailPage() {
         )}
       </div>
 
-      <section>
-        <h2 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">
-          {t.project_fonts_title}
-        </h2>
-        {projectFonts.length === 0 ? (
-          <EmptyState message={t.project_empty} />
-        ) : (
-          <ul className="flex flex-col">
-            {projectFonts.map((f) => (
-              <li key={f.id} className="flex items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  <FontListRow
-                    font={f}
-                    proofText={proofText}
-                    proofSize={proofSize}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    removeFont.mutate({ projectId: project.id, fontId: f.id })
-                  }
-                  aria-label={`${t.project_remove_font}: ${f.family} ${f.style}`}
-                  title={t.project_remove_font}
-                  className="shrink-0 text-muted hover:text-[var(--color-danger-text)] focus-accent rounded p-0.5"
-                >
-                  <X size={16} aria-hidden="true" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {/* Fonts section: visible when no tabs (no artwork) OR when Fonts tab selected */}
+      {(!artworkPath || activeTab === "fonts") && (
+        <>
+          <section>
+            <h2 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">
+              {t.project_fonts_title}
+            </h2>
+            {projectFonts.length === 0 ? (
+              <EmptyState message={t.project_empty} />
+            ) : (
+              <ul className="flex flex-col">
+                {projectFonts.map((f) => (
+                  <li key={f.id} className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <FontListRow
+                        font={f}
+                        proofText={proofText}
+                        proofSize={proofSize}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        removeFont.mutate({ projectId: project.id, fontId: f.id })
+                      }
+                      aria-label={`${t.project_remove_font}: ${f.family} ${f.style}`}
+                      title={t.project_remove_font}
+                      className="shrink-0 text-muted hover:text-[var(--color-danger-text)] focus-accent rounded p-0.5"
+                    >
+                      <X size={16} aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
-      <section className="mt-6 flex items-center gap-2">
-        <Button
-          onClick={activateProjectFonts}
-          disabled={(fontIds ?? []).length === 0}
-          loading={setActive.isPending}
-        >
-          {t.project_activate}
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={handleExclusiveClick}
-          disabled={(fontIds ?? []).length === 0}
-          loading={setActive.isPending}
-        >
-          {t.project_activate_exclusive}
-        </Button>
-      </section>
+          <section className="mt-6 flex items-center gap-2">
+            <Button
+              onClick={activateProjectFonts}
+              disabled={(fontIds ?? []).length === 0}
+              loading={setActive.isPending}
+            >
+              {t.project_activate}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleExclusiveClick}
+              disabled={(fontIds ?? []).length === 0}
+              loading={setActive.isPending}
+            >
+              {t.project_activate_exclusive}
+            </Button>
+          </section>
+        </>
+      )}
 
       <Modal
         open={confirmExclusive}

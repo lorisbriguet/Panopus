@@ -173,4 +173,29 @@ describe("ParamsPanel", () => {
     const sliders = screen.getAllByRole("slider");
     expect(sliders.length).toBeGreaterThan(0);
   });
+
+  it("displays compile error when provided", () => {
+    const node: GraphNode = {
+      id: "effect1",
+      kind: "effect",
+      effectId: "dither",
+      params: {},
+      x: 0,
+      y: 0,
+    };
+    const onParamsChange = vi.fn();
+    const compileError = "ERROR: 0:42: 'invalid_function' : no matching overloaded function found";
+
+    render(
+      <ParamsPanel
+        node={node}
+        onParamsChange={onParamsChange}
+        compileError={compileError}
+      />
+    );
+
+    // Compile error should be displayed in danger text
+    expect(screen.getByText(compileError)).toBeInTheDocument();
+    expect(screen.getByText(compileError)).toHaveClass("text-[var(--color-danger-text)]");
+  });
 });

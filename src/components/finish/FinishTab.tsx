@@ -21,7 +21,8 @@ export function FinishTab({ projectId, artworkPath, graph: initialGraph }: Finis
   const [graph, setGraph] = useState<FinishGraph>(initialGraph);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [artworkBitmap, setArtworkBitmap] = useState<ImageBitmap | null>(null);
-  const saveGraph = useSaveProjectGraph();
+  const [compileErrors, setCompileErrors] = useState<Record<string, string | null>>({});
+  const { mutate: saveGraphMutate } = useSaveProjectGraph();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load artwork bitmap
@@ -51,12 +52,12 @@ export function FinishTab({ projectId, artworkPath, graph: initialGraph }: Finis
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       const graphJson = serializeGraph(graph);
-      saveGraph.mutate({ id: projectId, graphJson });
+      saveGraphMutate({ id: projectId, graphJson });
     }, 800);
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [graph, projectId, saveGraph]);
+  }, [graph, projectId, saveGraphMutate]);
 
   const handleGraphChange = useCallback((newGraph: FinishGraph) => {
     setGraph(newGraph);
@@ -78,6 +79,7 @@ export function FinishTab({ projectId, artworkPath, graph: initialGraph }: Finis
           graph={graph}
           artworkBitmap={artworkBitmap}
           artworkPath={artworkPath}
+          onCompileErrors={setCompileErrors}
         />
       </div>
 
@@ -104,6 +106,7 @@ export function FinishTab({ projectId, artworkPath, graph: initialGraph }: Finis
                 };
                 setGraph(newGraph);
               }}
+              compileError={compileErrors[selectedNode.id] ?? null}
             />
           </div>
         )}

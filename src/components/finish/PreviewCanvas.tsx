@@ -7,13 +7,14 @@ interface PreviewCanvasProps {
   graph: FinishGraph;
   artworkBitmap: ImageBitmap | null;
   artworkPath: string;
+  onCompileErrors?: (errors: Record<string, string | null>) => void;
 }
 
 /**
  * Owns a GlExecutor, re-renders rAF-throttled on graph/param changes, fit-to-panel size.
  * Recreates executor when artworkPath changes (per decision 1: sourceTex leak prevention).
  */
-export function PreviewCanvas({ graph, artworkBitmap, artworkPath }: PreviewCanvasProps) {
+export function PreviewCanvas({ graph, artworkBitmap, artworkPath, onCompileErrors }: PreviewCanvasProps) {
   const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const executorRef = useRef<GlExecutor | null>(null);
@@ -73,10 +74,19 @@ export function PreviewCanvas({ graph, artworkBitmap, artworkPath }: PreviewCanv
 
     if (width > 0 && height > 0) {
       executorRef.current.render(graph, width, height);
+
+      // Collect compile errors after render
+      if (onCompileErrors) {
+        const errors: Record<string, string | null> = {};
+        for (const node of graph.nodes) {
+          errors[node.id] = executorRef.current.getCompileError(node.id);
+        }
+        onCompileErrors(errors);
+      }
     }
 
     rafRef.current = null;
-  }, [graph]);
+  }, [graph, onCompileErrors]);
 
   useEffect(() => {
     if (needsRender && rafRef.current === null) {
