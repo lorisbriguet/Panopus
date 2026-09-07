@@ -1,6 +1,6 @@
 [package]
 name = "panopus"
-version = "0.2.1"
+version = "0.2.2"
 description = "macOS font manager"
 authors = ["Loris Briguet"]
 edition = "2021"
