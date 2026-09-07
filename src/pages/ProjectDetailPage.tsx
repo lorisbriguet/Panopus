@@ -2,7 +2,8 @@ import { useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, X } from "lucide-react";
 import { FontListRow } from "../components/fonts/FontListRow";
-import { EmptyState, Input, PageSpinner } from "../components/ui";
+import { Button, EmptyState, Input, Modal, PageSpinner } from "../components/ui";
+import { useSetActive } from "../hooks/useActivation";
 import { useFonts } from "../hooks/useFonts";
 import {
   useProject,
@@ -28,10 +29,12 @@ export function ProjectDetailPage() {
   const { data: fonts } = useFonts();
   const renameProject = useRenameProject();
   const removeFont = useRemoveFontFromProject();
+  const setActive = useSetActive();
   const storeProofText = useAppStore((s) => s.proofText);
   const proofSize = useAppStore((s) => s.proofSize);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [confirmExclusive, setConfirmExclusive] = useState(false);
 
   if (isLoading) return <PageSpinner />;
   if (!project) return <EmptyState message={t.project_not_found} />;
@@ -43,6 +46,32 @@ export function ProjectDetailPage() {
 
   const idSet = new Set(fontIds ?? []);
   const projectFonts = (fonts ?? []).filter((f) => idSet.has(f.id));
+
+  // "Other active" = user fonts currently active that are NOT in this project
+  // — the set "Activate exclusively" turns off. System fonts are untouchable.
+  const otherActiveIds = (fonts ?? [])
+    .filter((f) => f.active === 1 && f.is_system === 0 && !idSet.has(f.id))
+    .map((f) => f.id);
+
+  const activateProjectFonts = () =>
+    setActive.mutate({ ids: fontIds ?? [], active: true });
+
+  const handleExclusiveClick = () => {
+    // Nothing else is active → exclusive degenerates to a plain activate;
+    // a "0 fonts will be deactivated" confirm would be noise, so skip it.
+    if (otherActiveIds.length === 0) activateProjectFonts();
+    else setConfirmExclusive(true);
+  };
+
+  const handleExclusiveConfirm = () => {
+    setConfirmExclusive(false);
+    // Sequence matters: deactivate the others first, THEN activate the
+    // project's fonts — chained via the first mutation's per-call onSuccess.
+    setActive.mutate(
+      { ids: otherActiveIds, active: false },
+      { onSuccess: activateProjectFonts }
+    );
+  };
 
   const commitRename = () => {
     setEditing(false);
@@ -133,8 +162,49 @@ export function ProjectDetailPage() {
         )}
       </section>
 
-      {/* Placeholder: artwork board section — Task 4 mounts it here. */}
-      {/* Placeholder: activation graph section — Task 5 mounts it here. */}
+      <section className="mt-6 flex items-center gap-2">
+        <Button
+          onClick={activateProjectFonts}
+          disabled={(fontIds ?? []).length === 0}
+          loading={setActive.isPending}
+        >
+          {t.project_activate}
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={handleExclusiveClick}
+          disabled={(fontIds ?? []).length === 0}
+          loading={setActive.isPending}
+        >
+          {t.project_activate_exclusive}
+        </Button>
+      </section>
+
+      <Modal
+        open={confirmExclusive}
+        onClose={() => setConfirmExclusive(false)}
+        title={t.project_activate_exclusive}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setConfirmExclusive(false)}
+            >
+              {t.close}
+            </Button>
+            <Button onClick={handleExclusiveConfirm}>{t.confirm}</Button>
+          </>
+        }
+      >
+        <p className="text-sm text-[var(--color-text-secondary)]">
+          {(otherActiveIds.length === 1
+            ? t.confirm_exclusive_body_one
+            : t.confirm_exclusive_body
+          ).replace("{count}", String(otherActiveIds.length))}
+        </p>
+      </Modal>
+
+      {/* Placeholder: artwork board section — a later task mounts it here. */}
     </>
   );
 }

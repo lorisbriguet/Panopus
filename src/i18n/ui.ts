@@ -232,6 +232,13 @@ const ui = {
     project_not_found: "Project not found",
     project_rename: "Rename project",
     back_to_projects: "Back to projects",
+
+    // Project activation (Finish T5)
+    project_activate: "Activate fonts",
+    project_activate_exclusive: "Activate exclusively",
+    confirm_exclusive_body: "{count} other active fonts will be deactivated",
+    confirm_exclusive_body_one: "{count} other active font will be deactivated",
+    confirm: "Confirm",
   },
   fr: {
     // Sidebar / Nav
@@ -462,6 +469,15 @@ const ui = {
     project_not_found: "Projet introuvable",
     project_rename: "Renommer le projet",
     back_to_projects: "Retour aux projets",
+
+    // Project activation (Finish T5)
+    project_activate: "Activer les polices",
+    project_activate_exclusive: "Activer en exclusivite",
+    confirm_exclusive_body:
+      "{count} autres polices actives seront desactivees",
+    confirm_exclusive_body_one:
+      "{count} autre police active sera desactivee",
+    confirm: "Confirmer",
   },
 } as const;
 

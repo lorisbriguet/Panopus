@@ -82,13 +82,28 @@ const mockFontRows: FontRow[] = [
   },
 ];
 
+// Reassignable so individual tests can vary the library (e.g. the zero-
+// others exclusive case); reset to the default in beforeEach. The factory
+// closure reads it lazily at render time, so hoisting is not an issue.
+let fontRowsData: FontRow[] = mockFontRows;
+
 // useToggleFavorite: FontListRow (rendered by the detail page) calls it.
 vi.mock("../../hooks/useFonts", () => ({
-  useFonts: () => ({ data: mockFontRows, isLoading: false }),
+  useFonts: () => ({ data: fontRowsData, isLoading: false }),
   useToggleFavorite: () => ({ mutate: vi.fn(), isPending: false }),
 }));
+
+// Auto-succeeding mutate: immediately runs the options onSuccess so the
+// exclusive flow's chained second mutation lands in the same call log —
+// mock.calls order IS the mutation order the page issued.
+const setActiveMutate = vi.fn(
+  (
+    _vars: { ids: number[]; active: boolean },
+    opts?: { onSuccess?: () => void }
+  ) => opts?.onSuccess?.()
+);
 vi.mock("../../hooks/useActivation", () => ({
-  useSetActive: () => ({ mutate: vi.fn(), isPending: false }),
+  useSetActive: () => ({ mutate: setActiveMutate, isPending: false }),
 }));
 
 function renderList() {
@@ -110,7 +125,10 @@ function renderDetail(id = 1) {
 }
 
 beforeEach(() => {
+  // clearAllMocks wipes calls but keeps implementations (setActiveMutate's
+  // auto-onSuccess survives); resetAllMocks would destroy it.
   vi.clearAllMocks();
+  fontRowsData = mockFontRows;
 });
 
 describe("ProjectsPage", () => {
@@ -172,5 +190,58 @@ describe("ProjectDetailPage", () => {
       screen.getByRole("button", { name: /remove from project.*Alpha/i })
     );
     expect(removeMutate).toHaveBeenCalledWith({ projectId: 1, fontId: 1 });
+  });
+});
+
+describe("ProjectDetailPage activation (Task 5)", () => {
+  it("Activate fonts calls setActive with the project's font ids", () => {
+    renderDetail(1);
+    fireEvent.click(screen.getByRole("button", { name: "Activate fonts" }));
+    expect(setActiveMutate).toHaveBeenCalledTimes(1);
+    expect(setActiveMutate.mock.calls[0]?.[0]).toEqual({
+      ids: [1],
+      active: true,
+    });
+  });
+
+  it("Activate exclusively opens a confirm modal (no mutation yet) with the count", () => {
+    renderDetail(1);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Activate exclusively" })
+    );
+    expect(setActiveMutate).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    // Beta (id 2) is the single other active non-system font → _one variant.
+    expect(
+      screen.getByText("1 other active font will be deactivated")
+    ).toBeInTheDocument();
+  });
+
+  it("confirming deactivates the others THEN activates the project's fonts", () => {
+    renderDetail(1);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Activate exclusively" })
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    // Auto-onSuccess mock chains synchronously — the call log is the order.
+    expect(setActiveMutate.mock.calls.map((c) => c[0])).toEqual([
+      { ids: [2], active: false },
+      { ids: [1], active: true },
+    ]);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("skips the deactivate call (and the modal) when no other fonts are active", () => {
+    fontRowsData = mockFontRows.map((f) =>
+      f.id === 2 ? { ...f, active: 0 } : f
+    );
+    renderDetail(1);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Activate exclusively" })
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(setActiveMutate.mock.calls.map((c) => c[0])).toEqual([
+      { ids: [1], active: true },
+    ]);
   });
 });
