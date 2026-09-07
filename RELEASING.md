@@ -109,6 +109,14 @@ gh release create vX.Y.Z \
 
 Once the updater is re-wired, **every release must carry all three assets** (.dmg, .app.tar.gz, latest.json). Use `gh release upload vX.Y.Z <file> --clobber` to replace an asset.
 
+## Repo visibility and the updater
+
+The repo is **private**, so `releases/latest/download/latest.json` returns 404 to the
+app's anonymous fetch — installed builds show "Update check failed" in Settings > Updates
+until the repo goes public (or the manifest moves to a public host). Everything else in
+this process still applies; releases are prepared updater-ready so flipping visibility
+is the only step left.
+
 ## 8. Post-release validation
 
 - `git status` clean; tag, `package.json`, `tauri.conf.json`, `Cargo.toml` all agree.
