@@ -30,7 +30,14 @@ export function useSetActive() {
       const failed = results.filter((r) => !r.ok);
       if (failed.length === 0) return;
       const t = getLabels();
-      const template = active ? t.activation_partial_failed : t.deactivation_partial_failed;
+      // Singular/plural template picked by count (font_label convention).
+      const template = active
+        ? failed.length === 1
+          ? t.activation_partial_failed_one
+          : t.activation_partial_failed
+        : failed.length === 1
+          ? t.deactivation_partial_failed_one
+          : t.deactivation_partial_failed;
       toast.error(template.replace("{count}", String(failed.length)));
       logError(
         "set_fonts_active partial failure:",

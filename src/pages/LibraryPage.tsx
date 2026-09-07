@@ -68,7 +68,7 @@ export function LibraryPage() {
     <>
       <PageHeader title={t.library}>
         <Badge variant="success">
-          {activeCount} {t.active_label}
+          {activeCount} {activeCount === 1 ? t.active_label_one : t.active_label}
         </Badge>
         <span className="text-sm text-muted">
           {filtered.length} {filtered.length === 1 ? t.font_label : t.fonts_label}

@@ -36,12 +36,12 @@ describe("useSetActive partial-failure feedback", () => {
     expect(toast.error).toHaveBeenCalledWith("2 fonts could not be activated");
   });
 
-  it("uses the deactivation wording when active is false", async () => {
+  it("uses the deactivation wording (singular) when one id fails", async () => {
     vi.mocked(invoke).mockResolvedValue(results([[1, false]]));
     const { result } = renderHook(() => useSetActive(), { wrapper });
     result.current.mutate({ ids: [1], active: false });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(toast.error).toHaveBeenCalledWith("1 fonts could not be deactivated");
+    expect(toast.error).toHaveBeenCalledWith("1 font could not be deactivated");
   });
 
   it("stays silent when every id succeeds", async () => {

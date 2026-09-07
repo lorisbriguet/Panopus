@@ -134,14 +134,20 @@ const ui = {
     collapse_family: "Collapse family",
 
     // Bulk activation (T10)
+    // Singular/plural pairs follow the font_label/fonts_label convention:
+    // call sites pick by count.
+    bulk_selected_one: "selected",
     bulk_selected: "selected",
     bulk_activate: "Activate",
     bulk_deactivate: "Deactivate",
     bulk_clear: "Clear selection",
     select_all_shown: "Select all shown",
     select_font: "Select font",
+    active_label_one: "active",
     active_label: "active",
+    activation_partial_failed_one: "{count} font could not be activated",
     activation_partial_failed: "{count} fonts could not be activated",
+    deactivation_partial_failed_one: "{count} font could not be deactivated",
     deactivation_partial_failed: "{count} fonts could not be deactivated",
 
     // Font detail panel (T11)
@@ -343,14 +349,18 @@ const ui = {
     collapse_family: "Replier la famille",
 
     // Bulk activation (T10)
+    bulk_selected_one: "selectionnee",
     bulk_selected: "selectionnees",
     bulk_activate: "Activer",
     bulk_deactivate: "Desactiver",
     bulk_clear: "Effacer la selection",
     select_all_shown: "Selectionner les polices affichees",
     select_font: "Selectionner la police",
+    active_label_one: "active",
     active_label: "actives",
+    activation_partial_failed_one: "{count} police n'a pas pu etre activee",
     activation_partial_failed: "{count} polices n'ont pas pu etre activees",
+    deactivation_partial_failed_one: "{count} police n'a pas pu etre desactivee",
     deactivation_partial_failed: "{count} polices n'ont pas pu etre desactivees",
 
     // Font detail panel (T11)
