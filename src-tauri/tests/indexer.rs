@@ -78,3 +78,39 @@ fn missing_library_root_errors_without_wiping_rows() {
         .unwrap();
     assert_eq!(before, after);
 }
+
+#[test]
+fn corrupt_in_place_font_becomes_quarantined() {
+    // A font that indexed fine and later fails to parse must flip to
+    // quarantined (and lose its active flag) on the next reindex.
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!("panopus-corrupt-{nanos}"));
+    std::fs::create_dir_all(&dir).unwrap();
+    let font = dir.join("victim.ttf");
+    std::fs::copy("tests/fixtures/valid.ttf", &font).unwrap();
+
+    let conn = rusqlite::Connection::open_in_memory().unwrap();
+    conn.execute_batch(panopus_lib::MIGRATION_V1).unwrap();
+    conn.execute_batch(panopus_lib::MIGRATION_V4).unwrap();
+    let r1 = panopus_lib::indexer::index_all(&conn, &dir, &[]).unwrap();
+    assert_eq!(r1.indexed, 1);
+    conn.execute("UPDATE fonts SET active=1", []).unwrap();
+
+    // Corrupt the file in place.
+    std::fs::write(&font, b"JUNKJUNKJUNKJUNKJUNKJUNK").unwrap();
+    let r2 = panopus_lib::indexer::index_all(&conn, &dir, &[]).unwrap();
+    assert_eq!(r2.quarantined, 1);
+    let (q, a): (i64, i64) = conn
+        .query_row("SELECT quarantined, active FROM fonts", [], |r| Ok((r.get(0)?, r.get(1)?)))
+        .unwrap();
+    assert_eq!((q, a), (1, 0));
+
+    // Re-runs stay incremental: the WHERE guard stops repeat counting.
+    let r3 = panopus_lib::indexer::index_all(&conn, &dir, &[]).unwrap();
+    assert_eq!(r3.quarantined, 0);
+
+    std::fs::remove_dir_all(&dir).ok();
+}

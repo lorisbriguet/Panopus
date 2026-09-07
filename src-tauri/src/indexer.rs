@@ -283,9 +283,14 @@ fn upsert_one(
             };
             let changed = conn
                 .execute(
+                    // A previously-valid font that now fails to parse must flip
+                    // to quarantined (deferred v1 review finding) — but only
+                    // once (WHERE guard keeps re-runs incremental) and without
+                    // clobbering its last-good metadata beyond the hash.
                     "INSERT INTO fonts (path, family, style, ps_name, source, format, glyph_count, hash, is_system, quarantined)
                      VALUES (?1, ?2, 'Regular', NULL, ?3, ?4, 0, '', ?5, 1)
-                     ON CONFLICT(path) DO NOTHING",
+                     ON CONFLICT(path) DO UPDATE SET quarantined = 1, active = 0, hash = ''
+                     WHERE fonts.quarantined = 0",
                     rusqlite::params![path_s, family, source, format, is_system as i64],
                 )
                 .map_err(|e| e.to_string())?;
