@@ -239,6 +239,12 @@ const ui = {
     confirm_exclusive_body: "{count} other active fonts will be deactivated",
     confirm_exclusive_body_one: "{count} other active font will be deactivated",
     confirm: "Confirm",
+
+    // Project artwork (Finish T6)
+    project_artwork_title: "Artwork",
+    project_pick_artwork: "Choose artwork...",
+    artwork_missing: "Artwork file not found — choose it again to relink",
+    finish_tab: "Finish",
   },
   fr: {
     // Sidebar / Nav
@@ -478,6 +484,13 @@ const ui = {
     confirm_exclusive_body_one:
       "{count} autre police active sera desactivee",
     confirm: "Confirmer",
+
+    // Project artwork (Finish T6)
+    project_artwork_title: "Maquette",
+    project_pick_artwork: "Choisir une maquette...",
+    artwork_missing:
+      "Fichier de maquette introuvable — choisissez-le a nouveau pour le relier",
+    finish_tab: "Finition",
   },
 } as const;
 

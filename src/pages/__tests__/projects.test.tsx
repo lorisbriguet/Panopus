@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ProjectsPage } from "../ProjectsPage";
 import { ProjectDetailPage } from "../ProjectDetailPage";
@@ -10,6 +10,31 @@ const createMutate = vi.fn();
 const deleteMutate = vi.fn();
 const renameMutate = vi.fn();
 const removeMutate = vi.fn();
+const setArtworkMutate = vi.fn();
+
+// invoke (the read_artwork_bytes liveness probe) and open (the artwork file
+// picker) both live in the shared src/__mocks__/tauri-api.ts stub — the
+// vitest alias maps @tauri-apps/api/core AND @tauri-apps/plugin-dialog to
+// that ONE file, so both vi.mock registrations below hit the same resolved
+// module. The single shared factory overrides both names on top of the
+// original stub (convertFileSrc etc. stay intact for FontListRow); using
+// one factory for both specifiers keeps the setup correct whichever
+// registration vitest keeps.
+const tauriMocks = vi.hoisted(() => {
+  const invokeMock = vi.fn<(cmd: string, args?: unknown) => Promise<unknown>>();
+  const openMock = vi.fn<() => Promise<string | null>>();
+  const factory = async (
+    importOriginal: () => Promise<Record<string, unknown>>
+  ) => ({
+    ...(await importOriginal()),
+    invoke: invokeMock,
+    open: openMock,
+  });
+  return { invokeMock, openMock, factory };
+});
+vi.mock("@tauri-apps/api/core", tauriMocks.factory);
+vi.mock("@tauri-apps/plugin-dialog", tauriMocks.factory);
+const { invokeMock, openMock } = tauriMocks;
 
 const mockProjects: ProjectRow[] = [
   {
@@ -28,6 +53,14 @@ const mockProjects: ProjectRow[] = [
     created_at: "2026-09-01 09:00:00",
     updated_at: "2026-09-01 09:00:00",
   },
+  {
+    id: 3,
+    name: "Album Cover",
+    artwork_path: "/art/poster.png",
+    graph_json: "{}",
+    created_at: "2026-09-01 08:00:00",
+    updated_at: "2026-09-01 08:00:00",
+  },
 ];
 
 // The full Task-2 hook surface the two pages consume — mutations expose
@@ -43,6 +76,7 @@ vi.mock("../../hooks/useProjects", () => ({
   useDeleteProject: () => ({ mutate: deleteMutate, isPending: false }),
   useProjectFontIds: () => ({ data: [1], isLoading: false }),
   useRemoveFontFromProject: () => ({ mutate: removeMutate, isPending: false }),
+  useSetProjectArtwork: () => ({ mutate: setArtworkMutate, isPending: false }),
 }));
 
 const mockFontRows: FontRow[] = [
@@ -129,6 +163,10 @@ beforeEach(() => {
   // auto-onSuccess survives); resetAllMocks would destroy it.
   vi.clearAllMocks();
   fontRowsData = mockFontRows;
+  // Re-assert defaults every test: clearAllMocks keeps implementations, so
+  // a test's mockRejectedValue would otherwise leak into the next one.
+  invokeMock.mockResolvedValue(new ArrayBuffer(0));
+  openMock.mockResolvedValue(null);
 });
 
 describe("ProjectsPage", () => {
@@ -243,5 +281,63 @@ describe("ProjectDetailPage activation (Task 5)", () => {
     expect(setActiveMutate.mock.calls.map((c) => c[0])).toEqual([
       { ids: [1], active: true },
     ]);
+  });
+});
+
+describe("ProjectDetailPage artwork (Task 6)", () => {
+  it("picker sends the chosen path to useSetProjectArtwork with image filters", async () => {
+    openMock.mockResolvedValue("/art/new-piece.tiff");
+    renderDetail(1);
+    fireEvent.click(screen.getByRole("button", { name: "Choose artwork..." }));
+    await waitFor(() =>
+      expect(setArtworkMutate).toHaveBeenCalledWith({
+        id: 1,
+        path: "/art/new-piece.tiff",
+      })
+    );
+    expect(openMock).toHaveBeenCalledWith({
+      filters: [{ name: "Image", extensions: ["png", "tif", "tiff"] }],
+    });
+  });
+
+  it("does not mutate when the picker is cancelled (null)", async () => {
+    renderDetail(1);
+    fireEvent.click(screen.getByRole("button", { name: "Choose artwork..." }));
+    // Flush the resolved-null picker promise before asserting the negative.
+    await waitFor(() => expect(openMock).toHaveBeenCalledTimes(1));
+    expect(setArtworkMutate).not.toHaveBeenCalled();
+  });
+
+  it("shows the artwork file name after a successful liveness probe", async () => {
+    renderDetail(3);
+    expect(await screen.findByText("poster.png")).toBeInTheDocument();
+    expect(invokeMock).toHaveBeenCalledWith("read_artwork_bytes", {
+      path: "/art/poster.png",
+    });
+    expect(screen.queryByText(/artwork file not found/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the relink prompt when read_artwork_bytes rejects", async () => {
+    invokeMock.mockRejectedValue("failed to read artwork");
+    renderDetail(3);
+    expect(
+      await screen.findByText(/artwork file not found/i)
+    ).toBeInTheDocument();
+    // The re-pick affordance is the same picker button.
+    expect(
+      screen.getByRole("button", { name: "Choose artwork..." })
+    ).toBeInTheDocument();
+  });
+
+  it("renders an inert Finish tab only when artwork is set", async () => {
+    renderDetail(3);
+    const finishTab = await screen.findByRole("tab", { name: "Finish" });
+    expect(finishTab).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("has no Finish tab and no probe when artwork is unset", () => {
+    renderDetail(1);
+    expect(screen.queryByRole("tab", { name: "Finish" })).not.toBeInTheDocument();
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 });

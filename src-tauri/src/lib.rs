@@ -516,6 +516,32 @@ async fn open_in_finder(path: String) -> Result<(), String> {
     }
 }
 
+/// Inner logic for `read_artwork_bytes`, factored out so tests can call it
+/// without an IPC harness. Only png/tif/tiff files are readable (matching
+/// the picker's filter — the extension gate is the backstop for paths that
+/// arrive via the DB rather than the dialog), checked case-insensitively
+/// and before any filesystem access.
+pub fn read_artwork_file(path: &str) -> Result<Vec<u8>, String> {
+    let ext = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .unwrap_or_default();
+    if !matches!(ext.as_str(), "png" | "tif" | "tiff") {
+        return Err(format!("unsupported artwork type: {path}"));
+    }
+    std::fs::read(path).map_err(|e| format!("failed to read artwork {path}: {e}"))
+}
+
+/// Read an artwork image's raw bytes over binary IPC (`ipc::Response`
+/// skips the JSON/base64 detour). Doubles as the detail page's liveness
+/// probe: a rejection means the file moved and the UI shows a relink
+/// prompt.
+#[tauri::command]
+fn read_artwork_bytes(path: String) -> Result<tauri::ipc::Response, String> {
+    read_artwork_file(&path).map(tauri::ipc::Response::new)
+}
+
 /// Run a full font index (library + system dirs) against the active DB.
 /// Async so Tauri executes it on the async runtime instead of blocking the
 /// main thread while the full scan runs.
@@ -562,6 +588,7 @@ pub fn run() {
             get_active_db,
             open_in_finder,
             index_library,
+            read_artwork_bytes,
             activation::set_fonts_active,
         ])
         .setup(|app| {

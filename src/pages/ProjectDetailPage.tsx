@@ -1,5 +1,11 @@
-import { useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import {
+  useEffect,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { Link, useParams } from "react-router-dom";
+import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import { ArrowLeft, X } from "lucide-react";
 import { FontListRow } from "../components/fonts/FontListRow";
 import { Button, EmptyState, Input, Modal, PageSpinner } from "../components/ui";
@@ -10,8 +16,10 @@ import {
   useProjectFontIds,
   useRemoveFontFromProject,
   useRenameProject,
+  useSetProjectArtwork,
 } from "../hooks/useProjects";
 import { useT } from "../i18n/useT";
+import { notifyError } from "../lib/notifyError";
 import { DEFAULT_PROOF_TEXT, useAppStore } from "../stores/app-store";
 
 /**
@@ -30,11 +38,30 @@ export function ProjectDetailPage() {
   const renameProject = useRenameProject();
   const removeFont = useRemoveFontFromProject();
   const setActive = useSetActive();
+  const setArtwork = useSetProjectArtwork();
   const storeProofText = useAppStore((s) => s.proofText);
   const proofSize = useAppStore((s) => s.proofSize);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [confirmExclusive, setConfirmExclusive] = useState(false);
+  const [artworkMissing, setArtworkMissing] = useState(false);
+
+  // Liveness probe: read_artwork_bytes rejection means the file moved or
+  // vanished since it was attached → show the relink prompt. The bytes are
+  // deliberately dropped — the Finish tab does the real read when it needs
+  // them; this only answers "is the path still good?".
+  const artworkPath = project?.artwork_path ?? null;
+  useEffect(() => {
+    setArtworkMissing(false);
+    if (!artworkPath) return;
+    let cancelled = false;
+    invoke("read_artwork_bytes", { path: artworkPath }).catch(() => {
+      if (!cancelled) setArtworkMissing(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [artworkPath]);
 
   if (isLoading) return <PageSpinner />;
   if (!project) return <EmptyState message={t.project_not_found} />;
@@ -79,6 +106,23 @@ export function ProjectDetailPage() {
     if (!name || name === project.name) return;
     renameProject.mutate({ id: project.id, name });
   };
+
+  // Same picker for first attach AND relink — useSetProjectArtwork
+  // overwrites the path either way, and the probe effect re-runs on the
+  // new value.
+  const pickArtwork = async () => {
+    try {
+      const picked = await open({
+        filters: [{ name: "Image", extensions: ["png", "tif", "tiff"] }],
+      });
+      if (typeof picked === "string")
+        setArtwork.mutate({ id: project.id, path: picked });
+    } catch (e) {
+      notifyError(t.choose_folder_failed, e);
+    }
+  };
+
+  const artworkName = artworkPath ? artworkPath.split("/").pop() : null;
 
   const handleRenameKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -204,7 +248,59 @@ export function ProjectDetailPage() {
         </p>
       </Modal>
 
-      {/* Placeholder: artwork board section — a later task mounts it here. */}
+      <section className="mt-8">
+        <h2 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">
+          {t.project_artwork_title}
+        </h2>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            onClick={pickArtwork}
+            loading={setArtwork.isPending}
+          >
+            {t.project_pick_artwork}
+          </Button>
+          {artworkName &&
+            (artworkMissing ? (
+              <span className="text-sm text-[var(--color-danger-text)]">
+                {t.artwork_missing}
+              </span>
+            ) : (
+              <span className="text-sm text-[var(--color-text-secondary)] truncate">
+                {artworkName}
+              </span>
+            ))}
+        </div>
+      </section>
+
+      {/* Present-but-inert tab strip: signals the Finish surface exists once
+          artwork is attached. Fonts is the (only) selected tab; Finish is
+          aria-disabled and swaps no content — Task 10 wires it up. */}
+      {artworkPath && (
+        <div
+          role="tablist"
+          aria-label={t.finish_tab}
+          className="mt-6 flex gap-1 border-b border-[var(--color-border)]"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected="true"
+            className="px-3 py-1.5 text-sm font-medium border-b-2 border-accent text-[var(--color-text-secondary)]"
+          >
+            {t.project_fonts_title}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-disabled="true"
+            className="px-3 py-1.5 text-sm text-muted cursor-default border-b-2 border-transparent"
+          >
+            {t.finish_tab}
+          </button>
+        </div>
+      )}
     </>
   );
 }
