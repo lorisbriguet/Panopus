@@ -1,5 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { vi } from "vitest";
+import type { ComponentType, ReactNode } from "react";
 
 // happy-dom gives @tanstack/react-virtual a zero-size scroll viewport, so the
 // real virtualizer would mount NOTHING. Passthrough mock: every index is
@@ -35,6 +36,64 @@ vi.mock("@tanstack/react-virtual", () => ({
     };
   },
 }));
+
+// @xyflow/react needs real layout/ResizeObserver/d3-zoom plumbing that
+// happy-dom lacks. Minimal passthrough mock: renders every node through its
+// registered nodeType component (so node labels/params reach the DOM),
+// renders children, and parks the latest props on
+// globalThis.__xyflowProps so tests can drive onConnect/onNodesChange etc.
+// directly.
+type XyMockNode = {
+  id: string;
+  type?: string;
+  data?: Record<string, unknown>;
+  selected?: boolean;
+};
+type XyMockProps = {
+  nodes?: XyMockNode[];
+  nodeTypes?: Record<string, unknown>;
+  children?: unknown;
+} & Record<string, unknown>;
+
+vi.mock("@xyflow/react", async () => {
+  const { createElement } = await import("react");
+  const ReactFlow = (props: XyMockProps) => {
+    (globalThis as Record<string, unknown>).__xyflowProps = props;
+    return createElement(
+      "div",
+      { "data-testid": "react-flow" },
+      (props.nodes ?? []).map((n) => {
+        const Comp = props.nodeTypes?.[n.type ?? "default"] as
+          | ComponentType<{
+              id: string;
+              data: Record<string, unknown> | undefined;
+              selected: boolean;
+            }>
+          | undefined;
+        return createElement(
+          "div",
+          { key: n.id, "data-nodeid": n.id },
+          Comp
+            ? createElement(Comp, {
+                id: n.id,
+                data: n.data,
+                selected: !!n.selected,
+              })
+            : n.id
+        );
+      }),
+      props.children as ReactNode
+    );
+  };
+  return {
+    ReactFlow,
+    default: ReactFlow,
+    ReactFlowProvider: (p: { children?: unknown }) => p.children,
+    Panel: (p: { children?: unknown }) => p.children,
+    Handle: () => null,
+    Position: { Left: "left", Right: "right", Top: "top", Bottom: "bottom" },
+  };
+});
 
 // Minimal localStorage mock for jsdom
 const store: Record<string, string> = {};

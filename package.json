@@ -48,6 +48,7 @@
     "@tiptap/starter-kit": "^3.21.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@xyflow/react": "^12.11.6",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "lucide-react": "^1.31.0",
