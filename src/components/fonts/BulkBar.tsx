@@ -24,7 +24,7 @@ interface BulkBarProps {
  * menu stays open after a toggle so tags can be chained, matching the bar's
  * "selection is kept" philosophy.
  */
-function TagMenu({ rows, selectedIds }: { rows: FontRow[]; selectedIds: number[] }) {
+function TagMenu({ rows, selectedIds }: { rows: FontRow[]; selectedIds: Set<number> }) {
   const t = useT();
   const darkMode = useAppStore((s) => s.darkMode);
   const { data: tags } = useTags();
@@ -51,7 +51,7 @@ function TagMenu({ rows, selectedIds }: { rows: FontRow[]; selectedIds: number[]
     };
   }, [open]);
 
-  const selectedRows = rows.filter((r) => selectedIds.includes(r.id));
+  const selectedRows = rows.filter((r) => selectedIds.has(r.id));
   const hasAll = (tagId: number) =>
     selectedRows.length > 0 &&
     selectedRows.every((r) => r.tag_ids.split(",").includes(String(tagId)));
@@ -90,8 +90,8 @@ function TagMenu({ rows, selectedIds }: { rows: FontRow[]; selectedIds: number[]
                   disabled={pending}
                   onClick={() =>
                     checked
-                      ? unassignBulk.mutate({ fontIds: selectedIds, tagId: tag.id })
-                      : assignBulk.mutate({ fontIds: selectedIds, tagId: tag.id })
+                      ? unassignBulk.mutate({ fontIds: Array.from(selectedIds), tagId: tag.id })
+                      : assignBulk.mutate({ fontIds: Array.from(selectedIds), tagId: tag.id })
                   }
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] disabled:opacity-50 outline-none focus-visible:bg-[var(--color-hover-row)]"
                 >
@@ -127,19 +127,19 @@ export function BulkBar({ rows = [] }: BulkBarProps) {
   const clearSelection = useAppStore((s) => s.clearSelection);
   const setActive = useSetActive();
 
-  if (selectedIds.length === 0) return null;
+  if (selectedIds.size === 0) return null;
 
   return (
     <div className="mt-3 flex items-center gap-2 flex-wrap rounded-xl bg-accent-light border border-[var(--color-border-divider)] px-4 py-2">
       <span className="text-sm font-medium text-accent tabular-nums">
-        {selectedIds.length} {t.bulk_selected}
+        {selectedIds.size} {selectedIds.size === 1 ? t.bulk_selected_one : t.bulk_selected}
       </span>
       <div className="ml-auto flex items-center gap-2">
         <Button
           size="sm"
           variant="primary"
           loading={setActive.isPending}
-          onClick={() => setActive.mutate({ ids: selectedIds, active: true })}
+          onClick={() => setActive.mutate({ ids: Array.from(selectedIds), active: true })}
         >
           {t.bulk_activate}
         </Button>
@@ -147,7 +147,7 @@ export function BulkBar({ rows = [] }: BulkBarProps) {
           size="sm"
           variant="secondary"
           disabled={setActive.isPending}
-          onClick={() => setActive.mutate({ ids: selectedIds, active: false })}
+          onClick={() => setActive.mutate({ ids: Array.from(selectedIds), active: false })}
         >
           {t.bulk_deactivate}
         </Button>

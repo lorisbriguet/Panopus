@@ -18,7 +18,7 @@ vi.mock("../../../hooks/useTags", () => ({
 
 beforeEach(() => {
   mutate.mockClear();
-  useAppStore.setState({ selectedIds: [] });
+  useAppStore.setState({ selectedIds: new Set<number>() });
 });
 
 describe("BulkBar", () => {
@@ -29,13 +29,13 @@ describe("BulkBar", () => {
   });
 
   it("shows the selection count", () => {
-    useAppStore.setState({ selectedIds: [1, 2, 3] });
+    useAppStore.setState({ selectedIds: new Set([1, 2, 3]) });
     render(<BulkBar />);
     expect(screen.getByText("3 selected")).toBeInTheDocument();
   });
 
   it("activates all selected ids", () => {
-    useAppStore.setState({ selectedIds: [1, 2, 3] });
+    useAppStore.setState({ selectedIds: new Set([1, 2, 3]) });
     render(<BulkBar />);
     fireEvent.click(screen.getByText("Activate"));
     expect(mutate).toHaveBeenCalledTimes(1);
@@ -43,7 +43,7 @@ describe("BulkBar", () => {
   });
 
   it("deactivates all selected ids", () => {
-    useAppStore.setState({ selectedIds: [1, 2, 3] });
+    useAppStore.setState({ selectedIds: new Set([1, 2, 3]) });
     render(<BulkBar />);
     fireEvent.click(screen.getByText("Deactivate"));
     expect(mutate).toHaveBeenCalledTimes(1);
@@ -51,10 +51,10 @@ describe("BulkBar", () => {
   });
 
   it("clears the selection (and hides itself)", () => {
-    useAppStore.setState({ selectedIds: [1, 2, 3] });
+    useAppStore.setState({ selectedIds: new Set([1, 2, 3]) });
     render(<BulkBar />);
     fireEvent.click(screen.getByText("Clear selection"));
-    expect(useAppStore.getState().selectedIds).toEqual([]);
+    expect(useAppStore.getState().selectedIds).toEqual(new Set());
     expect(screen.queryByText("Activate")).not.toBeInTheDocument();
     expect(mutate).not.toHaveBeenCalled();
   });
@@ -63,14 +63,21 @@ describe("BulkBar", () => {
 describe("selection store actions", () => {
   it("toggleSelected adds then removes an id", () => {
     useAppStore.getState().toggleSelected(7);
-    expect(useAppStore.getState().selectedIds).toEqual([7]);
+    expect(useAppStore.getState().selectedIds).toEqual(new Set([7]));
     useAppStore.getState().toggleSelected(7);
-    expect(useAppStore.getState().selectedIds).toEqual([]);
+    expect(useAppStore.getState().selectedIds).toEqual(new Set());
   });
 
   it("selectMany replaces the selection with the given ids", () => {
-    useAppStore.setState({ selectedIds: [9] });
+    useAppStore.setState({ selectedIds: new Set([9]) });
     useAppStore.getState().selectMany([1, 2, 3]);
-    expect(useAppStore.getState().selectedIds).toEqual([1, 2, 3]);
+    expect(useAppStore.getState().selectedIds).toEqual(new Set([1, 2, 3]));
+  });
+
+  it("allocates a NEW Set on toggle so subscribers see an identity change", () => {
+    useAppStore.setState({ selectedIds: new Set([1]) });
+    const before = useAppStore.getState().selectedIds;
+    useAppStore.getState().toggleSelected(2);
+    expect(useAppStore.getState().selectedIds).not.toBe(before);
   });
 });

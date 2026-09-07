@@ -58,7 +58,7 @@ export const FontCard = memo(function FontCard({
   const setActive = useSetActive();
   // Boolean selector: the memoized card only re-renders when ITS tick flips,
   // not on every selection change across a 6'345-row library.
-  const selected = useAppStore((s) => s.selectedIds.includes(font.id));
+  const selected = useAppStore((s) => s.selectedIds.has(font.id));
   const toggleSelected = useAppStore((s) => s.toggleSelected);
   const isPinned = useAppStore((s) => s.pinnedIds.includes(font.id));
   const pinFont = useAppStore((s) => s.pinFont);

@@ -75,7 +75,7 @@ export const FontListRow = memo(function FontListRow({
   const setActive = useSetActive();
   // Boolean selectors (Task-10 precedent): the memoized row only re-renders
   // when ITS tick flips, not on every selection change across the library.
-  const selected = useAppStore((s) => s.selectedIds.includes(font.id));
+  const selected = useAppStore((s) => s.selectedIds.has(font.id));
   const toggleSelected = useAppStore((s) => s.toggleSelected);
   const isPinned = useAppStore((s) => s.pinnedIds.includes(font.id));
   const pinFont = useAppStore((s) => s.pinFont);

@@ -54,7 +54,7 @@ function getRow() {
 beforeEach(() => {
   vi.clearAllMocks();
   __resetForTest();
-  useAppStore.setState({ selectedIds: [], expandedFamilies: [], pinnedIds: [] });
+  useAppStore.setState({ selectedIds: new Set<number>(), expandedFamilies: [], pinnedIds: [] });
 });
 
 describe("FontListRow", () => {
@@ -105,7 +105,7 @@ describe("FontListRow", () => {
   it("does NOT open the detail when clicking the selection checkbox", () => {
     renderRow();
     fireEvent.click(screen.getByRole("checkbox", { name: "Select font" }));
-    expect(useAppStore.getState().selectedIds).toEqual([7]);
+    expect(useAppStore.getState().selectedIds).toEqual(new Set([7]));
     expect(openDetail).not.toHaveBeenCalled();
   });
 

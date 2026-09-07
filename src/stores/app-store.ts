@@ -225,13 +225,15 @@ export interface AppState {
   libraryView: LibraryViewOption;
   /**
    * Bulk-selection for the library grid: font ids with a ticked checkbox.
-   * Stored as number[] (not Set) so zustand shallow snapshots stay plain data;
-   * ephemeral like libraryQuery — a selection has no meaning across launches.
+   * Stored as a Set so per-card `.has(id)` selectors stay O(1) even with a
+   * select-all over ~6'000 rows; every update allocates a NEW Set so zustand
+   * identity checks still fire. Ephemeral like libraryQuery — a selection has
+   * no meaning across launches.
    */
-  selectedIds: number[];
+  selectedIds: Set<number>;
   /**
    * Library grouping: family names currently expanded in the grid. Stored as
-   * string[] (plain data, like selectedIds) and ephemeral — an unfolded group
+   * string[] (plain data) and ephemeral — an unfolded group
    * has no meaning across launches, so nothing is persisted.
    */
   expandedFamilies: string[];
@@ -373,7 +375,7 @@ export const useAppStore = create<AppState>((set) => ({
   librarySort: (localStorage.getItem("librarySort") as LibrarySortOption) ?? "family_asc",
   libraryColumns: loadLibraryColumns(),
   libraryView: loadLibraryView(),
-  selectedIds: [],
+  selectedIds: new Set<number>(),
   expandedFamilies: [],
   pinnedIds: (() => {
     try {
@@ -429,13 +431,14 @@ export const useAppStore = create<AppState>((set) => ({
     set({ libraryView: view });
   },
   toggleSelected: (id) =>
-    set((s) => ({
-      selectedIds: s.selectedIds.includes(id)
-        ? s.selectedIds.filter((x) => x !== id)
-        : [...s.selectedIds, id],
-    })),
-  clearSelection: () => set({ selectedIds: [] }),
-  selectMany: (ids) => set({ selectedIds: [...ids] }),
+    set((s) => {
+      const next = new Set(s.selectedIds);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return { selectedIds: next };
+    }),
+  clearSelection: () => set({ selectedIds: new Set<number>() }),
+  selectMany: (ids) => set({ selectedIds: new Set(ids) }),
   toggleFamily: (family) =>
     set((s) => ({
       expandedFamilies: s.expandedFamilies.includes(family)

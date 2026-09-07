@@ -48,7 +48,7 @@ const rows = [makeRow(1, "1"), makeRow(2, "1,2"), makeRow(3, "2")];
 beforeEach(() => {
   assignMutate.mockClear();
   unassignMutate.mockClear();
-  useAppStore.setState({ selectedIds: [1, 2] });
+  useAppStore.setState({ selectedIds: new Set([1, 2]) });
 });
 
 describe("BulkBar tag menu", () => {
