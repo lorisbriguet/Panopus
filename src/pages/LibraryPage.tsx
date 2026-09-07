@@ -57,15 +57,18 @@ export function LibraryPage() {
     [rows]
   );
 
+
+
   return (
     <>
-      {/* Pinned control strip (SM task 925/374): sticks to the top of the
-          scroll container; negative X margins span the container's p-8
-          padding so the bar is full-width and opaque. NO negative top
-          margin — sticky insets constrain the MARGIN edge, so -mt would pin
-          the bar that far below the scrollport top, leaving a see-through
-          strip above it. */}
-      <div className="sticky top-0 z-20 -mx-8 px-8 pt-3 pb-3 bg-[var(--color-bg)] border-b border-[var(--color-border-divider)]">
+      {/* Pinned control strip (SM task 925/374). Measured behavior (probe):
+          WebKit pins sticky boxes relative to the scroller's CONTENT edge,
+          i.e. below MainLayout's p-8 padding, and overflow-clipping happens
+          at the padding box — so a top-0 bar pinned 32px down with rows
+          visibly crossing the padding strip above it. -top-8 cancels the
+          scroller's padding-top exactly, pinning the bar flush with the
+          visual top; negative X margins make it span full width. */}
+      <div className="sticky -top-8 z-20 -mx-8 px-8 pt-3 pb-3 bg-[var(--color-bg)] border-b border-[var(--color-border-divider)]">
       <PageHeader title={t.library}>
         <Badge variant="success">
           {activeCount} {activeCount === 1 ? t.active_label_one : t.active_label}
