@@ -5,6 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderOpen, Palette, RefreshCw } from "lucide-react";
 import { getDb } from "../db";
+import { UpdateChecker } from "../components/UpdateChecker";
 import { useAppStore, ACCENT_PRESETS, type AccentPreset } from "../stores/app-store";
 import { THEMES } from "../lib/themes";
 import { useT } from "../i18n/useT";
@@ -14,7 +15,7 @@ import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 import { notifyError } from "../lib/notifyError";
 
-type SettingsCategory = "library" | "appearance";
+type SettingsCategory = "library" | "appearance" | "updates";
 
 /** Shape returned by the Rust `index_library` command. */
 interface IndexReport {
@@ -272,6 +273,14 @@ export function SettingsPage() {
                 <Palette className="mr-2 h-4 w-4" />
                 {t.appearance}
               </Button>
+              <Button
+                variant={activeCategory === "updates" ? "secondary" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveCategory("updates")}
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                {t.updates_category}
+              </Button>
             </nav>
           </div>
 
@@ -279,6 +288,7 @@ export function SettingsPage() {
             <div className="bg-bg-elevated rounded-lg p-6 border border-border">
               {activeCategory === "library" && renderLibrary()}
               {activeCategory === "appearance" && renderAppearance()}
+              {activeCategory === "updates" && <UpdateChecker />}
             </div>
           </div>
         </div>

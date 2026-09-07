@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Panopus",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "ch.panopus.app",
   "build": {
     "frontendDist": "../dist",
@@ -34,7 +34,14 @@
       }
     }
   },
-  "plugins": {},
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBQjVDMEM0MUQyMzJFMDAKUldRQUxpTWR4TUMxcXZZaWY5MkptUm1MSjVOUVVxWVUvZWN6WTRuWjN3WjB0QnZQV2RYbVJJZGUK",
+      "endpoints": [
+        "https://github.com/lorisbriguet/Panopus/releases/latest/download/latest.json"
+      ]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

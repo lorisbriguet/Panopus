@@ -83,6 +83,7 @@ const ui = {
     operation_failed: "Operation failed",
 
     // Update Checker
+    updates_category: "Updates",
     checking_for_updates: "Checking for updates...",
     up_to_date: "Up to date",
     update_available: "Update available",
@@ -298,6 +299,7 @@ const ui = {
     operation_failed: "Operation echouee",
 
     // Update Checker
+    updates_category: "Mises a jour",
     checking_for_updates: "Verification des mises a jour...",
     up_to_date: "A jour",
     update_available: "Mise a jour disponible",
