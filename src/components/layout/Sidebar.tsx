@@ -4,6 +4,7 @@ import {
   Type,
   Columns2,
   BookOpen,
+  FolderKanban,
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
@@ -22,6 +23,7 @@ const navItems: SidebarItem[] = [
   { to: "/library", icon: Type, labelKey: "library" },
   { to: "/compare", icon: Columns2, labelKey: "compare" },
   { to: "/designers", icon: BookOpen, labelKey: "designers" },
+  { to: "/projects", icon: FolderKanban, labelKey: "projects" },
   { to: "/settings", icon: Settings, labelKey: "settings" },
 ];
 

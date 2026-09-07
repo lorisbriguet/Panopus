@@ -216,6 +216,20 @@ const ui = {
     problems_desc:
       "Files that could not be parsed; they are quarantined and excluded from the library.",
     problems_empty: "No problem files",
+
+    // Projects (Finish T3)
+    projects: "Projects",
+    project_new_placeholder: "New project name...",
+    project_create: "Create",
+    project_delete: "Delete project",
+    confirm_delete_project: "Confirm delete",
+    project_fonts_title: "Fonts",
+    project_remove_font: "Remove from project",
+    project_empty: "No fonts in this project yet",
+    projects_empty: "No projects yet",
+    project_not_found: "Project not found",
+    project_rename: "Rename project",
+    back_to_projects: "Back to projects",
   },
   fr: {
     // Sidebar / Nav
@@ -430,6 +444,20 @@ const ui = {
     problems_desc:
       "Fichiers illisibles ; ils sont mis en quarantaine et exclus de la bibliotheque.",
     problems_empty: "Aucun fichier a probleme",
+
+    // Projects (Finish T3)
+    projects: "Projets",
+    project_new_placeholder: "Nom du nouveau projet...",
+    project_create: "Creer",
+    project_delete: "Supprimer le projet",
+    confirm_delete_project: "Confirmer la suppression",
+    project_fonts_title: "Polices",
+    project_remove_font: "Retirer du projet",
+    project_empty: "Aucune police dans ce projet pour le moment",
+    projects_empty: "Aucun projet pour le moment",
+    project_not_found: "Projet introuvable",
+    project_rename: "Renommer le projet",
+    back_to_projects: "Retour aux projets",
   },
 } as const;
 

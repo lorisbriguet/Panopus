@@ -10,6 +10,8 @@ import { LibraryPage } from "./pages/LibraryPage";
 import { ComparePage } from "./pages/ComparePage";
 import { DesignersPage } from "./pages/DesignersPage";
 import { DesignerDetailPage } from "./pages/DesignerDetailPage";
+import { ProjectsPage } from "./pages/ProjectsPage";
+import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { CommandPalette } from "./components/CommandPalette";
 import { useErrorNotifications } from "./hooks/useErrorNotifications";
@@ -117,6 +119,8 @@ export default function App() {
               <Route path="compare" element={<ComparePage />} />
               <Route path="designers" element={<DesignersPage />} />
               <Route path="designers/:slug" element={<DesignerDetailPage />} />
+              <Route path="projects" element={<ProjectsPage />} />
+              <Route path="projects/:id" element={<ProjectDetailPage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
           </Routes>
