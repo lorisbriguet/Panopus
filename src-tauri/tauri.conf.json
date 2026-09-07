@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Panopus",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "identifier": "ch.panopus.app",
   "build": {
     "frontendDist": "../dist",
