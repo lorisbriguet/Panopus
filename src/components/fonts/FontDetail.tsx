@@ -1,4 +1,11 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
@@ -21,6 +28,11 @@ import { GlyphMap } from "./GlyphMap";
 import { Waterfall } from "./Waterfall";
 
 type DetailTab = "info" | "glyphs" | "waterfall";
+
+// Modal.tsx's focus-trap query — kept in sync so both dialogs cycle the
+// same set of controls.
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 type DesignerRef = { slug: string; name: string };
 
@@ -248,6 +260,18 @@ export function FontDetail({ fontId, onClose, onSelectFont }: FontDetailProps) {
 
   const open = fontId !== null;
 
+  // Capture the trigger element at render time, on the closed->open
+  // transition (Modal.tsx precedent): children with autoFocus grab focus
+  // during commit (before effects run), so an effect would capture the wrong
+  // element. Idempotent under StrictMode's double render.
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+  const focusWasOpenRef = useRef(false);
+  if (open && !focusWasOpenRef.current) {
+    const active = document.activeElement;
+    previouslyFocusedRef.current = active instanceof HTMLElement ? active : null;
+  }
+  focusWasOpenRef.current = open;
+
   // Fresh open → Info tab (spec default). Style switches within the family
   // keep the current tab so Glyphs/Waterfall can be compared across styles.
   const wasOpenRef = useRef(false);
@@ -270,6 +294,58 @@ export function FontDetail({ fontId, onClose, onSelectFont }: FontDetailProps) {
     const panel = panelRef.current;
     if (panel && !panel.contains(document.activeElement)) panel.focus();
   }, [open, fontId]);
+
+  // Restore focus to the trigger on close/unmount (Modal.tsx precedent).
+  // Keyed on `open` ONLY — style switches (fontId changes) must not restore.
+  useEffect(() => {
+    if (!open) return;
+    const panel = panelRef.current;
+    if (panel) {
+      const active = document.activeElement;
+      // StrictMode's simulated unmount runs the cleanup below (restoring
+      // focus and clearing the saved element) without re-rendering;
+      // re-capture here so the real close can still restore.
+      if (
+        previouslyFocusedRef.current === null &&
+        active instanceof HTMLElement &&
+        !panel.contains(active)
+      ) {
+        previouslyFocusedRef.current = active;
+      }
+    }
+    return () => {
+      const prev = previouslyFocusedRef.current;
+      previouslyFocusedRef.current = null;
+      // The trigger may have been removed while the panel was open.
+      if (prev && prev.isConnected) prev.focus();
+    };
+  }, [open]);
+
+  // Trap Tab / Shift+Tab inside the panel (Modal.tsx mechanics). Focusables
+  // are queried per keydown because tab content changes while open.
+  const handleTrapKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "Tab") return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+    if (focusables.length === 0) {
+      e.preventDefault();
+      panel.focus();
+      return;
+    }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey) {
+      if (active === first || active === panel) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else if (active === last || active === panel) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
 
   const font = open ? (rows ?? []).find((r) => r.id === fontId) : undefined;
   if (!font) return null;
@@ -297,6 +373,7 @@ export function FontDetail({ fontId, onClose, onSelectFont }: FontDetailProps) {
         tabIndex={-1}
         className="absolute inset-y-0 right-0 w-full max-w-xl bg-[var(--color-surface)] border-l border-[var(--color-border-divider)] shadow-[0_16px_48px_rgba(0,0,0,0.5)] flex flex-col outline-none peek-enter"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleTrapKeyDown}
       >
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-[var(--color-border-divider)]">
           <h3 id={titleId} className="text-sm font-medium min-w-0 truncate">
