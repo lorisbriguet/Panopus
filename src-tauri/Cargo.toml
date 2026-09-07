@@ -32,6 +32,12 @@ tauri-plugin-process = "2"
 tauri-plugin-window-state = "2.4.1"
 tauri-plugin-notification = "2"
 ttf-parser = "0.24"
+# Finish export engine: naga ingests the shared shaders/ GLSL and emits
+# WGSL for wgpu; versions must stay a matching pair (same release train).
+wgpu = "30"
+naga = { version = "30", features = ["glsl-in", "wgsl-out"] }
+pollster = "0.4"
+image = { version = "0.25", default-features = false, features = ["png"] }
 # Ledger checksums for the setup() schema bootstrap — must stay on the same
 # major as the sha2 used by sqlx's migrator (SHA-384 over the migration SQL).
 sha2 = "0.10"

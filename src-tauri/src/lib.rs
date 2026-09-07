@@ -2,6 +2,7 @@ pub mod activation;
 mod bootstrap;
 mod dbfiles;
 pub mod indexer;
+pub mod render;
 pub mod watcher;
 
 use tauri::Manager;
