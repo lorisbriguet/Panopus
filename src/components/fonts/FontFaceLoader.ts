@@ -32,8 +32,10 @@ export function ensureFontFace(id: number, path: string): string {
   const url = convertFileSrc(path).replace(/"/g, '\\"');
   const sheet = el.sheet;
   if (sheet) {
+    // font-display: swap — text paints immediately in the fallback face and
+    // swaps in when the file arrives, so a slow-loading font never blocks a row.
     sheet.insertRule(
-      `@font-face { font-family: "${family}"; src: url("${url}"); }`,
+      `@font-face { font-family: "${family}"; src: url("${url}"); font-display: swap; }`,
       sheet.cssRules.length
     );
     registered.add(id);

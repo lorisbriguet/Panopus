@@ -1,13 +1,11 @@
 import {
   memo,
-  useCallback,
   useEffect,
   useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
-  type RefObject,
 } from "react";
 import { Star, Pin, PinOff } from "lucide-react";
 import { Badge } from "../ui/Badge";
@@ -17,7 +15,6 @@ import { useSetActive } from "../../hooks/useActivation";
 import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
 import type { FontRow } from "../../lib/fontFilters";
-import type { FamilyGroup as FamilyGroupData } from "../../lib/familyGroups";
 import { LICENCE_VARIANTS } from "./FontCard";
 import { ensureFontFace } from "./FontFaceLoader";
 
@@ -25,23 +22,18 @@ import { ensureFontFace } from "./FontFaceLoader";
  * Gutter affordance for folded families in list mode: the representative row
  * shows a "+N styles" chip (collapsed) or a "−" chip on the first style row
  * (expanded). The chip is a BUTTON so the row's `closest("button, input, a")`
- * guard keeps a chip click from also opening the detail panel.
+ * guard keeps a chip click from also opening the detail panel. The shape is
+ * the flattener's FamilyChipInfo (lib/libraryItems) plus the toggle callback;
+ * the chip button carries `data-family-toggle` so the VIRTUALIZED list can
+ * re-focus whichever chip is mounted after an expand/collapse remount.
  */
 interface FamilyChip {
   family: string;
   /** Styles hidden behind the representative (rows.length - 1). */
   hiddenCount: number;
   expanded: boolean;
-  /** Fold/unfold the family — owned by FamilyListRows (focus restore). */
+  /** Fold/unfold the family — owned by the library list (focus restore). */
   onToggle: () => void;
-  /**
-   * FamilyListRows' handle on the CURRENTLY MOUNTED chip. Toggling swaps the
-   * collapsed representative row for the expanded style rows (different
-   * elements — the representative is Regular-preferred, so it may not be
-   * rows[0]); the parent re-focuses this ref after the swap so keyboard
-   * focus never drops to <body>.
-   */
-  chipRef: RefObject<HTMLButtonElement | null>;
 }
 
 interface FontListRowProps {
@@ -166,7 +158,7 @@ export const FontListRow = memo(function FontListRow({
             {familyChip && (
               <button
                 type="button"
-                ref={familyChip.chipRef}
+                data-family-toggle={familyChip.family}
                 onClick={familyChip.onToggle}
                 aria-expanded={familyChip.expanded}
                 aria-label={`${
@@ -259,89 +251,3 @@ export const FontListRow = memo(function FontListRow({
   );
 });
 
-interface FamilyListRowsProps {
-  group: FamilyGroupData;
-  proofText: string;
-  proofSize: number;
-  onOpenDetail?: (id: number) => void;
-}
-
-/**
- * List-mode counterpart of FamilyGroup: collapsed = ONE FontListRow for the
- * representative with a "+N styles" chip; expanded = every style row, the
- * first one carrying the "−" collapse chip. Same ephemeral expandedFamilies
- * store slice, same primitive-selector memo discipline — toggling one family
- * never re-renders the other rows.
- */
-export const FamilyListRows = memo(function FamilyListRows({
-  group,
-  proofText,
-  proofSize,
-  onOpenDetail,
-}: FamilyListRowsProps) {
-  const expanded = useAppStore((s) => s.expandedFamilies.includes(group.family));
-  const toggleFamily = useAppStore((s) => s.toggleFamily);
-  // Toggling REPLACES the chip's host row (collapsed shows the
-  // Regular-preferred representative, expanded shows rows[0] — often
-  // different fonts, so React can't preserve the element via keys). The
-  // pressed chip therefore unmounts and focus would drop to <body>; instead
-  // the chip toggle flags a pending restore and the post-swap effect
-  // re-focuses whichever chip is mounted now.
-  const chipRef = useRef<HTMLButtonElement | null>(null);
-  const restoreFocus = useRef(false);
-  const handleChipToggle = useCallback(() => {
-    restoreFocus.current = true;
-    toggleFamily(group.family);
-  }, [toggleFamily, group.family]);
-
-  useEffect(() => {
-    if (!restoreFocus.current) return;
-    restoreFocus.current = false;
-    chipRef.current?.focus();
-  }, [expanded]);
-
-  // The representative stands in for the rest — hint counts the HIDDEN styles.
-  const hiddenCount = group.rows.length - 1;
-
-  if (!expanded) {
-    return (
-      <FontListRow
-        font={group.representative}
-        proofText={proofText}
-        proofSize={proofSize}
-        onOpenDetail={onOpenDetail}
-        familyChip={{
-          family: group.family,
-          hiddenCount,
-          expanded: false,
-          onToggle: handleChipToggle,
-          chipRef,
-        }}
-      />
-    );
-  }
-  return (
-    <>
-      {group.rows.map((f, i) => (
-        <FontListRow
-          key={f.id}
-          font={f}
-          proofText={proofText}
-          proofSize={proofSize}
-          onOpenDetail={onOpenDetail}
-          familyChip={
-            i === 0
-              ? {
-                  family: group.family,
-                  hiddenCount,
-                  expanded: true,
-                  onToggle: handleChipToggle,
-                  chipRef,
-                }
-              : undefined
-          }
-        />
-      ))}
-    </>
-  );
-});

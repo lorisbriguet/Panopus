@@ -1,15 +1,12 @@
 import { useMemo, useState } from "react";
 import { Badge, EmptyState, PageHeader, PageSpinner } from "../components/ui";
 import { BulkBar } from "../components/fonts/BulkBar";
-import { FamilyGroup } from "../components/fonts/FamilyGroup";
-import { FontCard } from "../components/fonts/FontCard";
 import { FontDetail } from "../components/fonts/FontDetail";
-import { FamilyListRows, FontListRow } from "../components/fonts/FontListRow";
+import { LibraryList } from "../components/fonts/LibraryList";
 import { ProofToolbar } from "../components/fonts/ProofToolbar";
 import { useFonts } from "../hooks/useFonts";
 import { useTags } from "../hooks/useTags";
 import { groupByFamily, isFamilyGroup } from "../lib/familyGroups";
-import { gridTemplateForColumns } from "../lib/gridColumns";
 import { filterFonts } from "../lib/fontFilters";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
@@ -23,10 +20,6 @@ export function LibraryPage() {
   const proofText = useAppStore((s) => s.proofText);
   const proofSize = useAppStore((s) => s.proofSize);
   const selectMany = useAppStore((s) => s.selectMany);
-  // Selector returns the derived template STRING (a primitive), so the page
-  // only re-renders when the setting actually changes the template.
-  const gridTemplate = useAppStore((s) => gridTemplateForColumns(s.libraryColumns));
-  const libraryView = useAppStore((s) => s.libraryView);
   const setAllFamiliesExpanded = useAppStore((s) => s.setAllFamiliesExpanded);
   // Detail slide-over: id of the inspected font, null = closed. Ephemeral
   // page state — no store slice needed, and useState's setter is stable so
@@ -96,55 +89,16 @@ export function LibraryPage() {
         <EmptyState
           message={(rows ?? []).length === 0 ? t.library_empty : t.no_fonts_match}
         />
-      ) : libraryView === "list" ? (
-        // Specimen list (default): one divider-separated row per font, family
-        // groups folding to their representative — same grouped data as the grid.
-        <div className="mt-4">
-          {grouped.map((entry) =>
-            isFamilyGroup(entry) ? (
-              <FamilyListRows
-                key={entry.family}
-                group={entry}
-                proofText={proofText}
-                proofSize={proofSize}
-                onOpenDetail={setDetailId}
-              />
-            ) : (
-              <FontListRow
-                key={entry.id}
-                font={entry}
-                proofText={proofText}
-                proofSize={proofSize}
-                onOpenDetail={setDetailId}
-              />
-            )
-          )}
-        </div>
       ) : (
-        <div
-          className="mt-4 grid gap-3 items-start"
-          style={{ gridTemplateColumns: gridTemplate }}
-        >
-          {grouped.map((entry) =>
-            isFamilyGroup(entry) ? (
-              <FamilyGroup
-                key={entry.family}
-                group={entry}
-                proofText={proofText}
-                proofSize={proofSize}
-                onOpenDetail={setDetailId}
-              />
-            ) : (
-              <FontCard
-                key={entry.id}
-                font={entry}
-                proofText={proofText}
-                proofSize={proofSize}
-                onOpenDetail={setDetailId}
-              />
-            )
-          )}
-        </div>
+        // Both views virtualize through LibraryList: only the visible window
+        // of rows is mounted, so a font-face arrival re-layouts ~30 rows
+        // instead of the whole 7'000+ row library.
+        <LibraryList
+          entries={grouped}
+          proofText={proofText}
+          proofSize={proofSize}
+          onOpenDetail={setDetailId}
+        />
       )}
       <FontDetail
         fontId={detailId}

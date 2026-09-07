@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { FamilyGroup } from "../FamilyGroup";
+import { CollapsedFamilyGroup, FamilyGroupHeader } from "../FamilyGroup";
 import { __resetForTest } from "../FontFaceLoader";
 import { useAppStore } from "../../../stores/app-store";
 import { groupByFamily, isFamilyGroup } from "../../../lib/familyGroups";
@@ -38,26 +38,38 @@ const rows = [
   row({ id: 3, style: "Regular", path: "/r" }),
 ];
 
-function renderGroup() {
+function getGroup() {
   const entry = groupByFamily(rows)[0];
   if (!isFamilyGroup(entry)) throw new Error("expected a group");
-  return render(<FamilyGroup group={entry} proofText="Proof" proofSize={20} />);
+  return entry;
 }
 
-/** The group header — a real button carrying aria-expanded. */
-function getHeader() {
-  return screen.getByRole("button", { name: /family: Inter/i });
-}
+const onToggle = vi.fn();
 
 beforeEach(() => {
+  vi.clearAllMocks();
   __resetForTest();
   useAppStore.setState({ expandedFamilies: [] });
 });
 
-describe("FamilyGroup", () => {
-  it("collapsed by default: representative (Regular) card + '+N styles' hint", () => {
-    renderGroup();
-    expect(getHeader()).toHaveAttribute("aria-expanded", "false");
+// The expanded rendering (full-width header band + chunked style rows) is
+// virtualization territory — covered through LibraryList (librarylist.test.tsx).
+describe("CollapsedFamilyGroup (grid cell)", () => {
+  function renderCell() {
+    return render(
+      <CollapsedFamilyGroup
+        group={getGroup()}
+        proofText="Proof"
+        proofSize={20}
+        onToggle={onToggle}
+      />
+    );
+  }
+
+  it("shows the representative (Regular) card with the '+N styles' hint", () => {
+    renderCell();
+    const header = screen.getByRole("button", { name: "Expand family: Inter" });
+    expect(header).toHaveAttribute("aria-expanded", "false");
     // Header count for the whole family…
     expect(screen.getByText("3 styles")).toBeInTheDocument();
     // …and the hidden-styles hint on the representative card.
@@ -68,17 +80,23 @@ describe("FamilyGroup", () => {
     expect(screen.queryByText("Italic")).not.toBeInTheDocument();
   });
 
-  it("clicking the header expands to every style card and back", () => {
-    renderGroup();
-    fireEvent.click(getHeader());
-    expect(getHeader()).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("Bold")).toBeInTheDocument();
-    expect(screen.getByText("Italic")).toBeInTheDocument();
-    expect(screen.getByText("Regular")).toBeInTheDocument();
-    expect(screen.queryByText("+2 styles")).not.toBeInTheDocument();
-    fireEvent.click(getHeader());
-    expect(getHeader()).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("Bold")).not.toBeInTheDocument();
+  it("clicking the header asks the list to toggle the family", () => {
+    renderCell();
+    fireEvent.click(screen.getByRole("button", { name: "Expand family: Inter" }));
+    expect(onToggle).toHaveBeenCalledWith("Inter");
+  });
+});
+
+describe("FamilyGroupHeader", () => {
+  it("expanded header: aria-expanded, focus-restore handle, toggle callback", () => {
+    render(<FamilyGroupHeader group={getGroup()} expanded onToggle={onToggle} />);
+    const header = screen.getByRole("button", { name: "Collapse family: Inter" });
+    expect(header).toHaveAttribute("aria-expanded", "true");
+    // data-family-toggle: the virtualized list re-focuses the header via
+    // this attribute after the expand/collapse remount.
+    expect(header).toHaveAttribute("data-family-toggle", "Inter");
+    fireEvent.click(header);
+    expect(onToggle).toHaveBeenCalledWith("Inter");
   });
 });
 

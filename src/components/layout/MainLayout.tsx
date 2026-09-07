@@ -75,7 +75,14 @@ export function MainLayout() {
           </div>
         )}
         <TabBar />
-        <div key={location.pathname} className="page-transition p-8 w-full flex-1 overflow-y-auto flex flex-col min-h-0 bg-[var(--color-bg)]">
+        {/* relative + data-scroll-container: the virtualized library resolves
+            this element as its scroll parent (closest()) and measures its own
+            offsetTop against it for the virtualizer's scrollMargin. */}
+        <div
+          key={location.pathname}
+          data-scroll-container
+          className="page-transition relative p-8 w-full flex-1 overflow-y-auto flex flex-col min-h-0 bg-[var(--color-bg)]"
+        >
           <Outlet />
         </div>
       </main>

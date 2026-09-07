@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { FontListRow, FamilyListRows } from "../FontListRow";
+import { FontListRow } from "../FontListRow";
 import { __resetForTest } from "../FontFaceLoader";
 import { useAppStore } from "../../../stores/app-store";
 import type { FontRow } from "../../../lib/fontFilters";
-import type { FamilyGroup } from "../../../lib/familyGroups";
 
 const favMutate = vi.fn();
 const activeMutate = vi.fn();
@@ -34,6 +33,7 @@ const font: FontRow = {
 };
 
 const openDetail = vi.fn();
+const chipToggle = vi.fn();
 
 function renderRow(overrides: Partial<FontRow> = {}) {
   return render(
@@ -116,68 +116,43 @@ describe("FontListRow", () => {
   });
 });
 
-describe("FamilyListRows folding", () => {
-  // Representative is Regular-preferred and deliberately NOT rows[0] here:
-  // collapsed shows id 2, expanded leads with id 1 — guaranteed remount, the
-  // exact case the focus-restore effect must survive.
-  const rows: FontRow[] = [
-    { ...font, id: 1, style: "Bold" },
-    { ...font, id: 2, style: "Regular" },
-    { ...font, id: 3, style: "Italic" },
-  ];
-  const group: FamilyGroup = {
-    family: "Alpha",
-    rows,
-    representative: rows[1],
-  };
-
-  function renderGroup() {
+describe("FontListRow family chip", () => {
+  // The chip data now comes pre-computed from the flattener
+  // (lib/libraryItems); folding/focus-restore itself is exercised through
+  // the virtualized LibraryList (librarylist.test.tsx).
+  function renderWithChip(expanded: boolean) {
     return render(
-      <FamilyListRows
-        group={group}
+      <FontListRow
+        font={font}
         proofText="Proof"
         proofSize={20}
         onOpenDetail={openDetail}
+        familyChip={{ family: "Alpha", hiddenCount: 2, expanded, onToggle: chipToggle }}
       />
     );
   }
 
-  it("collapsed: shows ONE row with a +N chip", () => {
-    renderGroup();
-    expect(screen.getAllByRole("button", { name: /open details/i })).toHaveLength(1);
+  it("collapsed chip shows +N, aria-expanded=false and the focus-restore handle", () => {
+    renderWithChip(false);
     const chip = screen.getByRole("button", { name: "Expand family: Alpha" });
     expect(chip).toHaveAttribute("aria-expanded", "false");
     expect(chip).toHaveTextContent("+2");
+    // data-family-toggle: the virtualized list re-focuses the chip via this
+    // attribute after the expand/collapse remount.
+    expect(chip).toHaveAttribute("data-family-toggle", "Alpha");
   });
 
-  it("clicking the +N chip expands the family WITHOUT opening the detail", () => {
-    renderGroup();
-    fireEvent.click(screen.getByRole("button", { name: "Expand family: Alpha" }));
-    expect(useAppStore.getState().expandedFamilies).toContain("Alpha");
-    expect(openDetail).not.toHaveBeenCalled();
-    // All style rows now visible; the first carries the collapse chip.
-    expect(screen.getAllByRole("button", { name: /open details/i })).toHaveLength(3);
+  it("expanded chip shows the collapse glyph and aria-expanded=true", () => {
+    renderWithChip(true);
     const chip = screen.getByRole("button", { name: "Collapse family: Alpha" });
     expect(chip).toHaveAttribute("aria-expanded", "true");
+    expect(chip).toHaveTextContent("\u2212");
   });
 
-  it("keeps focus on the chip across the expand/collapse remounts", () => {
-    renderGroup();
-    // Expanding swaps the representative row for the style rows — the
-    // pressed chip unmounts; FamilyListRows must re-focus the new chip.
+  it("clicking the chip toggles WITHOUT opening the detail", () => {
+    renderWithChip(false);
     fireEvent.click(screen.getByRole("button", { name: "Expand family: Alpha" }));
-    expect(screen.getByRole("button", { name: "Collapse family: Alpha" })).toHaveFocus();
-    // And back: collapsing must land focus on the "+N" chip again.
-    fireEvent.click(screen.getByRole("button", { name: "Collapse family: Alpha" }));
-    expect(screen.getByRole("button", { name: "Expand family: Alpha" })).toHaveFocus();
-  });
-
-  it("clicking the collapse chip folds back to the representative", () => {
-    useAppStore.setState({ expandedFamilies: ["Alpha"] });
-    renderGroup();
-    fireEvent.click(screen.getByRole("button", { name: "Collapse family: Alpha" }));
-    expect(useAppStore.getState().expandedFamilies).not.toContain("Alpha");
-    expect(screen.getAllByRole("button", { name: /open details/i })).toHaveLength(1);
+    expect(chipToggle).toHaveBeenCalledTimes(1);
     expect(openDetail).not.toHaveBeenCalled();
   });
 });
