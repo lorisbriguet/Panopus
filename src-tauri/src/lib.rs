@@ -148,17 +148,36 @@ INSERT INTO sources (name, licence_status, note) VALUES
   ON CONFLICT(name) DO UPDATE SET licence_status = 'bought', note = excluded.note;
 "#;
 
+/// Projects: a poster's dossier — its font selection, returned artwork and
+/// Finish node graph (spec 2026-09-07-panopus-finish-design.md §1).
+pub const MIGRATION_V6: &str = r#"
+CREATE TABLE projects (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  artwork_path TEXT,
+  graph_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE project_fonts (
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  font_id INTEGER NOT NULL REFERENCES fonts(id) ON DELETE CASCADE,
+  PRIMARY KEY (project_id, font_id)
+);
+"#;
+
 /// All schema migrations in order: (version, description, sql). Single
 /// source of truth shared by the SQL plugin registration in `run()` and the
 /// setup() bootstrap (`bootstrap::ensure_schema`) — the two MUST stay
 /// identical, since sqlx validates a SHA-384 checksum of the exact SQL
 /// string against its `_sqlx_migrations` ledger.
-pub(crate) const MIGRATIONS: [(i64, &str, &str); 5] = [
+pub(crate) const MIGRATIONS: [(i64, &str, &str); 6] = [
     (1, "panopus_initial", MIGRATION_V1),
     (2, "panopus_seed_designers", MIGRATION_V2),
     (3, "panopus_velvetyne_source", MIGRATION_V3),
     (4, "panopus_font_sample_text", MIGRATION_V4),
     (5, "panopus_errorerror_source", MIGRATION_V5),
+    (6, "panopus_projects", MIGRATION_V6),
 ];
 
 /// Global state: the active DB filename (default: "panopus.db").

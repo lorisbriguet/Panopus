@@ -31,3 +31,16 @@ fn migration_v3_seeds_velvetyne_as_free_and_is_idempotent() {
         .unwrap();
     assert_eq!(status, "free");
 }
+
+#[test]
+fn migration_v6_creates_project_tables() {
+    let conn = Connection::open_in_memory().unwrap();
+    conn.execute_batch(panopus_lib::MIGRATION_V1).unwrap();
+    conn.execute_batch(panopus_lib::MIGRATION_V6).unwrap();
+    conn.execute("INSERT INTO projects (name) VALUES ('Fumetto 26')", []).unwrap();
+    conn.execute("INSERT INTO fonts (path,family,source,format,hash) VALUES ('/a.ttf','A','opti','ttf','h')", []).unwrap();
+    conn.execute("INSERT INTO project_fonts (project_id, font_id) VALUES (1, 1)", []).unwrap();
+    conn.execute("DELETE FROM projects", []).unwrap();
+    let n: i64 = conn.query_row("SELECT count(*) FROM project_fonts", [], |r| r.get(0)).unwrap();
+    assert_eq!(n, 0, "cascade");
+}
