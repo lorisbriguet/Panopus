@@ -251,6 +251,17 @@ const ui = {
     finish_params_empty: "No parameters",
     cycle_rejected: "Cannot connect: would create a cycle",
     finish_no_artwork: "Loading artwork...",
+
+    // Export dialog (Finish T14)
+    export_title: "Export F4 — 300 dpi",
+    export_run: "Export",
+    export_dest: "Choose destination...",
+    aspect_warning:
+      "Artwork aspect ratio is more than 1% off F4 (895x1280) — the export will crop",
+    export_done: "Export complete",
+    format_png: "PNG",
+    format_tiff: "TIFF",
+    format_pdf: "PDF",
   },
   fr: {
     // Sidebar / Nav
@@ -503,6 +514,17 @@ const ui = {
     finish_params_empty: "Aucun parametre",
     cycle_rejected: "Impossible de connecter : creerait un cycle",
     finish_no_artwork: "Chargement de la maquette...",
+
+    // Export dialog (Finish T14)
+    export_title: "Export F4 — 300 dpi",
+    export_run: "Exporter",
+    export_dest: "Choisir la destination...",
+    aspect_warning:
+      "Le ratio de la maquette s'ecarte de plus de 1% du F4 (895x1280) — l'export recadrera",
+    export_done: "Export termine",
+    format_png: "PNG",
+    format_tiff: "TIFF",
+    format_pdf: "PDF",
   },
 } as const;
 

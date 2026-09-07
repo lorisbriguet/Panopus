@@ -3,6 +3,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { NodeCanvas } from "./NodeCanvas";
 import { ParamsPanel } from "./ParamsPanel";
 import { PreviewCanvas } from "./PreviewCanvas";
+import { ExportDialog } from "./ExportDialog";
+import { Button } from "../ui/Button";
+import { useT } from "../../i18n/useT";
 import { useSaveProjectGraph } from "../../hooks/useProjects";
 import type { FinishGraph } from "../../lib/finishGraph";
 import { serializeGraph } from "../../lib/finishGraph";
@@ -22,6 +25,8 @@ export function FinishTab({ projectId, artworkPath, graph: initialGraph }: Finis
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [artworkBitmap, setArtworkBitmap] = useState<ImageBitmap | null>(null);
   const [compileErrors, setCompileErrors] = useState<Record<string, string | null>>({});
+  const [exportOpen, setExportOpen] = useState(false);
+  const t = useT();
   const { mutate: saveGraphMutate } = useSaveProjectGraph();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -73,6 +78,19 @@ export function FinishTab({ projectId, artworkPath, graph: initialGraph }: Finis
 
   return (
     <div className="flex flex-col gap-4 h-full">
+      {/* Export */}
+      <div className="flex justify-end">
+        <Button variant="ghost" size="sm" onClick={() => setExportOpen(true)}>
+          {t.export_run}
+        </Button>
+      </div>
+      <ExportDialog
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        projectId={projectId}
+        artworkBitmap={artworkBitmap}
+      />
+
       {/* Preview top */}
       <div className="flex-1 min-h-0">
         <PreviewCanvas
