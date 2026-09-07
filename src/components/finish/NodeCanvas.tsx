@@ -120,15 +120,29 @@ export function NodeCanvas({
         return;
       }
 
-      // Add wire
-      const newWire: GraphWire = {
-        from: source,
-        to: target,
-        toIn: 0, // simplified: always toIn 0 for single-input effects
-      };
+      // Land on the target's first free input (mix has 2); when every
+      // input is occupied, replace the toIn 0 wire.
+      const targetNode = graph.nodes.find((n) => n.id === target);
+      const inputCount =
+        targetNode?.kind === "effect"
+          ? EFFECTS[targetNode.effectId ?? ""]?.inputs ?? 1
+          : 1;
+      const occupied = new Set(
+        graph.wires.filter((w) => w.to === target).map((w) => w.toIn)
+      );
+      let toIn = 0;
+      while (toIn < inputCount && occupied.has(toIn)) toIn++;
+      const replacing = toIn >= inputCount;
+      if (replacing) toIn = 0;
+      const newWire: GraphWire = { from: source, to: target, toIn };
       onGraphChange({
         ...graph,
-        wires: [...graph.wires, newWire],
+        wires: [
+          ...graph.wires.filter(
+            (w) => !(replacing && w.to === target && w.toIn === 0)
+          ),
+          newWire,
+        ],
       });
     },
     [graph, onGraphChange, t.cycle_rejected]

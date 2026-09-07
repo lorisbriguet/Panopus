@@ -2,6 +2,10 @@
 // repo root (inside the vite root, so import.meta.glob reaches it from
 // here via ../../): an effect.json manifest, one or more *.frag passes
 // normalized to the host uniform contract, and optional texture assets.
+//
+// Multi-pass rule: the NODE's wired inputs bind to pass 1's
+// uTex0..uTexK; every later pass N reads pass N-1's output as its uTex0.
+// All passes of an effect receive the effect's full param uniform set.
 
 export type ParamSpec = {
   name: string;

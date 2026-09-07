@@ -1,0 +1,14 @@
+{
+  "id": "vhs",
+  "label": "VHS",
+  "inputs": 1,
+  "passes": [{ "frag": "signal.frag" }, { "frag": "crt.frag" }],
+  "params": [
+    { "name": "wear", "type": "float", "min": 0, "max": 1, "step": 0.01, "default": 0.3 },
+    { "name": "noise", "type": "float", "min": 0, "max": 1, "step": 0.01, "default": 0.25 },
+    { "name": "ghost", "type": "float", "min": 0, "max": 1, "step": 0.01, "default": 0.2 },
+    { "name": "scanline", "type": "float", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+    { "name": "vignette", "type": "float", "min": 0, "max": 1, "step": 0.01, "default": 0.3 },
+    { "name": "seed", "type": "float", "min": 0, "max": 100, "step": 1, "default": 0 }
+  ]
+}

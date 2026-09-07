@@ -49,6 +49,82 @@ describe("effect registry", () => {
     expect(algo?.options).toEqual(["bayer", "halftone", "ascii"]);
   });
 
+  test("registry has the four core effects", () => {
+    expect(Object.keys(EFFECTS)).toEqual(
+      expect.arrayContaining(["dither", "vhs", "jpeg", "mix"])
+    );
+    expect(Object.keys(EFFECTS).length).toBeGreaterThanOrEqual(4);
+  });
+
+  test("vhs has 2 passes with sources present", () => {
+    const vhs = EFFECTS.vhs;
+    expect(vhs.inputs).toBe(1);
+    expect(vhs.passes.map((p) => p.frag)).toEqual([
+      "signal.frag",
+      "crt.frag",
+    ]);
+    for (const pass of vhs.passes) {
+      expect(FRAG_SOURCES[`vhs/${pass.frag}`]).toBeTypeOf("string");
+    }
+    const names = vhs.params.map((p) => p.name);
+    expect(names).toEqual([
+      "wear",
+      "noise",
+      "ghost",
+      "scanline",
+      "vignette",
+      "seed",
+    ]);
+  });
+
+  test("jpeg has 4 passes and quality/blockSize params", () => {
+    const jpeg = EFFECTS.jpeg;
+    expect(jpeg.inputs).toBe(1);
+    expect(jpeg.passes.map((p) => p.frag)).toEqual([
+      "color.frag",
+      "dct1d.frag",
+      "quant.frag",
+      "final.frag",
+    ]);
+    const blockSize = jpeg.params.find((p) => p.name === "blockSize");
+    expect(blockSize?.type).toBe("enum");
+    expect(blockSize?.options).toEqual(["8", "16"]);
+    expect(blockSize?.default).toBe("8");
+    const quality = jpeg.params.find((p) => p.name === "quality");
+    expect(quality?.min).toBe(1);
+    expect(quality?.max).toBe(100);
+    expect(quality?.default).toBe(25);
+  });
+
+  test("mix is a 2-input single-pass blend", () => {
+    const mixSpec = EFFECTS.mix;
+    expect(mixSpec.inputs).toBe(2);
+    expect(mixSpec.passes.length).toBe(1);
+    const mode = mixSpec.params.find((p) => p.name === "mode");
+    expect(mode?.options).toEqual(["blend", "add", "multiply", "screen"]);
+    expect(mode?.default).toBe("blend");
+    const amount = mixSpec.params.find((p) => p.name === "amount");
+    expect(amount?.default).toBe(0.5);
+  });
+
+  test("every param name is uniform-name safe", () => {
+    for (const spec of Object.values(EFFECTS)) {
+      for (const p of spec.params) {
+        expect(p.name, `${spec.id}/${p.name}`).toMatch(/^[a-z][a-zA-Z0-9]*$/);
+      }
+    }
+  });
+
+  test("no TD-specific constructs survive normalization in any frag", () => {
+    for (const [key, src] of Object.entries(FRAG_SOURCES)) {
+      expect(src, key).not.toMatch(/#version/);
+      const code = src.replace(/\/\/[^\n]*/g, "");
+      expect(code, key).not.toMatch(
+        /sTD2DInputs|uTD2DInfos|TDOutputSwizzle|TD_NUM_COLOR_BUFFERS|vUV\.st/
+      );
+    }
+  });
+
   test("dither frag is normalized to the host uniform contract", () => {
     const src = FRAG_SOURCES["dither/glsl_dither.frag"];
     expect(src).not.toMatch(/#version/);

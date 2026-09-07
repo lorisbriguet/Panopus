@@ -1,0 +1,20 @@
+{
+  "id": "jpeg",
+  "label": "JPEG",
+  "inputs": 1,
+  "passes": [
+    { "frag": "color.frag" },
+    { "frag": "dct1d.frag" },
+    { "frag": "quant.frag" },
+    { "frag": "final.frag" }
+  ],
+  "params": [
+    { "name": "quality", "type": "float", "min": 1, "max": 100, "step": 1, "default": 25 },
+    {
+      "name": "blockSize",
+      "type": "enum",
+      "options": ["8", "16"],
+      "default": "8"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "mix",
+  "label": "Mix",
+  "inputs": 2,
+  "passes": [{ "frag": "mix.frag" }],
+  "params": [
+    {
+      "name": "mode",
+      "type": "enum",
+      "options": ["blend", "add", "multiply", "screen"],
+      "default": "blend"
+    },
+    { "name": "amount", "type": "float", "min": 0, "max": 1, "step": 0.01, "default": 0.5 }
+  ]
+}

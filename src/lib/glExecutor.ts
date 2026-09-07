@@ -207,6 +207,13 @@ export class GlExecutor {
   private poolW = 0;
   private poolH = 0;
   private poolCursor = 0;
+  /**
+   * Intermediate passes render into RGBA16F when the context can (JPEG's
+   * DCT passes produce signed / out-of-range coefficients that RGBA8
+   * would clamp to mush - TD ran them on 32f targets). RGBA8 fallback
+   * keeps the in-range effects working on contexts without the ext.
+   */
+  private floatPool = false;
 
   /** Fired when an async effect texture finishes loading (re-render cue). */
   onAssetLoaded: (() => void) | null = null;
@@ -226,6 +233,7 @@ export class GlExecutor {
       return;
     }
     this.gl = gl;
+    this.floatPool = !!gl.getExtension("EXT_color_buffer_float");
     this.buf = gl.createBuffer();
     this.vao = gl.createVertexArray();
     gl.bindVertexArray(this.vao);
@@ -430,7 +438,11 @@ export class GlExecutor {
 
   // -- internals ------------------------------------------------------------
 
-  private makeTex(w: number, h: number): WebGLTexture | null {
+  private makeTex(
+    w: number,
+    h: number,
+    asRenderTarget = false
+  ): WebGLTexture | null {
     const gl = this.gl!;
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -438,15 +450,16 @@ export class GlExecutor {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const asFloat = asRenderTarget && this.floatPool;
     gl.texImage2D(
       gl.TEXTURE_2D,
       0,
-      gl.RGBA,
+      asFloat ? gl.RGBA16F : gl.RGBA,
       w,
       h,
       0,
       gl.RGBA,
-      gl.UNSIGNED_BYTE,
+      asFloat ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE,
       null
     );
     return tex;
@@ -574,7 +587,7 @@ export class GlExecutor {
       return this.pool[this.poolCursor++];
     }
     const gl = this.gl!;
-    const tex = this.makeTex(this.poolW, this.poolH)!;
+    const tex = this.makeTex(this.poolW, this.poolH, true)!;
     const fbo = gl.createFramebuffer()!;
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.framebufferTexture2D(

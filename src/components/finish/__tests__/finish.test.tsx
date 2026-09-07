@@ -88,6 +88,83 @@ describe("NodeCanvas", () => {
     // Effect node should render with its label from the manifest
     expect(screen.getByText("Dither")).toBeInTheDocument();
   });
+
+  it("wires a second connection into a 2-input effect on the first free input", () => {
+    const graph: FinishGraph = {
+      v: 1,
+      nodes: [
+        { id: "srcA", kind: "source", x: 0, y: 100 },
+        { id: "srcB", kind: "source", x: 0, y: 220 },
+        { id: "mix1", kind: "effect", effectId: "mix", params: {}, x: 200, y: 160 },
+        { id: "out", kind: "output", x: 400, y: 160 },
+      ],
+      wires: [
+        { from: "srcA", to: "mix1", toIn: 0 },
+        { from: "mix1", to: "out", toIn: 0 },
+      ],
+    };
+    const onGraphChange = vi.fn();
+
+    render(
+      <NodeCanvas
+        graph={graph}
+        onGraphChange={onGraphChange}
+        selectedNodeId={null}
+        onNodeSelect={vi.fn()}
+      />
+    );
+
+    // Drive the connect handler through the xyflow mock's parked props:
+    // input 0 of mix1 is occupied, so srcB must land on toIn 1.
+    const props = (globalThis as Record<string, unknown>).__xyflowProps as {
+      onConnect: (c: { source: string; target: string }) => void;
+    };
+    props.onConnect({ source: "srcB", target: "mix1" });
+
+    expect(onGraphChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wires: expect.arrayContaining([
+          { from: "srcA", to: "mix1", toIn: 0 },
+          { from: "srcB", to: "mix1", toIn: 1 },
+        ]),
+      })
+    );
+  });
+
+  it("replaces the toIn 0 wire when all inputs of the target are occupied", () => {
+    const graph: FinishGraph = {
+      v: 1,
+      nodes: [
+        { id: "srcA", kind: "source", x: 0, y: 100 },
+        { id: "srcB", kind: "source", x: 0, y: 220 },
+        { id: "eff1", kind: "effect", effectId: "dither", params: {}, x: 200, y: 160 },
+        { id: "out", kind: "output", x: 400, y: 160 },
+      ],
+      wires: [
+        { from: "srcA", to: "eff1", toIn: 0 },
+        { from: "eff1", to: "out", toIn: 0 },
+      ],
+    };
+    const onGraphChange = vi.fn();
+
+    render(
+      <NodeCanvas
+        graph={graph}
+        onGraphChange={onGraphChange}
+        selectedNodeId={null}
+        onNodeSelect={vi.fn()}
+      />
+    );
+
+    const props = (globalThis as Record<string, unknown>).__xyflowProps as {
+      onConnect: (c: { source: string; target: string }) => void;
+    };
+    props.onConnect({ source: "srcB", target: "eff1" });
+
+    const updated = onGraphChange.mock.calls[0][0] as FinishGraph;
+    const intoEff = updated.wires.filter((w) => w.to === "eff1");
+    expect(intoEff).toEqual([{ from: "srcB", to: "eff1", toIn: 0 }]);
+  });
 });
 
 describe("ParamsPanel", () => {
