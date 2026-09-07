@@ -111,11 +111,9 @@ Once the updater is re-wired, **every release must carry all three assets** (.dm
 
 ## Repo visibility and the updater
 
-The repo is **private**, so `releases/latest/download/latest.json` returns 404 to the
-app's anonymous fetch — installed builds show "Update check failed" in Settings > Updates
-until the repo goes public (or the manifest moves to a public host). Everything else in
-this process still applies; releases are prepared updater-ready so flipping visibility
-is the only step left.
+The repo is **public** (flipped 2026-09-07) so the app's anonymous fetch of
+`releases/latest/download/latest.json` works — the updater is live. If it ever goes
+private again, installed builds degrade to "Update check failed" in Settings > Updates.
 
 ## 8. Post-release validation
 
