@@ -60,9 +60,12 @@ export function LibraryPage() {
   return (
     <>
       {/* Pinned control strip (SM task 925/374): sticks to the top of the
-          scroll container; negative margins span the container's p-8 padding
-          so scrolled content passes behind an opaque, full-width bar. */}
-      <div className="sticky top-0 z-20 -mx-8 -mt-8 px-8 pt-8 pb-3 bg-[var(--color-bg)] border-b border-[var(--color-border-divider)]">
+          scroll container; negative X margins span the container's p-8
+          padding so the bar is full-width and opaque. NO negative top
+          margin — sticky insets constrain the MARGIN edge, so -mt would pin
+          the bar that far below the scrollport top, leaving a see-through
+          strip above it. */}
+      <div className="sticky top-0 z-20 -mx-8 px-8 pt-3 pb-3 bg-[var(--color-bg)] border-b border-[var(--color-border-divider)]">
       <PageHeader title={t.library}>
         <Badge variant="success">
           {activeCount} {activeCount === 1 ? t.active_label_one : t.active_label}
