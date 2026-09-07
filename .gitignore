@@ -34,3 +34,6 @@ src-tauri/WixTools/
 # Logs
 *.log
 npm-debug.log*
+
+# Parity harness failure dumps
+test/parity/failed-*.png

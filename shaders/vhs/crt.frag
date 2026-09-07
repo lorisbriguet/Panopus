@@ -71,12 +71,17 @@ vec3 blur_in0(vec2 tc, float offs) {
 }
 
 float rand(vec2 co) {
-    float a = 12.9898;
-    float b = 78.233;
-    float c = 43758.5453;
-    float dt = dot(co.xy, vec2(a, b));
-    float sn = mod(dt, 3.14);
-    return fract(sin(sn) * c);
+    // Integer hash, bit-exact across shader compilers (the TD original's
+    // fract(sin(...)) diverged between preview and export — see
+    // signal.frag's hash21). Inputs are uv-scale, so quantize to 2^-16:
+    // pixel centers land exactly, the constant +0.3/+0.5 offsets far
+    // from rounding boundaries.
+    uvec2 q = uvec2(ivec2(round(co * 65536.0)) + 16384);
+    uint h = q.x * 1664525u ^ q.y * 1013904223u;
+    h = (h ^ (h >> 16u)) * 2246822519u;
+    h = (h ^ (h >> 13u)) * 3266489917u;
+    h ^= h >> 16u;
+    return float(h >> 8u) * (1.0 / 16777216.0);
 }
 
 void main() {

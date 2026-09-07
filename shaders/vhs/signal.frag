@@ -60,9 +60,17 @@ float blackman(float n, float Nf) {
 }
 
 float hash21(vec2 p) {
-    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-    p3 += dot(p3, p3.yzx + 33.33);
-    return fract((p3.x + p3.y) * p3.z);
+    // Integer hash (bit-exact across shader compilers): the float
+    // fract-chain hash this replaces decorrelated between the WebGL2
+    // preview and the wgpu export (fma contraction flips every bit),
+    // breaking parity. Inputs quantize to 1/8 steps — every call site
+    // feeds values at least ~0.1 apart, so rounding is stable.
+    uvec2 q = uvec2(ivec2(round(p * 8.0)) + 16384);
+    uint h = q.x * 1664525u ^ q.y * 1013904223u;
+    h = (h ^ (h >> 16u)) * 2246822519u;
+    h = (h ^ (h >> 13u)) * 3266489917u;
+    h ^= h >> 16u;
+    return float(h >> 8u) * (1.0 / 16777216.0);
 }
 
 void main() {
