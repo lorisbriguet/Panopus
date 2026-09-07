@@ -37,7 +37,12 @@ ttf-parser = "0.24"
 wgpu = "30"
 naga = { version = "30", features = ["glsl-in", "wgsl-out"] }
 pollster = "0.4"
-image = { version = "0.25", default-features = false, features = ["png"] }
+# tiff feature: artwork attach allows .tif/.tiff; the export encoder uses
+# the tiff crate directly (deflate) — 0.9 matches image 0.25's own tiff
+# dependency so only one copy is built.
+image = { version = "0.25", default-features = false, features = ["png", "tiff"] }
+tiff = "0.9"
+printpdf = "0.7"
 # Ledger checksums for the setup() schema bootstrap — must stay on the same
 # major as the sha2 used by sqlx's migrator (SHA-384 over the migration SQL).
 sha2 = "0.10"
@@ -45,3 +50,6 @@ core-foundation = "0.10"
 md5 = "0.7"
 walkdir = "2"
 notify = "6"
+
+[dev-dependencies]
+tempfile = "3"

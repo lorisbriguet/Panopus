@@ -591,6 +591,7 @@ pub fn run() {
             index_library,
             read_artwork_bytes,
             activation::set_fonts_active,
+            render::export::export_finish,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

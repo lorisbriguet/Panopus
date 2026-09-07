@@ -3,6 +3,7 @@
 //! harness (Task 15) pins both to the same pixels.
 
 pub mod engine;
+pub mod export;
 pub mod manifest;
 
 use serde::{Deserialize, Serialize};
