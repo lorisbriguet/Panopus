@@ -4,6 +4,11 @@ Brainstormed 2026-09-08 on top of the shipped Finish v1 (feat/finish,
 through commit 7db39066). This document captures the agreed direction;
 a task plan derives from it later.
 
+**Status:** P1 shipped (D1, D2, D4 — plans/2026-09-08-finish-2-p1.md).
+P2 shipped (D5, D7, D8, D9 + gradient map, posterize, halftone, riso —
+plans/2026-09-08-finish-2-p2.md). Remaining: P3 (D3 text operator +
+drag), P4 (D6 proof render, variation strip, A/B).
+
 ## What Finish is for (user's words, distilled)
 
 One chain, many deliverables, reusable looks:
