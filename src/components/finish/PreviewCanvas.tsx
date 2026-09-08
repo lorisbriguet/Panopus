@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { GlExecutor } from "../../lib/glExecutor";
-import { F4_RATIO } from "../../lib/finishGraph";
-import type { FinishGraph } from "../../lib/finishGraph";
+import {
+  F4_RATIO,
+  nodeResolutions,
+  outputPx,
+  outputSettingsForNode,
+} from "../../lib/finishGraph";
+import type { FinishGraph, GraphNode } from "../../lib/finishGraph";
+import {
+  blockRect,
+  chainDestRect,
+  dragToParams,
+  isDraggable,
+} from "../../lib/previewDrag";
 import { useT } from "../../i18n/useT";
 
 interface PreviewCanvasProps {
@@ -17,6 +28,9 @@ interface PreviewCanvasProps {
   ratio?: number;
   /** Which output node's page the canvas shows (null = first). */
   previewOutputId?: string | null;
+  /** Selected node — text/transform become draggable blocks (D3). */
+  selectedNode?: GraphNode | null;
+  onNodeParams?: (nodeId: string, patch: { x: number; y: number }) => void;
   onCompileErrors?: (errors: Record<string, string | null>) => void;
   /** Per-node output thumbnails (TouchDesigner-style operator viewers). */
   onThumbnails?: (thumbs: Record<string, string>) => void;
@@ -34,6 +48,8 @@ export function PreviewCanvas({
   artworkPath,
   ratio = F4_RATIO,
   previewOutputId = null,
+  selectedNode = null,
+  onNodeParams,
   onCompileErrors,
   onThumbnails,
 }: PreviewCanvasProps) {
@@ -43,6 +59,15 @@ export function PreviewCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
   const [needsRender, setNeedsRender] = useState(false);
+  /** Canvas + container CSS sizes from the last render (drag overlay). */
+  const [view, setView] = useState({ w: 0, h: 0, cw: 0, ch: 0 });
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    baseX: number;
+    baseY: number;
+  } | null>(null);
   // Ref so the executor keeps one stable callback across re-renders.
   const onThumbnailsRef = useRef(onThumbnails);
   onThumbnailsRef.current = onThumbnails;
@@ -137,6 +162,12 @@ export function PreviewCanvas({
 
     width = Math.max(1, width);
     height = Math.max(1, height);
+    setView((v) =>
+      v.w === width && v.h === height &&
+      v.cw === container.clientWidth && v.ch === container.clientHeight
+        ? v
+        : { w: width, h: height, cw: container.clientWidth, ch: container.clientHeight }
+    );
     executorRef.current.previewOutput = previewOutputId;
     if (width > 0 && height > 0) {
       executorRef.current.render(graph, width, height);
@@ -166,6 +197,32 @@ export function PreviewCanvas({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Drag overlay geometry (D3/D9): the selected text/transform block on
+  // the canvas, via the same placement math the executor uses.
+  let dest: ReturnType<typeof chainDestRect> = null;
+  let block: ReturnType<typeof blockRect> = null;
+  if (
+    isDraggable(selectedNode) &&
+    selectedNode &&
+    view.w > 0 &&
+    previewOutputId !== undefined
+  ) {
+    const settings = outputSettingsForNode(graph, previewOutputId ?? "");
+    const pagePx = outputPx(settings);
+    const dims = new Map<string, { w: number; h: number }>();
+    if (sourceBitmaps) {
+      for (const [id, b] of sourceBitmaps) dims.set(id, { w: b.width, h: b.height });
+    }
+    const outId = previewOutputId ?? graph.nodes.find((n) => n.kind === "output")?.id;
+    const tail = outId
+      ? nodeResolutions(graph, dims, 16384).get(outId)
+      : undefined;
+    if (tail) {
+      dest = chainDestRect(view.w, view.h, settings.fit, tail.w, tail.h, pagePx.w);
+      if (dest) block = blockRect(dest, selectedNode);
+    }
+  }
+
   if (!artworkBitmap) {
     return (
       <div className="h-full border border-[var(--color-input-border)] rounded-lg bg-[var(--color-surface)] flex items-center justify-center">
@@ -186,6 +243,47 @@ export function PreviewCanvas({
         ref={canvasRef}
         className="absolute inset-0 m-auto border border-white/15 shadow-[0_0_48px_rgba(0,0,0,0.55)]"
       />
+      {block && (
+        <div
+          data-testid="drag-block"
+          className="absolute z-30 border border-accent cursor-move"
+          style={{
+            left: (view.cw - view.w) / 2 + block.left,
+            top: (view.ch - view.h) / 2 + block.top,
+            width: block.w,
+            height: block.h,
+          }}
+          onPointerDown={(e) => {
+            if (!selectedNode) return;
+            (e.target as HTMLElement).setPointerCapture(e.pointerId);
+            const p = selectedNode.params ?? {};
+            dragRef.current = {
+              pointerId: e.pointerId,
+              startX: e.clientX,
+              startY: e.clientY,
+              baseX: typeof p.x === "number" ? p.x : 0,
+              baseY: typeof p.y === "number" ? p.y : 0,
+            };
+          }}
+          onPointerMove={(e) => {
+            const d = dragRef.current;
+            if (!d || !selectedNode || !dest || !onNodeParams) return;
+            onNodeParams(
+              selectedNode.id,
+              dragToParams(
+                dest,
+                d.baseX,
+                d.baseY,
+                e.clientX - d.startX,
+                e.clientY - d.startY
+              )
+            );
+          }}
+          onPointerUp={() => {
+            dragRef.current = null;
+          }}
+        />
+      )}
     </div>
   );
 }

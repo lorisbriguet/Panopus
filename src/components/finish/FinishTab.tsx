@@ -335,6 +335,15 @@ export function FinishTab({
           artworkPath={artworkPath ?? ""}
           ratio={ratio}
           previewOutputId={previewOutputId}
+          selectedNode={selectedNode}
+          onNodeParams={(nodeId, patch) => {
+            commitGraph({
+              ...graph,
+              nodes: graph.nodes.map((n) =>
+                n.id === nodeId ? { ...n, params: { ...n.params, ...patch } } : n
+              ),
+            });
+          }}
           onCompileErrors={setCompileErrors}
           onThumbnails={setThumbs}
         />
