@@ -1,7 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { NodeCanvas } from "../NodeCanvas";
 import { ParamsPanel } from "../ParamsPanel";
+import { FinishTab } from "../FinishTab";
+
+vi.mock("../../../hooks/useProjects", () => ({
+  useSaveProjectGraph: () => ({ mutate: vi.fn(), isPending: false }),
+}));
 import { emptyGraph } from "../../../lib/finishGraph";
 import type { FinishGraph, GraphNode } from "../../../lib/finishGraph";
 import { EFFECTS } from "../../../lib/effects";
@@ -297,5 +302,51 @@ describe("ParamsPanel", () => {
     // Compile error should be displayed in danger text
     expect(screen.getByText(compileError)).toBeInTheDocument();
     expect(screen.getByText(compileError)).toHaveClass("text-[var(--color-danger-text)]");
+  });
+});
+
+describe("FinishTab graph undo (Finish 2 T1)", () => {
+  const renderTab = () =>
+    render(
+      <FinishTab
+        projectId={1}
+        artworkPath={null}
+        onPickArtwork={vi.fn()}
+        graph={emptyGraph()}
+      />
+    );
+
+  const addDither = () => {
+    fireEvent.click(screen.getByRole("button", { name: /add/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Dither" }));
+  };
+
+  it("cmd+z undoes an added effect, cmd+shift+z redoes it", async () => {
+    renderTab();
+    addDither();
+    expect(screen.getByText("Dither")).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "z", metaKey: true });
+    await waitFor(() =>
+      expect(screen.queryByText("Dither")).not.toBeInTheDocument()
+    );
+
+    fireEvent.keyDown(document, { key: "Z", metaKey: true, shiftKey: true });
+    await waitFor(() => expect(screen.getByText("Dither")).toBeInTheDocument());
+  });
+
+  it("leaves cmd+z alone while typing in an input", async () => {
+    renderTab();
+    addDither();
+    // Select the output node so its width NumField is in the DOM.
+    const props = (globalThis as Record<string, unknown>).__xyflowProps as {
+      onNodesChange: (changes: unknown[]) => void;
+    };
+    act(() => {
+      props.onNodesChange([{ type: "select", id: "out", selected: true }]);
+    });
+    const width = await screen.findByLabelText("width");
+    fireEvent.keyDown(width, { key: "z", metaKey: true });
+    expect(screen.getByText("Dither")).toBeInTheDocument();
   });
 });

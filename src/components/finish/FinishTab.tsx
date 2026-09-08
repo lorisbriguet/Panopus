@@ -9,8 +9,11 @@ import type { FinishGraph } from "../../lib/finishGraph";
 import {
   outputRatio,
   outputSettings,
+  parseGraph,
   serializeGraph,
 } from "../../lib/finishGraph";
+import { createHistory } from "../../lib/graphHistory";
+import type { GraphHistory } from "../../lib/graphHistory";
 
 interface FinishTabProps {
   projectId: number;
@@ -44,6 +47,19 @@ export function FinishTab({
   const [exportOpen, setExportOpen] = useState(false);
   const { mutate: saveGraphMutate } = useSaveProjectGraph();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Local graph undo history, seeded with the mount graph. Every edit
+  // commits through commitGraph; undo/redo restore WITHOUT pushing.
+  const historyRef = useRef<GraphHistory | null>(null);
+  if (!historyRef.current) {
+    historyRef.current = createHistory();
+    historyRef.current.push(serializeGraph(initialGraph), Date.now());
+  }
+
+  const commitGraph = useCallback((next: FinishGraph) => {
+    setGraph(next);
+    historyRef.current!.push(serializeGraph(next), Date.now());
+  }, []);
 
   // Load artwork bitmap
   useEffect(() => {
@@ -92,8 +108,37 @@ export function FinishTab({
     };
   }, [graph, projectId, saveGraphMutate]);
 
-  const handleGraphChange = useCallback((newGraph: FinishGraph) => {
-    setGraph(newGraph);
+  const handleGraphChange = useCallback(
+    (newGraph: FinishGraph) => {
+      commitGraph(newGraph);
+    },
+    [commitGraph]
+  );
+
+  // Cmd+Z / Cmd+Shift+Z, CAPTURE phase so it preempts App.tsx's global
+  // DB-undo listener while the Finish tab is mounted. Falls through
+  // (no preventDefault) when the graph history has nothing to give,
+  // and never fires while typing in a field.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || (e.key !== "z" && e.key !== "Z")) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (target?.isContentEditable || target?.closest?.('[contenteditable="true"]')) return;
+      const h = historyRef.current!;
+      const json = e.shiftKey ? h.redo() : h.undo();
+      if (json === null) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const restored = parseGraph(json);
+      setGraph(restored);
+      setSelectedNodeId((sel) =>
+        sel && restored.nodes.some((n) => n.id === sel) ? sel : null
+      );
+    };
+    document.addEventListener("keydown", handler, true);
+    return () => document.removeEventListener("keydown", handler, true);
   }, []);
 
   const handleNodeSelect = useCallback((nodeId: string | null) => {
@@ -145,13 +190,12 @@ export function FinishTab({
           <ParamsPanel
             node={selectedNode}
             onParamsChange={(params) => {
-              const newGraph = {
+              commitGraph({
                 ...graph,
                 nodes: graph.nodes.map((n) =>
                   n.id === selectedNode.id ? { ...n, params } : n
                 ),
-              };
-              setGraph(newGraph);
+              });
             }}
             compileError={compileErrors[selectedNode.id] ?? null}
             onExport={() => setExportOpen(true)}
