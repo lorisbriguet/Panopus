@@ -1,0 +1,11 @@
+{
+  "id": "gradientmap",
+  "label": "Gradient Map",
+  "inputs": 1,
+  "passes": [{ "frag": "gradientmap.frag" }],
+  "params": [
+    { "name": "dark", "type": "color", "default": "#101014" },
+    { "name": "light", "type": "color", "default": "#f2ede4" },
+    { "name": "mix", "type": "float", "min": 0, "max": 1, "step": 0.01, "default": 1 }
+  ]
+}

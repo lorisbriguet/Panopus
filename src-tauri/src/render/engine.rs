@@ -260,7 +260,9 @@ fn write_params(
         let v = node_params.and_then(|m| m.get(&p.name));
         match f.kind.as_str() {
             "color" => {
-                let [r, g, b] = color_vec3(v);
+                // Fall back to the manifest default like the scalar path
+                // (mirrors glExecutor's `node.params?.[name] ?? p.default`).
+                let [r, g, b] = color_vec3(v.or(Some(&p.default)));
                 put_f32(f.offset, r, &mut buf);
                 put_f32(f.offset + 4, g, &mut buf);
                 put_f32(f.offset + 8, b, &mut buf);
