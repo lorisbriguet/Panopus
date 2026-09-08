@@ -15,6 +15,7 @@ import { EFFECTS, FRAG_SOURCES } from "./effects";
 import type { EffectSpec, ParamSpec } from "./effects";
 import {
   executionOrder,
+  nodeResolutions,
   outputNodes,
   outputPx,
   outputSettingsFrom,
@@ -208,10 +209,10 @@ export class GlExecutor {
   /** `${effectId}/${file}` -> effect texture asset (async-loaded). */
   private assetTex = new Map<string, WebGLTexture>();
 
-  private pool: Target[] = [];
-  private poolW = 0;
-  private poolH = 0;
-  private poolCursor = 0;
+  /** Size-keyed pools of pass targets: per-node resolutions mean
+   *  several sizes live in one render. Cursors reset per render;
+   *  sizes unused by a render are pruned. */
+  private pools = new Map<string, { targets: Target[]; cursor: number }>();
   /**
    * Intermediate passes render into RGBA16F when the context can (JPEG's
    * DCT passes produce signed / out-of-range coefficients that RGBA8
@@ -349,19 +350,21 @@ export class GlExecutor {
         : outs[0]?.id ?? null;
     const settingsOf = (id: string) =>
       outputSettingsFrom(outs.find((n) => n.id === id)?.params);
-    const firstSource = graph.nodes.find(
-      (n) => n.kind === "source" && this.sourceTex.has(n.id)
-    );
-    const native = firstSource ? this.sourceTex.get(firstSource.id)! : null;
-    const iw = native?.w ?? width;
-    const ih = native?.h ?? height;
-    const cap = 2048;
-    const wScale = Math.min(1, cap / Math.max(iw, ih));
-    const ww = Math.max(1, Math.round(iw * wScale));
-    const wh = Math.max(1, Math.round(ih * wScale));
+    const sourceDims = new Map<string, { w: number; h: number }>();
+    for (const [id, entry] of this.sourceTex) {
+      sourceDims.set(id, { w: entry.w, h: entry.h });
+    }
+    // Preview resolutions (capped for perf) drive the render; TRUE
+    // resolutions (device cap) drive place-mode fractions so "100%"
+    // means real output pixels, matching the Rust exporter.
+    const res = nodeResolutions(graph, sourceDims, 2048);
+    const resTrue = nodeResolutions(graph, sourceDims, 16384);
+    const resOf = (id: string) => res.get(id) ?? { w: 8, h: 8 };
+    const trueOf = (id: string) => resTrue.get(id) ?? { w: 8, h: 8 };
 
-    this.ensurePool(ww, wh);
-    this.poolCursor = 0;
+    const usedSizes = new Set<string>();
+    for (const r of res.values()) usedSizes.add(`${r.w}x${r.h}`);
+    this.resetPools(usedSizes);
     gl.bindVertexArray(this.vao);
 
     const byId = new Map(graph.nodes.map((n) => [n.id, n]));
@@ -389,9 +392,38 @@ export class GlExecutor {
         const tex = inputTex(id, 0);
         if (id === previewId) {
           const s = settingsOf(id);
-          this.blitToCanvasPlaced(tex, width, height, s, iw, ih, outputPx(s));
+          const t = trueOf(id);
+          this.blitToCanvasPlaced(tex, width, height, s, t.w, t.h, outputPx(s));
         }
         outputs.set(id, tex); // so the output operator gets a thumbnail too
+        continue;
+      }
+      if (node.kind === "scale") {
+        // Resampling blit: input -> a target at this node's resolution,
+        // nearest-neighbor when filter is "pixel".
+        const { w: nw, h: nh } = resOf(id);
+        const input = inputTex(id, 0);
+        const pixel = node.params?.filter === "pixel";
+        const target = this.acquireTarget(nw, nh);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
+        gl.viewport(0, 0, nw, nh);
+        if (!this.copyProg) this.copyProg = this.compile(COPY_FRAG);
+        if (this.copyProg.prog) {
+          gl.useProgram(this.copyProg.prog);
+          if (pixel) {
+            gl.bindTexture(gl.TEXTURE_2D, input);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+          }
+          this.bindTex(this.copyProg.prog, "uTex0", input, 0);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+          if (pixel) {
+            gl.bindTexture(gl.TEXTURE_2D, input);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          }
+        }
+        outputs.set(id, target.tex);
         continue;
       }
       const spec = node.effectId ? EFFECTS[node.effectId] : undefined;
@@ -400,6 +432,7 @@ export class GlExecutor {
         outputs.set(id, inputTex(id, 0));
         continue;
       }
+      const { w: nw, h: nh } = resOf(id);
       let prev: WebGLTexture | null = null;
       let failed: string | null = null;
       for (let pi = 0; pi < spec.passes.length; pi++) {
@@ -408,9 +441,9 @@ export class GlExecutor {
           failed = entry.error ?? "shader compile failed";
           break;
         }
-        const target = this.acquireTarget();
+        const target = this.acquireTarget(nw, nh);
         gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
-        gl.viewport(0, 0, ww, wh);
+        gl.viewport(0, 0, nw, nh);
         gl.useProgram(entry.prog);
         let unit = 0;
         if (pi === 0) {
@@ -434,7 +467,7 @@ export class GlExecutor {
         // stripped (e.g. dither's declared-but-unread uSeed) - skip
         // silently in that case.
         const locRes = gl.getUniformLocation(entry.prog, "uRes");
-        if (locRes) gl.uniform2f(locRes, ww, wh);
+        if (locRes) gl.uniform2f(locRes, nw, nh);
         for (const p of spec.params) {
           const loc = gl.getUniformLocation(entry.prog, uniformName(p.name));
           if (!loc) continue;
@@ -458,16 +491,18 @@ export class GlExecutor {
     if (this.thumbSize > 0 && this.onThumbnails) {
       const thumbs: Record<string, string> = {};
       for (const [id, tex] of outputs) {
-        // Chain operators show their working-res output (source aspect);
-        // each output operator shows ITS OWN placed page.
+        // Chain operators show their own resolution's aspect; each
+        // output operator shows ITS OWN placed page.
         const isOut = byId.get(id)?.kind === "output";
         if (isOut) {
           const s = settingsOf(id);
           const px = outputPx(s);
-          const url = this.captureThumb(tex, px.w / px.h, s, iw, ih, px);
+          const t = trueOf(id);
+          const url = this.captureThumb(tex, px.w / px.h, s, t.w, t.h, px);
           if (url) thumbs[id] = url;
         } else {
-          const url = this.captureThumb(tex, ww / wh);
+          const r = resOf(id);
+          const url = this.captureThumb(tex, r.w / r.h);
           if (url) thumbs[id] = url;
         }
       }
@@ -608,11 +643,13 @@ export class GlExecutor {
     this.sourceTex.clear();
     for (const t of this.assetTex.values()) gl.deleteTexture(t);
     this.assetTex.clear();
-    for (const t of this.pool) {
-      gl.deleteTexture(t.tex);
-      gl.deleteFramebuffer(t.fbo);
+    for (const pool of this.pools.values()) {
+      for (const t of pool.targets) {
+        gl.deleteTexture(t.tex);
+        gl.deleteFramebuffer(t.fbo);
+      }
     }
-    this.pool = [];
+    this.pools.clear();
     for (const t of this.thumbTargets.values()) {
       gl.deleteTexture(t.tex);
       gl.deleteFramebuffer(t.fbo);
@@ -762,24 +799,34 @@ export class GlExecutor {
     return unit + 1;
   }
 
-  private ensurePool(w: number, h: number): void {
-    if (w === this.poolW && h === this.poolH) return;
+  /** Reset cursors and drop pool sizes the previous render stopped using. */
+  private resetPools(usedKeys: Set<string>): void {
     const gl = this.gl!;
-    for (const t of this.pool) {
-      gl.deleteTexture(t.tex);
-      gl.deleteFramebuffer(t.fbo);
+    for (const [key, pool] of this.pools) {
+      if (!usedKeys.has(key)) {
+        for (const t of pool.targets) {
+          gl.deleteTexture(t.tex);
+          gl.deleteFramebuffer(t.fbo);
+        }
+        this.pools.delete(key);
+      } else {
+        pool.cursor = 0;
+      }
     }
-    this.pool = [];
-    this.poolW = w;
-    this.poolH = h;
   }
 
-  private acquireTarget(): Target {
-    if (this.poolCursor < this.pool.length) {
-      return this.pool[this.poolCursor++];
+  private acquireTarget(w: number, h: number): Target {
+    const key = `${w}x${h}`;
+    let pool = this.pools.get(key);
+    if (!pool) {
+      pool = { targets: [], cursor: 0 };
+      this.pools.set(key, pool);
+    }
+    if (pool.cursor < pool.targets.length) {
+      return pool.targets[pool.cursor++];
     }
     const gl = this.gl!;
-    const tex = this.makeTex(this.poolW, this.poolH, true)!;
+    const tex = this.makeTex(w, h, true)!;
     const fbo = gl.createFramebuffer()!;
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.framebufferTexture2D(
@@ -790,8 +837,8 @@ export class GlExecutor {
       0
     );
     const target = { tex, fbo };
-    this.pool.push(target);
-    this.poolCursor++;
+    pool.targets.push(target);
+    pool.cursor++;
     return target;
   }
 

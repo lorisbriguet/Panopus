@@ -1,5 +1,6 @@
 import { describe, test, expect } from "vitest";
 import {
+  nodeResolutions,
   type FinishGraph,
   emptyGraph,
   wouldCycle,
@@ -264,5 +265,72 @@ describe("multiple outputs", () => {
     const order = executionOrder(twoOutputGraph());
     expect(order).toContain("print");
     expect(order).toContain("ig");
+  });
+});
+
+describe("nodeResolutions", () => {
+  const dims = new Map([["src", { w: 1000, h: 2000 }]]);
+
+  const chain = (scaleParams?: Record<string, number | string | boolean>): FinishGraph => ({
+    v: 1,
+    nodes: [
+      { id: "src", kind: "source", x: 0, y: 0 },
+      { id: "sc", kind: "scale", params: scaleParams ?? { factor: 0.5 }, x: 0, y: 0 },
+      { id: "e", kind: "effect", effectId: "dither", x: 0, y: 0 },
+      { id: "out", kind: "output", x: 0, y: 0 },
+    ],
+    wires: [
+      { from: "src", to: "sc", toIn: 0 },
+      { from: "sc", to: "e", toIn: 0 },
+      { from: "e", to: "out", toIn: 0 },
+    ],
+  });
+
+  test("effects and outputs inherit their first input's resolution", () => {
+    const res = nodeResolutions(chain(), dims, 16384);
+    expect(res.get("src")).toEqual({ w: 1000, h: 2000 });
+    expect(res.get("sc")).toEqual({ w: 500, h: 1000 });
+    expect(res.get("e")).toEqual({ w: 500, h: 1000 });
+    expect(res.get("out")).toEqual({ w: 500, h: 1000 });
+  });
+
+  test("scale factor rounds and clamps to 0.05..4", () => {
+    expect(
+      nodeResolutions(chain({ factor: 3 }), dims, 16384).get("sc")
+    ).toEqual({ w: 3000, h: 6000 });
+    expect(
+      nodeResolutions(chain({ factor: 99 }), dims, 16384).get("sc")
+    ).toEqual({ w: 4000, h: 8000 });
+    expect(
+      nodeResolutions(chain({ factor: 0.001 }), dims, 16384).get("sc")
+    ).toEqual({ w: 50, h: 100 });
+  });
+
+  test("absolute width+height override the factor", () => {
+    expect(
+      nodeResolutions(chain({ factor: 2, width: 640, height: 480 }), dims, 16384).get("sc")
+    ).toEqual({ w: 640, h: 480 });
+    // one alone is not enough
+    expect(
+      nodeResolutions(chain({ factor: 2, width: 640 }), dims, 16384).get("sc")
+    ).toEqual({ w: 2000, h: 4000 });
+  });
+
+  test("everything clamps to the cap, sources keep aspect", () => {
+    const res = nodeResolutions(chain({ factor: 4 }), dims, 1024);
+    expect(res.get("src")).toEqual({ w: 512, h: 1024 });
+    expect(res.get("sc")).toEqual({ w: 1024, h: 1024 }); // per-axis clamp
+  });
+
+  test("unwired inputs fall back to 8x8", () => {
+    const g = chain();
+    g.wires = g.wires.filter((w) => w.to !== "e");
+    const res = nodeResolutions(g, dims, 16384);
+    expect(res.get("e")).toEqual({ w: 8, h: 8 });
+  });
+
+  test("parseGraph accepts scale nodes", () => {
+    const g = parseGraph(serializeGraph(chain()));
+    expect(g.nodes.some((n) => n.kind === "scale")).toBe(true);
   });
 });

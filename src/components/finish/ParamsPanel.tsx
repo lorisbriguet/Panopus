@@ -147,6 +147,81 @@ function SourceParams({
   );
 }
 
+/** Scale operator: factor or absolute size, resample filter. */
+function ScaleParams({
+  node,
+  onParamsChange,
+}: {
+  node: GraphNode;
+  onParamsChange: ParamsPanelProps["onParamsChange"];
+}) {
+  const p = node.params ?? {};
+  const factor = typeof p.factor === "number" && Number.isFinite(p.factor) ? p.factor : 0.5;
+  const width = typeof p.width === "number" && p.width > 0 ? p.width : 0;
+  const height = typeof p.height === "number" && p.height > 0 ? p.height : 0;
+  const filter = p.filter === "pixel" ? "pixel" : "smooth";
+  const set = (patch: Record<string, number | string | boolean>) =>
+    onParamsChange({ factor, width, height, filter, ...patch });
+
+  return (
+    <div className="h-full border border-white/10 rounded-[3px] bg-black/50 backdrop-blur-[3px] overflow-y-auto font-mono">
+      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
+        <span className="inline-block w-1.5 h-1.5 rounded-[1px] bg-white/50" />
+        <h3 className="text-[10px] tracking-[0.08em] uppercase text-[var(--color-text-secondary)]">
+          Scale
+        </h3>
+      </div>
+      <div className="divide-y divide-white/[0.06]">
+        <div className={ROW}>
+          <label className={NAME}>factor</label>
+          <ScrubBar
+            p={{ name: "factor", type: "float", min: 0.05, max: 4, step: 0.05, default: 0.5 }}
+            value={factor}
+            onChange={(v) => set({ factor: v })}
+          />
+          <div className={READOUT}>{factor}</div>
+        </div>
+        <div className={ROW}>
+          <label className={NAME}>width</label>
+          <NumField
+            label="width"
+            value={width}
+            min={0}
+            max={16384}
+            onChange={(v) => set({ width: v })}
+          />
+        </div>
+        <div className={ROW}>
+          <label className={NAME}>height</label>
+          <NumField
+            label="height"
+            value={height}
+            min={0}
+            max={16384}
+            onChange={(v) => set({ height: v })}
+          />
+        </div>
+        <div className={ROW}>
+          <span className={NAME} />
+          <span className="flex-1 text-right text-[10px] text-muted">
+            width+height &gt; 0 override factor
+          </span>
+        </div>
+        <div className={ROW}>
+          <label className={NAME}>filter</label>
+          <Select
+            value={filter}
+            onChange={(e) => set({ filter: e.target.value })}
+          >
+            <option value="smooth">smooth</option>
+            <option value="pixel">pixel</option>
+          </Select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Output operator settings: size (mm or px), density, color space. */
 function OutputParams({
   node,
@@ -308,6 +383,10 @@ export function ParamsPanel({
         pickPending={pickPending}
       />
     );
+  }
+
+  if (node.kind === "scale") {
+    return <ScaleParams node={node} onParamsChange={onParamsChange} />;
   }
 
   if (node.kind === "output") {

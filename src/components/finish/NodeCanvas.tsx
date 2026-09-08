@@ -33,9 +33,11 @@ interface NodeCanvasProps {
   thumbnails?: Record<string, string>;
   /** Page aspect (w/h): shapes the OUTPUT operator's viewer frame. */
   ratio?: number;
-  /** Artwork aspect (w/h): shapes source/effect viewer frames — the
-   *  chain runs at source resolution, only output is page-shaped. */
+  /** Artwork aspect (w/h): fallback for chain viewer frames. */
   sourceRatio?: number;
+  /** Per-node render aspect (w/h) from nodeResolutions — scale nodes
+   *  can change it mid-chain. */
+  nodeRatios?: Record<string, number>;
 }
 
 type OperatorData = { label: string; thumb?: string; ratio?: number };
@@ -129,10 +131,17 @@ function OutputNode({ data }: { data: OperatorData }) {
   );
 }
 
+function ScaleNode({ data, selected }: { data: OperatorData; selected: boolean }) {
+  return (
+    <Operator data={data} selected={selected} tint="bg-white/50" hasInput hasOutput />
+  );
+}
+
 const nodeTypes = {
   source: SourceNode,
   effect: EffectNode,
   output: OutputNode,
+  scale: ScaleNode,
 };
 
 /** Thin, light wires — TD network look. */
@@ -153,6 +162,7 @@ export function NodeCanvas({
   thumbnails,
   ratio,
   sourceRatio,
+  nodeRatios,
 }: NodeCanvasProps) {
   const t = useT();
   const [showAddMenu, setShowAddMenu] = useState(false);
@@ -175,11 +185,11 @@ export function NodeCanvas({
               : EFFECTS[n.effectId ?? ""]?.label ?? "?",
           thumb: thumbnails?.[n.id],
           // Output viewers are shaped by THEIR OWN page settings; chain
-          // viewers by the artwork.
+          // viewers by their node's render resolution (artwork fallback).
           ratio:
             n.kind === "output"
               ? outputRatio(outputSettingsFrom(n.params))
-              : sourceRatio ?? ratio,
+              : nodeRatios?.[n.id] ?? sourceRatio ?? ratio,
         };
         const existing = byId.get(n.id);
         // Keep the live object (position + measured dims) while dragging;
@@ -196,7 +206,7 @@ export function NodeCanvas({
         };
       });
     });
-  }, [graph.nodes, selectedNodeId, thumbnails, ratio, sourceRatio]);
+  }, [graph.nodes, selectedNodeId, thumbnails, ratio, sourceRatio, nodeRatios]);
 
   const edges: Edge[] = useMemo(
     () =>
@@ -277,6 +287,24 @@ export function NodeCanvas({
     [graph, onGraphChange, onNodeSelect]
   );
 
+  const handleAddScale = useCallback(() => {
+    const nodeId = `scale_${Date.now()}`;
+    onGraphChange({
+      ...graph,
+      nodes: [
+        ...graph.nodes,
+        {
+          id: nodeId,
+          kind: "scale",
+          params: { factor: 0.5, filter: "smooth" },
+          x: 280,
+          y: 280,
+        },
+      ],
+    });
+    setShowAddMenu(false);
+  }, [graph, onGraphChange]);
+
   const handleAddOutput = useCallback(() => {
     const nodeId = `output_${Date.now()}`;
     onGraphChange({
@@ -331,6 +359,7 @@ export function NodeCanvas({
           const deletable =
             node &&
             (node.kind === "effect" ||
+              node.kind === "scale" ||
               (node.kind === "output" && outputNodes(graph).length > 1));
           if (deletable) {
             onGraphChange({
@@ -386,6 +415,13 @@ export function NodeCanvas({
                 </button>
               ))}
               <div className="my-1 border-t border-[var(--color-border-divider)]" />
+              <button
+                type="button"
+                onClick={handleAddScale}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
+              >
+                Scale
+              </button>
               <button
                 type="button"
                 onClick={handleAddOutput}

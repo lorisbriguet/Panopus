@@ -62,6 +62,64 @@ pub struct FinishGraphRs {
     pub wires: Vec<GraphWireRs>,
 }
 
+/// Per-node render resolution — mirror of finishGraph.ts's
+/// nodeResolutions (D2: resolution is a chain property). Sources start
+/// at their native size (aspect-preserving cap); scale nodes change it
+/// (factor 0.05–4, or absolute width+height when BOTH set); every other
+/// node inherits its FIRST input (toIn 0); unwired inputs fall back to
+/// 8x8. Keep rounding/clamps in lockstep with the TS side.
+pub fn node_resolutions(
+    g: &FinishGraphRs,
+    source_dims: &HashMap<String, (u32, u32)>,
+    cap: u32,
+) -> HashMap<String, (u32, u32)> {
+    let mut res: HashMap<String, (u32, u32)> = HashMap::new();
+    let clamp_axis = |v: f64| -> u32 { (v.round() as i64).clamp(1, i64::from(cap)) as u32 };
+    for id in execution_order(g) {
+        let Some(node) = g.nodes.iter().find(|n| n.id == id) else {
+            continue;
+        };
+        let input_res = |res: &HashMap<String, (u32, u32)>| -> (u32, u32) {
+            g.wires
+                .iter()
+                .find(|w| w.to == id && w.to_in == 0)
+                .and_then(|w| res.get(&w.from).copied())
+                .unwrap_or((8, 8))
+        };
+        let r = match node.kind.as_str() {
+            "source" => {
+                let (dw, dh) = source_dims.get(&id).copied().unwrap_or((8, 8));
+                let s = (f64::from(cap) / f64::from(dw.max(dh))).min(1.0);
+                (clamp_axis(f64::from(dw) * s), clamp_axis(f64::from(dh) * s))
+            }
+            "scale" => {
+                let p = node.params.as_ref();
+                let abs = |k: &str| -> Option<f64> {
+                    p.and_then(|m| m.get(k))
+                        .and_then(|v| v.as_f64())
+                        .filter(|n| n.is_finite() && *n > 0.0)
+                };
+                match (abs("width"), abs("height")) {
+                    (Some(aw), Some(ah)) => (clamp_axis(aw), clamp_axis(ah)),
+                    _ => {
+                        let raw = p
+                            .and_then(|m| m.get("factor"))
+                            .and_then(|v| v.as_f64())
+                            .filter(|n| n.is_finite())
+                            .unwrap_or(0.5);
+                        let f = raw.clamp(0.05, 4.0);
+                        let (iw, ih) = input_res(&res);
+                        (clamp_axis(f64::from(iw) * f), clamp_axis(f64::from(ih) * f))
+                    }
+                }
+            }
+            _ => input_res(&res),
+        };
+        res.insert(id, r);
+    }
+    res
+}
+
 /// Port of finishGraph.ts's executionOrder: Kahn's algorithm over the
 /// subgraph that reaches an output node. Semantics mirrored exactly —
 /// including the deterministic tie-break: when several nodes are ready,

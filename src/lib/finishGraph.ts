@@ -106,9 +106,56 @@ export function outputRatio(s: OutputSettings): number {
   return h > 0 ? w / h : F4_RATIO;
 }
 
+/**
+ * Per-node render resolution (D2: resolution is a chain property).
+ * Sources start at their native size (aspect-preserving cap); scale
+ * nodes change it (factor 0.05–4, or absolute width+height when BOTH
+ * are set); every other node inherits its FIRST input (toIn 0);
+ * unwired inputs fall back to 8x8. Mirrored by Rust's
+ * node_resolutions (render/mod.rs) — keep rounding/clamps in lockstep.
+ */
+export function nodeResolutions(
+  g: FinishGraph,
+  sourceDims: Map<string, { w: number; h: number }>,
+  cap: number
+): Map<string, { w: number; h: number }> {
+  const res = new Map<string, { w: number; h: number }>();
+  const clampAxis = (v: number) => Math.min(cap, Math.max(1, Math.round(v)));
+  const inputRes = (id: string): { w: number; h: number } => {
+    const wire = g.wires.find((w) => w.to === id && w.toIn === 0);
+    return (wire && res.get(wire.from)) || { w: 8, h: 8 };
+  };
+  for (const id of executionOrder(g)) {
+    const node = g.nodes.find((n) => n.id === id);
+    if (!node) continue;
+    if (node.kind === "source") {
+      const d = sourceDims.get(id) ?? { w: 8, h: 8 };
+      const s = Math.min(1, cap / Math.max(d.w, d.h));
+      res.set(id, { w: clampAxis(d.w * s), h: clampAxis(d.h * s) });
+    } else if (node.kind === "scale") {
+      const p = node.params ?? {};
+      const abs = (v: unknown) =>
+        typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null;
+      const aw = abs(p.width);
+      const ah = abs(p.height);
+      if (aw !== null && ah !== null) {
+        res.set(id, { w: clampAxis(aw), h: clampAxis(ah) });
+      } else {
+        const raw = typeof p.factor === "number" && Number.isFinite(p.factor) ? p.factor : 0.5;
+        const f = Math.min(4, Math.max(0.05, raw));
+        const inp = inputRes(id);
+        res.set(id, { w: clampAxis(inp.w * f), h: clampAxis(inp.h * f) });
+      }
+    } else {
+      res.set(id, inputRes(id));
+    }
+  }
+  return res;
+}
+
 export type GraphNode = {
   id: string;
-  kind: "source" | "effect" | "output";
+  kind: "source" | "effect" | "output" | "scale";
   effectId?: string;
   params?: Record<string, number | string | boolean>;
   sourcePath?: string;
@@ -218,7 +265,7 @@ export function executionOrder(g: FinishGraph): string[] {
   return order;
 }
 
-const KINDS = new Set(["source", "effect", "output"]);
+const KINDS = new Set(["source", "effect", "output", "scale"]);
 
 function isNode(v: unknown): v is GraphNode {
   if (typeof v !== "object" || v === null) return false;

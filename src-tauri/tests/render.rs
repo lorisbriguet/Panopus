@@ -126,3 +126,82 @@ fn render_chain_returns_a_tail_per_output() {
         assert!(p[0] > 250 && p[1] < 5, "{id}: {p:?}");
     }
 }
+
+#[test]
+fn node_resolutions_mirrors_ts() {
+    let graph: FinishGraphRs = serde_json::from_str(
+        r#"{"v":1,"nodes":[
+            {"id":"src","kind":"source","x":0,"y":0},
+            {"id":"sc","kind":"scale","params":{"factor":0.5},"x":0,"y":0},
+            {"id":"e","kind":"effect","effectId":"dither","x":0,"y":0},
+            {"id":"out","kind":"output","x":0,"y":0}],
+        "wires":[
+            {"from":"src","to":"sc","toIn":0},
+            {"from":"sc","to":"e","toIn":0},
+            {"from":"e","to":"out","toIn":0}]}"#,
+    )
+    .unwrap();
+    let mut dims = HashMap::new();
+    dims.insert("src".to_string(), (1000u32, 2000u32));
+    // Identical numbers to the TS unit tests (finishGraph.test.ts).
+    let res = panopus_lib::render::node_resolutions(&graph, &dims, 16384);
+    assert_eq!(res["src"], (1000, 2000));
+    assert_eq!(res["sc"], (500, 1000));
+    assert_eq!(res["e"], (500, 1000));
+    assert_eq!(res["out"], (500, 1000));
+    let capped = panopus_lib::render::node_resolutions(&graph, &dims, 1024);
+    assert_eq!(capped["src"], (512, 1024));
+}
+
+#[test]
+fn scale_sandwich_renders_at_propagated_resolutions() {
+    let mut engine = match panopus_lib::render::engine::RenderEngine::new() {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("skipping engine test: {e}");
+            return;
+        }
+    };
+    let effects = panopus_lib::render::manifest::load_effects(&shaders_dir()).unwrap();
+    // source(8x8 red) -> scale(x4, pixel) -> output: nearest upscale of a
+    // solid color must stay solid; the tail arrives at 32x32.
+    let graph: FinishGraphRs = serde_json::from_str(
+        r#"{"v":1,"nodes":[
+            {"id":"src","kind":"source","x":0,"y":0},
+            {"id":"sc","kind":"scale","params":{"factor":4,"filter":"pixel"},"x":0,"y":0},
+            {"id":"out","kind":"output","x":0,"y":0}],
+        "wires":[
+            {"from":"src","to":"sc","toIn":0},
+            {"from":"sc","to":"out","toIn":0}]}"#,
+    )
+    .unwrap();
+    let red = image::RgbaImage::from_pixel(8, 8, image::Rgba([255, 0, 0, 255]));
+    let mut sources = HashMap::new();
+    sources.insert("src".to_string(), red);
+    let tails = engine.render_chain(&graph, &sources, &effects).unwrap();
+    let tail = &tails["out"];
+    assert_eq!(tail.dimensions(), (32, 32));
+    for (x, y) in [(0u32, 0u32), (16, 16), (31, 31)] {
+        let p = tail.get_pixel(x, y);
+        assert!(p[0] > 250 && p[1] < 5 && p[2] < 5, "({x},{y}): {p:?}");
+    }
+
+    // down-then-up sandwich lands on the expected dimensions
+    let graph2: FinishGraphRs = serde_json::from_str(
+        r#"{"v":1,"nodes":[
+            {"id":"src","kind":"source","x":0,"y":0},
+            {"id":"a","kind":"scale","params":{"factor":0.25},"x":0,"y":0},
+            {"id":"b","kind":"scale","params":{"factor":4},"x":0,"y":0},
+            {"id":"out","kind":"output","x":0,"y":0}],
+        "wires":[
+            {"from":"src","to":"a","toIn":0},
+            {"from":"a","to":"b","toIn":0},
+            {"from":"b","to":"out","toIn":0}]}"#,
+    )
+    .unwrap();
+    let red = image::RgbaImage::from_pixel(64, 64, image::Rgba([255, 0, 0, 255]));
+    let mut sources2 = HashMap::new();
+    sources2.insert("src".to_string(), red);
+    let tails2 = engine.render_chain(&graph2, &sources2, &effects).unwrap();
+    assert_eq!(tails2["out"].dimensions(), (64, 64));
+}

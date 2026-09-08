@@ -433,8 +433,12 @@ pub struct RenderEngine {
     pub shader_root: PathBuf,
     vertex: wgpu::ShaderModule,
     sampler: wgpu::Sampler,
+    /// Nearest-neighbor variant for scale nodes in "pixel" mode.
+    sampler_nearest: wgpu::Sampler,
     pipelines: HashMap<String, PassPipeline>,
     blit: Option<(wgpu::RenderPipeline, wgpu::BindGroupLayout)>,
+    /// Same copy shader, but targeting POOL_FORMAT (scale-node passes).
+    blit_pool: Option<(wgpu::RenderPipeline, wgpu::BindGroupLayout)>,
     assets: HashMap<String, wgpu::Texture>,
 }
 
@@ -479,14 +483,24 @@ impl RenderEngine {
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
+        let sampler_nearest = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("finish-sampler-nearest"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
         Ok(Self {
             device,
             queue,
             shader_root: shaders_dir(None),
             vertex,
             sampler,
+            sampler_nearest,
             pipelines: HashMap::new(),
             blit: None,
+            blit_pool: None,
             assets: HashMap::new(),
         })
     }
@@ -627,12 +641,57 @@ impl RenderEngine {
         Ok(())
     }
 
+    /// Reuse a free target from the size's pool or grow it.
+    fn acquire_pool(
+        device: &wgpu::Device,
+        pools: &mut HashMap<(u32, u32), Vec<PoolTex>>,
+        size: (u32, u32),
+    ) -> usize {
+        let pool = pools.entry(size).or_default();
+        if let Some(i) = pool.iter().position(|p| p.free) {
+            pool[i].free = false;
+            return i;
+        }
+        let tex = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("finish-pool"),
+            size: wgpu::Extent3d {
+                width: size.0,
+                height: size.1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: POOL_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        pool.push(PoolTex { tex, free: false });
+        pool.len() - 1
+    }
+
     fn ensure_blit_pipeline(&mut self) {
         if self.blit.is_none() {
+            self.blit = Some(self.make_blit_pipeline(IO_FORMAT, "finish-blit"));
+        }
+    }
+
+    fn ensure_blit_pool_pipeline(&mut self) {
+        if self.blit_pool.is_none() {
+            self.blit_pool = Some(self.make_blit_pipeline(POOL_FORMAT, "finish-blit-pool"));
+        }
+    }
+
+    fn make_blit_pipeline(
+        &self,
+        format: wgpu::TextureFormat,
+        label: &str,
+    ) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout) {
+        {
             let bgl = self
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("finish-blit"),
+                    label: Some(label),
                     entries: &[
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
@@ -681,7 +740,7 @@ impl RenderEngine {
                         entry_point: Some("main"),
                         compilation_options: Default::default(),
                         targets: &[Some(wgpu::ColorTargetState {
-                            format: IO_FORMAT,
+                            format,
                             blend: None,
                             write_mask: wgpu::ColorWrites::ALL,
                         })],
@@ -692,7 +751,7 @@ impl RenderEngine {
                     multiview_mask: None,
                     cache: None,
                 });
-            self.blit = Some((pipeline, bgl));
+            (pipeline, bgl)
         }
     }
 
@@ -787,20 +846,17 @@ impl RenderEngine {
         use wgpu::util::DeviceExt;
 
         let order = execution_order(graph);
-        // Chain semantics: sources/effects run at the source's NATIVE
-        // resolution (mirrors glExecutor.render, minus its preview cap).
-        let (sw, sh) = graph
+        // Per-node resolutions (D2): sources native (device-cap), scale
+        // nodes change it, everything else inherits its first input.
+        const CAP: f64 = 16384.0;
+        let source_dims: HashMap<String, (u32, u32)> = graph
             .nodes
             .iter()
-            .find(|n| n.kind == "source")
-            .and_then(|n| sources.get(&n.id))
-            .map(|img| img.dimensions())
-            .unwrap_or((64, 64));
-        // Cap at the device texture limit (oversized scans etc.).
-        const CAP: f64 = 16384.0;
-        let scale = (CAP / f64::from(sw.max(sh))).min(1.0);
-        let ww = ((f64::from(sw) * scale).round() as u32).max(1);
-        let wh = ((f64::from(sh) * scale).round() as u32).max(1);
+            .filter(|n| n.kind == "source")
+            .filter_map(|n| sources.get(&n.id).map(|img| (n.id.clone(), img.dimensions())))
+            .collect();
+        let resolutions = super::node_resolutions(graph, &source_dims, CAP as u32);
+        let res_of = |id: &str| resolutions.get(id).copied().unwrap_or((8, 8));
         let black = self.upload_rgba(&RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 255])), "black");
 
         // Node output textures (kept alive until their consumers ran).
@@ -814,10 +870,11 @@ impl RenderEngine {
                 *consumers.entry(w.from.as_str()).or_insert(0) += 1;
             }
         }
-        // Pool of Rgba16Float pass targets, reused once freed.
-        let mut pool: Vec<PoolTex> = Vec::new();
-        // node id -> pool index, for release when consumers are done.
-        let mut node_pool: HashMap<String, usize> = HashMap::new();
+        // Size-keyed pools of Rgba16Float pass targets, reused once freed
+        // (per-node resolutions mean several sizes live in one render).
+        let mut pools: HashMap<(u32, u32), Vec<PoolTex>> = HashMap::new();
+        // node id -> (size, pool index), for release when consumers are done.
+        let mut node_pool: HashMap<String, ((u32, u32), usize)> = HashMap::new();
 
         let input_tex = |graph: &FinishGraphRs,
                          node_out: &HashMap<String, wgpu::Texture>,
@@ -839,7 +896,7 @@ impl RenderEngine {
                 label: Some("finish-graph"),
             });
 
-        let mut tail_bufs: Vec<(String, wgpu::Buffer)> = Vec::new();
+        let mut tail_bufs: Vec<(String, wgpu::Buffer, (u32, u32))> = Vec::new();
         let by_id: HashMap<&str, &super::GraphNodeRs> =
             graph.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
 
@@ -872,12 +929,13 @@ impl RenderEngine {
                     node_out.insert(id.clone(), self.upload_rgba(&flipped, id));
                 }
                 "output" => {
+                    let (ow, oh) = res_of(id);
                     let input = input_tex(graph, &node_out, id, 0, &black);
                     let tex = self.device.create_texture(&wgpu::TextureDescriptor {
                         label: Some("finish-out"),
                         size: wgpu::Extent3d {
-                            width: ww,
-                            height: wh,
+                            width: ow,
+                            height: oh,
                             depth_or_array_layers: 1,
                         },
                         mip_level_count: 1,
@@ -930,10 +988,10 @@ impl RenderEngine {
                     }
                     // Queue this output's readback (one buffer per output;
                     // all copies ride the same encoder/submit).
-                    let bpr = (ww * 4 + 255) & !255;
+                    let bpr = (ow * 4 + 255) & !255;
                     let buf = self.device.create_buffer(&wgpu::BufferDescriptor {
                         label: Some("finish-readback"),
-                        size: bpr as u64 * wh as u64,
+                        size: bpr as u64 * oh as u64,
                         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
                         mapped_at_creation: false,
                     });
@@ -949,18 +1007,81 @@ impl RenderEngine {
                             layout: wgpu::TexelCopyBufferLayout {
                                 offset: 0,
                                 bytes_per_row: Some(bpr),
-                                rows_per_image: Some(wh),
+                                rows_per_image: Some(oh),
                             },
                         },
                         wgpu::Extent3d {
-                            width: ww,
-                            height: wh,
+                            width: ow,
+                            height: oh,
                             depth_or_array_layers: 1,
                         },
                     );
-                    tail_bufs.push((id.clone(), buf));
+                    tail_bufs.push((id.clone(), buf, (ow, oh)));
+                }
+                "scale" => {
+                    // Resampling blit: input -> a pool target at this
+                    // node's resolution, linear or nearest per filter.
+                    let (nw, nh) = res_of(id);
+                    let input = input_tex(graph, &node_out, id, 0, &black);
+                    let nearest = node
+                        .params
+                        .as_ref()
+                        .and_then(|p| p.get("filter"))
+                        .and_then(|v| v.as_str())
+                        == Some("pixel");
+                    self.ensure_blit_pool_pipeline();
+                    let target_idx =
+                        Self::acquire_pool(&self.device, &mut pools, (nw, nh));
+                    {
+                        let (pipeline, bgl) = self.blit_pool.as_ref().unwrap();
+                        let bind = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("finish-scale"),
+                            layout: bgl,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(
+                                        &input.create_view(&Default::default()),
+                                    ),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(if nearest {
+                                        &self.sampler_nearest
+                                    } else {
+                                        &self.sampler
+                                    }),
+                                },
+                            ],
+                        });
+                        let view = pools[&(nw, nh)][target_idx]
+                            .tex
+                            .create_view(&Default::default());
+                        let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                            label: Some("finish-scale"),
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view: &view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                                    store: wgpu::StoreOp::Store,
+                                },
+                                depth_slice: None,
+                            })],
+                            depth_stencil_attachment: None,
+                            timestamp_writes: None,
+                            occlusion_query_set: None,
+                            multiview_mask: None,
+                        });
+                        rp.set_pipeline(pipeline);
+                        rp.set_bind_group(0, &bind, &[]);
+                        rp.draw(0..3, 0..1);
+                    }
+                    node_out.insert(id.clone(), pools[&(nw, nh)][target_idx].tex.clone());
+                    node_pool.insert(id.clone(), ((nw, nh), target_idx));
                 }
                 "effect" => {
+                    let (nw, nh) = res_of(id);
                     let effect_id = node
                         .effect_id
                         .as_deref()
@@ -988,8 +1109,8 @@ impl RenderEngine {
                             node.params.as_ref(),
                             &pp.fields,
                             pp.buf_size,
-                            ww,
-                            wh,
+                            nw,
+                            nh,
                         );
                         let ubuf =
                             self.device
@@ -1012,7 +1133,8 @@ impl RenderEngine {
                                     if pi == 0 {
                                         input_tex(graph, &node_out, id, k, &black)
                                     } else if k == 0 {
-                                        prev.map(|i| pool[i].tex.clone()).unwrap_or_else(|| black.clone())
+                                        prev.map(|i| pools[&(nw, nh)][i].tex.clone())
+                                            .unwrap_or_else(|| black.clone())
                                     } else {
                                         black.clone()
                                     }
@@ -1054,34 +1176,12 @@ impl RenderEngine {
                         });
 
                         // Acquire a pool target (reuse a free one).
-                        let target_idx = pool
-                            .iter()
-                            .position(|p| p.free)
-                            .map(|i| {
-                                pool[i].free = false;
-                                i
-                            })
-                            .unwrap_or_else(|| {
-                                let tex = self.device.create_texture(&wgpu::TextureDescriptor {
-                                    label: Some("finish-pool"),
-                                    size: wgpu::Extent3d {
-                                        width: ww,
-                                        height: wh,
-                                        depth_or_array_layers: 1,
-                                    },
-                                    mip_level_count: 1,
-                                    sample_count: 1,
-                                    dimension: wgpu::TextureDimension::D2,
-                                    format: POOL_FORMAT,
-                                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                                        | wgpu::TextureUsages::TEXTURE_BINDING,
-                                    view_formats: &[],
-                                });
-                                pool.push(PoolTex { tex, free: false });
-                                pool.len() - 1
-                            });
+                        let target_idx =
+                            Self::acquire_pool(&self.device, &mut pools, (nw, nh));
                         {
-                            let view = pool[target_idx].tex.create_view(&Default::default());
+                            let view = pools[&(nw, nh)][target_idx]
+                                .tex
+                                .create_view(&Default::default());
                             let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                                 label: Some("finish-pass"),
                                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1105,14 +1205,14 @@ impl RenderEngine {
                         // Intra-effect ping-pong: the previous pass target
                         // is free once this pass consumed it.
                         if let Some(p) = prev {
-                            pool[p].free = true;
+                            pools.get_mut(&(nw, nh)).unwrap()[p].free = true;
                         }
                         prev = Some(target_idx);
                     }
                     let final_idx =
                         prev.ok_or_else(|| format!("effect {effect_id} has no passes"))?;
-                    node_out.insert(id.clone(), pool[final_idx].tex.clone());
-                    node_pool.insert(id.clone(), final_idx);
+                    node_out.insert(id.clone(), pools[&(nw, nh)][final_idx].tex.clone());
+                    node_pool.insert(id.clone(), ((nw, nh), final_idx));
                 }
                 other => return Err(format!("unknown node kind: {other}")),
             }
@@ -1122,8 +1222,8 @@ impl RenderEngine {
                     if let Some(c) = consumers.get_mut(w.from.as_str()) {
                         *c -= 1;
                         if *c == 0 {
-                            if let Some(idx) = node_pool.get(&w.from) {
-                                pool[*idx].free = true;
+                            if let Some((size, idx)) = node_pool.get(&w.from) {
+                                pools.get_mut(size).unwrap()[*idx].free = true;
                             }
                             node_out.remove(&w.from);
                         }
@@ -1138,9 +1238,8 @@ impl RenderEngine {
         self.queue.submit([encoder.finish()]);
 
         // Map every tail buffer, then read them all after one wait.
-        let bpr = (ww * 4 + 255) & !255;
         let mut rxs = Vec::with_capacity(tail_bufs.len());
-        for (_, buf) in &tail_bufs {
+        for (_, buf, _) in &tail_bufs {
             let (tx, rx) = std::sync::mpsc::channel();
             buf.slice(..).map_async(wgpu::MapMode::Read, move |r| {
                 let _ = tx.send(r);
@@ -1154,22 +1253,23 @@ impl RenderEngine {
             })
             .map_err(|e| format!("device poll: {e}"))?;
         let mut tails: HashMap<String, RgbaImage> = HashMap::new();
-        for ((id, buf), rx) in tail_bufs.into_iter().zip(rxs) {
+        for ((id, buf, (ow, oh)), rx) in tail_bufs.into_iter().zip(rxs) {
             rx.recv()
                 .map_err(|e| format!("map channel: {e}"))?
                 .map_err(|e| format!("map buffer: {e}"))?;
+            let bpr = (ow * 4 + 255) & !255;
             let slice = buf.slice(..);
             let data = slice
                 .get_mapped_range()
                 .map_err(|e| format!("mapped range: {e}"))?;
-            let mut pixels = Vec::with_capacity((ww * wh * 4) as usize);
-            for row in 0..wh {
+            let mut pixels = Vec::with_capacity((ow * oh * 4) as usize);
+            for row in 0..oh {
                 let start = (row * bpr) as usize;
-                pixels.extend_from_slice(&data[start..start + (ww * 4) as usize]);
+                pixels.extend_from_slice(&data[start..start + (ow * 4) as usize]);
             }
             drop(data);
             buf.unmap();
-            let img = RgbaImage::from_raw(ww, wh, pixels)
+            let img = RgbaImage::from_raw(ow, oh, pixels)
                 .ok_or("readback size mismatch")?;
             tails.insert(id, image::imageops::flip_vertical(&img));
         }

@@ -7,6 +7,7 @@ import { ExportDialog } from "./ExportDialog";
 import { useSaveProjectGraph } from "../../hooks/useProjects";
 import type { FinishGraph } from "../../lib/finishGraph";
 import {
+  nodeResolutions,
   outputNodes,
   outputRatio,
   outputSettingsForNode,
@@ -104,6 +105,19 @@ export function FinishTab({
   const ratio = outputRatio(settings);
   const artRatio = artworkFull ? artworkFull.width / artworkFull.height : undefined;
 
+  // Per-node viewer aspects (scale nodes reshape mid-chain).
+  const nodeRatios: Record<string, number> = {};
+  if (artworkFull) {
+    const dims = new Map(
+      graph.nodes
+        .filter((n) => n.kind === "source")
+        .map((n) => [n.id, { w: artworkFull.width, h: artworkFull.height }])
+    );
+    for (const [id, r] of nodeResolutions(graph, dims, 2048)) {
+      nodeRatios[id] = r.w / r.h;
+    }
+  }
+
   // Debounced autosave (800ms)
   useEffect(() => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -182,6 +196,7 @@ export function FinishTab({
           thumbnails={thumbs}
           ratio={ratio}
           sourceRatio={artRatio}
+          nodeRatios={nodeRatios}
         />
       </div>
 
