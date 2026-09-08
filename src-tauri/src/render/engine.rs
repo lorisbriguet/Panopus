@@ -823,7 +823,7 @@ impl RenderEngine {
         out_w: u32,
         out_h: u32,
     ) -> Result<RgbaImage, String> {
-        let tails = self.render_chain(graph, sources, effects)?;
+        let tails = self.render_chain(graph, sources, &HashMap::new(), effects)?;
         let first = graph
             .nodes
             .iter()
@@ -843,6 +843,7 @@ impl RenderEngine {
         &mut self,
         graph: &FinishGraphRs,
         sources: &HashMap<String, RgbaImage>,
+        rasters: &HashMap<String, RgbaImage>,
         effects: &HashMap<String, EffectSpec>,
     ) -> Result<HashMap<String, RgbaImage>, String> {
         use wgpu::util::DeviceExt;
@@ -863,6 +864,14 @@ impl RenderEngine {
         // Unwired effect inputs bind TRANSPARENT black so composite-over
         // of an absent layer is a no-op (mirrors glExecutor's `clear`).
         let clear = self.upload_rgba(&RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 0])), "clear");
+        // Text-node rasters, bound as that node's uTex1 (D3).
+        let raster_tex: HashMap<String, wgpu::Texture> = rasters
+            .iter()
+            .map(|(id, img)| {
+                let flipped = image::imageops::flip_vertical(img);
+                (id.clone(), self.upload_rgba(&flipped, id))
+            })
+            .collect();
 
         // Node output textures (kept alive until their consumers ran).
         let mut node_out: HashMap<String, wgpu::Texture> = HashMap::new();
@@ -1085,12 +1094,17 @@ impl RenderEngine {
                     node_out.insert(id.clone(), pools[&(nw, nh)][target_idx].tex.clone());
                     node_pool.insert(id.clone(), ((nw, nh), target_idx));
                 }
-                "effect" => {
+                "effect" | "text" => {
                     let (nw, nh) = res_of(id);
-                    let effect_id = node
-                        .effect_id
-                        .as_deref()
-                        .ok_or_else(|| format!("effect node {id} without effectId"))?;
+                    // Text nodes run the built-in "text" effect with the
+                    // node's raster bound as uTex1 below.
+                    let effect_id = if node.kind == "text" {
+                        "text"
+                    } else {
+                        node.effect_id
+                            .as_deref()
+                            .ok_or_else(|| format!("effect node {id} without effectId"))?
+                    };
                     let spec = effects
                         .get(effect_id)
                         .ok_or_else(|| format!("unknown effect: {effect_id}"))?
@@ -1135,7 +1149,9 @@ impl RenderEngine {
                                     .strip_prefix("uTex")
                                     .and_then(|s| s.parse::<u32>().ok())
                                 {
-                                    if pi == 0 {
+                                    if node.kind == "text" && k == 1 {
+                                        raster_tex.get(id.as_str()).unwrap_or(&clear).clone()
+                                    } else if pi == 0 {
                                         input_tex(graph, &node_out, id, k, &clear)
                                     } else if k == 0 {
                                         prev.map(|i| pools[&(nw, nh)][i].tex.clone())

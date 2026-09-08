@@ -72,6 +72,26 @@ fn ensure_source2(path: &Path) -> image::RgbaImage {
     img
 }
 
+/// Synthetic "text" raster for D3 parity: white glyph-ish bars on
+/// transparent (parity never needs real font rasterization in Rust).
+/// 512x128 — aspect 4, matching the case's rasterAspect param.
+fn ensure_text_raster(path: &Path) {
+    if path.is_file() {
+        return;
+    }
+    let img = image::RgbaImage::from_fn(512, 128, |x, y| {
+        let bar = (x / 64) % 2 == 0;
+        let body = y > 16 && y < 112;
+        let notch = bar && y > 40 && y < 72 && (x % 64) > 40;
+        if body && bar && !notch {
+            image::Rgba([255, 255, 255, 255])
+        } else {
+            image::Rgba([0, 0, 0, 0])
+        }
+    });
+    img.save(path).unwrap();
+}
+
 #[derive(serde::Deserialize)]
 struct Case {
     name: String,
@@ -87,6 +107,7 @@ fn write_goldens() {
     let dir = parity_dir();
     let source = ensure_source(&dir.join("source.png"));
     ensure_source2(&dir.join("source2.png"));
+    ensure_text_raster(&dir.join("text-raster.png"));
     let goldens = dir.join("goldens");
     std::fs::create_dir_all(&goldens).unwrap();
 
@@ -101,8 +122,9 @@ fn write_goldens() {
     for file in case_files {
         let case: Case =
             serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
-        // Convention: a case source node's `sourcePath` names a file in
-        // the parity dir (harness mirrors it); default = source.png.
+        // Convention: a case source node's `sourcePath` (and a text
+        // node's `rasterPath`) names a file in the parity dir (harness
+        // mirrors it); source default = source.png.
         let mut sources = HashMap::new();
         for n in case.graph.nodes.iter().filter(|n| n.kind == "source") {
             let img = match n.source_path.as_deref() {
@@ -113,8 +135,19 @@ fn write_goldens() {
             };
             sources.insert(n.id.clone(), img);
         }
+        let mut rasters = HashMap::new();
+        for n in case.graph.nodes.iter().filter(|n| n.kind == "text") {
+            let file = n
+                .raster_path
+                .as_deref()
+                .unwrap_or_else(|| panic!("{}: text node {} without rasterPath", case.name, n.id));
+            let img = image::open(dir.join(file))
+                .unwrap_or_else(|e| panic!("{}: {file}: {e}", case.name))
+                .to_rgba8();
+            rasters.insert(n.id.clone(), img);
+        }
         let tails = engine
-            .render_chain(&case.graph, &sources, &effects)
+            .render_chain(&case.graph, &sources, &rasters, &effects)
             .unwrap_or_else(|e| panic!("{}: {e}", case.name));
         let outputs: Vec<_> = case
             .graph

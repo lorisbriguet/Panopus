@@ -1,0 +1,15 @@
+{
+  "name": "text",
+  "graph": {
+    "v": 1,
+    "nodes": [
+      { "id": "src", "kind": "source", "x": 0, "y": 0 },
+      { "id": "t", "kind": "text", "params": { "x": 0.12, "y": -0.18, "size": 0.22, "rotate": -8, "opacity": 0.95, "rasterAspect": 4 }, "rasterPath": "text-raster.png", "x": 0, "y": 0 },
+      { "id": "out", "kind": "output", "params": { "unit": "px", "width": 512, "height": 731, "dpi": 300 }, "x": 0, "y": 0 }
+    ],
+    "wires": [
+      { "from": "src", "to": "t", "toIn": 0 },
+      { "from": "t", "to": "out", "toIn": 0 }
+    ]
+  }
+}

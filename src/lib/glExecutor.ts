@@ -209,6 +209,8 @@ export class GlExecutor {
   private nodeErrors = new Map<string, string | null>();
   /** source nodeId -> uploaded texture + native pixel size. */
   private sourceTex = new Map<string, { tex: WebGLTexture; w: number; h: number }>();
+  /** text nodeId -> uploaded raster texture (bound as that node's uTex1). */
+  private rasterTex = new Map<string, WebGLTexture>();
   /** `${effectId}/${file}` -> effect texture asset (async-loaded). */
   private assetTex = new Map<string, WebGLTexture>();
 
@@ -343,6 +345,31 @@ export class GlExecutor {
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
   }
 
+  /** Upload a text node's raster (white-on-transparent, D3). Same GL
+   *  orientation handling as setSource. */
+  setNodeRaster(nodeId: string, image: ImageBitmap): void {
+    const gl = this.gl;
+    if (!gl) return;
+    let tex = this.rasterTex.get(nodeId);
+    if (!tex) {
+      tex = this.makeTex(1, 1)!;
+      this.rasterTex.set(nodeId, tex);
+    }
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    const scratch = document.createElement("canvas");
+    scratch.width = image.width;
+    scratch.height = image.height;
+    const ctx = scratch.getContext("2d");
+    if (ctx) {
+      ctx.drawImage(image, 0, 0);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, scratch);
+    } else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    }
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  }
+
   /** Compile/effect error for a node after the last render, if any. */
   getCompileError(nodeId: string): string | null {
     if (!this.gl) return this.ctxError;
@@ -448,7 +475,13 @@ export class GlExecutor {
         outputs.set(id, target.tex);
         continue;
       }
-      const spec = node.effectId ? EFFECTS[node.effectId] : undefined;
+      // Text nodes run the built-in "text" effect, raster as uTex1 (D3).
+      const spec =
+        node.kind === "text"
+          ? EFFECTS.text
+          : node.effectId
+            ? EFFECTS[node.effectId]
+            : undefined;
       if (!spec) {
         this.nodeErrors.set(id, `unknown effect: ${node.effectId ?? "?"}`);
         outputs.set(id, inputTex(id, 0));
@@ -469,9 +502,14 @@ export class GlExecutor {
         gl.useProgram(entry.prog);
         let unit = 0;
         if (pi === 0) {
-          // wired inputs bind uTex0..uTexK by toIn index; unwired = black
+          // wired inputs bind uTex0..uTexK by toIn index; unwired =
+          // transparent; text nodes bind their raster as uTex1
           for (let k = 0; k < spec.inputs; k++) {
-            unit = this.bindTex(entry.prog, `uTex${k}`, inputTex(id, k), unit);
+            const tex =
+              node.kind === "text" && k === 1
+                ? this.rasterTex.get(id) ?? clear
+                : inputTex(id, k);
+            unit = this.bindTex(entry.prog, `uTex${k}`, tex, unit);
           }
         } else {
           // multi-pass: pass N>1 reads the previous pass as uTex0
@@ -663,6 +701,8 @@ export class GlExecutor {
     this.copyProg = null;
     for (const t of this.sourceTex.values()) gl.deleteTexture(t.tex);
     this.sourceTex.clear();
+    for (const t of this.rasterTex.values()) gl.deleteTexture(t);
+    this.rasterTex.clear();
     for (const t of this.assetTex.values()) gl.deleteTexture(t);
     this.assetTex.clear();
     for (const pool of this.pools.values()) {

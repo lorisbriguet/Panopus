@@ -41,6 +41,9 @@ pub struct GraphNodeRs {
     pub params: Option<serde_json::Map<String, serde_json::Value>>,
     #[serde(rename = "sourcePath", default)]
     pub source_path: Option<String>,
+    /// Text nodes (D3): cached raster file the exporter composites.
+    #[serde(rename = "rasterPath", default)]
+    pub raster_path: Option<String>,
     #[serde(default)]
     pub x: f64,
     #[serde(default)]

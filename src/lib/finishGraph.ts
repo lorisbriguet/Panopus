@@ -161,10 +161,13 @@ export function nodeResolutions(
 
 export type GraphNode = {
   id: string;
-  kind: "source" | "effect" | "output" | "scale";
+  kind: "source" | "effect" | "output" | "scale" | "text";
   effectId?: string;
   params?: Record<string, number | string | boolean>;
   sourcePath?: string;
+  /** Text nodes (D3): cached raster file + its content hash. */
+  rasterPath?: string;
+  rasterKey?: string;
   x: number;
   y: number;
 };
@@ -271,7 +274,7 @@ export function executionOrder(g: FinishGraph): string[] {
   return order;
 }
 
-const KINDS = new Set(["source", "effect", "output", "scale"]);
+const KINDS = new Set(["source", "effect", "output", "scale", "text"]);
 
 function isNode(v: unknown): v is GraphNode {
   if (typeof v !== "object" || v === null) return false;

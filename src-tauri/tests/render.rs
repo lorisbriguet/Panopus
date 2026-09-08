@@ -117,7 +117,7 @@ fn render_chain_returns_a_tail_per_output() {
     let red = image::RgbaImage::from_pixel(8, 8, image::Rgba([255, 0, 0, 255]));
     let mut sources = HashMap::new();
     sources.insert("src".to_string(), red);
-    let tails = engine.render_chain(&graph, &sources, &effects).unwrap();
+    let tails = engine.render_chain(&graph, &sources, &HashMap::new(), &effects).unwrap();
     assert_eq!(tails.len(), 2);
     for id in ["a", "b"] {
         let img = &tails[id];
@@ -178,7 +178,7 @@ fn scale_sandwich_renders_at_propagated_resolutions() {
     let red = image::RgbaImage::from_pixel(8, 8, image::Rgba([255, 0, 0, 255]));
     let mut sources = HashMap::new();
     sources.insert("src".to_string(), red);
-    let tails = engine.render_chain(&graph, &sources, &effects).unwrap();
+    let tails = engine.render_chain(&graph, &sources, &HashMap::new(), &effects).unwrap();
     let tail = &tails["out"];
     assert_eq!(tail.dimensions(), (32, 32));
     for (x, y) in [(0u32, 0u32), (16, 16), (31, 31)] {
@@ -202,6 +202,50 @@ fn scale_sandwich_renders_at_propagated_resolutions() {
     let red = image::RgbaImage::from_pixel(64, 64, image::Rgba([255, 0, 0, 255]));
     let mut sources2 = HashMap::new();
     sources2.insert("src".to_string(), red);
-    let tails2 = engine.render_chain(&graph2, &sources2, &effects).unwrap();
+    let tails2 = engine.render_chain(&graph2, &sources2, &HashMap::new(), &effects).unwrap();
     assert_eq!(tails2["out"].dimensions(), (64, 64));
+}
+
+#[test]
+fn text_node_overlays_its_raster() {
+    let mut engine = match panopus_lib::render::engine::RenderEngine::new() {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("skipping engine test: {e}");
+            return;
+        }
+    };
+    let effects = panopus_lib::render::manifest::load_effects(&shaders_dir()).unwrap();
+    // Solid blue base; raster = white square with alpha 1 (aspect 1).
+    // size 0.5, centered, white fill -> center becomes white, corners stay blue.
+    let graph: FinishGraphRs = serde_json::from_str(
+        r##"{"v":1,"nodes":[
+            {"id":"src","kind":"source","x":0,"y":0},
+            {"id":"t","kind":"text","params":{"size":0.5,"fill":"#ffffff","rasterAspect":1},"rasterPath":"unused","x":0,"y":0},
+            {"id":"out","kind":"output","x":0,"y":0}],
+        "wires":[
+            {"from":"src","to":"t","toIn":0},
+            {"from":"t","to":"out","toIn":0}]}"##,
+    )
+    .unwrap();
+    let blue = image::RgbaImage::from_pixel(64, 64, image::Rgba([0, 0, 255, 255]));
+    let raster = image::RgbaImage::from_pixel(16, 16, image::Rgba([255, 255, 255, 255]));
+    let mut sources = HashMap::new();
+    sources.insert("src".to_string(), blue);
+    let mut rasters = HashMap::new();
+    rasters.insert("t".to_string(), raster);
+    let tails = engine
+        .render_chain(&graph, &sources, &rasters, &effects)
+        .unwrap();
+    let img = &tails["out"];
+    let center = img.get_pixel(32, 32);
+    assert!(
+        center[0] > 250 && center[1] > 250 && center[2] > 250,
+        "center should be white: {center:?}"
+    );
+    let corner = img.get_pixel(2, 2);
+    assert!(
+        corner[2] > 250 && corner[0] < 5,
+        "corner should stay blue: {corner:?}"
+    );
 }

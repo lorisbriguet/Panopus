@@ -55,11 +55,18 @@ async function renderCase(
   document.body.appendChild(canvas);
   const ex = new GlExecutor(canvas);
   // Convention (mirrors parity_goldens.rs): a case source node's
-  // sourcePath names a file in the parity dir; default = source.png.
+  // sourcePath (and a text node's rasterPath) names a file in the
+  // parity dir; source default = source.png.
   for (const n of graph.nodes) {
-    if (n.kind !== "source") continue;
-    const file = n.sourcePath ?? "source.png";
-    ex.setSource(n.id, await createImageBitmap(await loadImage(`../${file}`)));
+    if (n.kind === "source") {
+      const file = n.sourcePath ?? "source.png";
+      ex.setSource(n.id, await createImageBitmap(await loadImage(`../${file}`)));
+    } else if (n.kind === "text" && n.rasterPath) {
+      ex.setNodeRaster(
+        n.id,
+        await createImageBitmap(await loadImage(`../${n.rasterPath}`))
+      );
+    }
   }
   ex.previewOutput = outputId;
   // Effect texture assets load async behind a 1x1 placeholder; the first

@@ -389,3 +389,34 @@ describe("recipes", () => {
     expect(applyRecipe(g, "{}")).toEqual(g);
   });
 });
+
+describe("text nodes (D3)", () => {
+  test("parseGraph accepts text nodes with raster refs", () => {
+    const g: FinishGraph = {
+      v: 1,
+      nodes: [
+        { id: "src", kind: "source", x: 0, y: 0 },
+        {
+          id: "t",
+          kind: "text",
+          params: { content: "PANOPUS", font: "Alpha", size: 0.2 },
+          rasterPath: "/cache/1-t.png",
+          rasterKey: "abc",
+          x: 0,
+          y: 0,
+        },
+        { id: "out", kind: "output", x: 0, y: 0 },
+      ],
+      wires: [
+        { from: "src", to: "t", toIn: 0 },
+        { from: "t", to: "out", toIn: 0 },
+      ],
+    };
+    const back = parseGraph(serializeGraph(g));
+    const t = back.nodes.find((n) => n.id === "t")!;
+    expect(t.kind).toBe("text");
+    expect(t.rasterPath).toBe("/cache/1-t.png");
+    expect(t.rasterKey).toBe("abc");
+    expect(executionOrder(back)).toEqual(["src", "t", "out"]);
+  });
+});

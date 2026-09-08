@@ -281,8 +281,21 @@ fn run_export(
             .to_rgba8();
         sources.insert(node_id, img);
     }
+    // Text-node rasters (webview-cached PNGs, D3).
+    let mut rasters: HashMap<String, RgbaImage> = HashMap::new();
+    for n in graph.nodes.iter().filter(|n| n.kind == "text") {
+        let path = n
+            .raster_path
+            .as_deref()
+            .filter(|p| !p.trim().is_empty())
+            .ok_or_else(|| format!("text node {} has no rendered raster", n.id))?;
+        let img = image::open(path)
+            .map_err(|e| format!("text raster {path} ({}): {e}", n.id))?
+            .to_rgba8();
+        rasters.insert(n.id.clone(), img);
+    }
     // One chain render, then a placement + encode per output node.
-    let tails = engine.render_chain(&graph, &sources, &effects)?;
+    let tails = engine.render_chain(&graph, &sources, &rasters, &effects)?;
     emit_progress(&app, "render", 40, None);
 
     let out_ids: Vec<String> = if outputs.is_empty() {
