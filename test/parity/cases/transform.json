@@ -1,0 +1,15 @@
+{
+  "name": "transform",
+  "graph": {
+    "v": 1,
+    "nodes": [
+      { "id": "src", "kind": "source", "x": 0, "y": 0 },
+      { "id": "t", "kind": "effect", "effectId": "transform", "params": { "x": 0.15, "y": -0.1, "scale": 0.6, "rotate": 20 }, "x": 0, "y": 0 },
+      { "id": "out", "kind": "output", "params": { "unit": "px", "width": 512, "height": 731, "dpi": 300 }, "x": 0, "y": 0 }
+    ],
+    "wires": [
+      { "from": "src", "to": "t", "toIn": 0 },
+      { "from": "t", "to": "out", "toIn": 0 }
+    ]
+  }
+}
