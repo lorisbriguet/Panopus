@@ -6,10 +6,13 @@ import { toast } from "sonner";
 import { Modal } from "../ui/Modal";
 import { Toggle } from "../ui/Toggle";
 import { Button } from "../ui/Button";
+import {
+  DEFAULT_OUTPUT,
+  outputPx,
+  outputRatio,
+  type OutputSettings,
+} from "../../lib/finishGraph";
 import { useT } from "../../i18n/useT";
-
-/** F4 at 300dpi: 10571x15118 px on an 895x1280 mm page. */
-const F4_RATIO = 10571 / 15118;
 
 const ALL_FORMATS = ["png", "tiff", "pdf"] as const;
 type Format = (typeof ALL_FORMATS)[number];
@@ -25,13 +28,21 @@ interface ExportDialogProps {
   projectId: number;
   /** For the aspect warning; null while the artwork is still loading. */
   artworkBitmap: ImageBitmap | null;
+  /** Output node settings (size, density, color space). */
+  settings?: OutputSettings;
 }
 
 /**
  * Export dialog: pick formats + destination, run export_finish, follow
  * its finish-export-progress events, list the written files.
  */
-export function ExportDialog({ open, onClose, projectId, artworkBitmap }: ExportDialogProps) {
+export function ExportDialog({
+  open,
+  onClose,
+  projectId,
+  artworkBitmap,
+  settings = DEFAULT_OUTPUT,
+}: ExportDialogProps) {
   const t = useT();
   const [formats, setFormats] = useState<Record<Format, boolean>>({
     png: true,
@@ -59,9 +70,13 @@ export function ExportDialog({ open, onClose, projectId, artworkBitmap }: Export
     };
   }, [open]);
 
+  const ratio = outputRatio(settings);
+  const px = outputPx(settings);
+  // Cropping only happens in fill mode; fit/place never lose pixels.
   const aspectOff =
+    settings.fit === "fill" &&
     artworkBitmap !== null &&
-    Math.abs(artworkBitmap.width / artworkBitmap.height - F4_RATIO) / F4_RATIO > 0.01;
+    Math.abs(artworkBitmap.width / artworkBitmap.height - ratio) / ratio > 0.01;
 
   const chosen = ALL_FORMATS.filter((f) => formats[f]);
 
@@ -111,6 +126,9 @@ export function ExportDialog({ open, onClose, projectId, artworkBitmap }: Export
       }
     >
       <div className="flex flex-col gap-4">
+        <p className="text-xs text-muted font-mono tabular-nums">
+          {px.w} × {px.h} px · {settings.dpi} dpi · {settings.color.toUpperCase()}
+        </p>
         {aspectOff && (
           <p className="text-xs text-[var(--color-danger-text)]">{t.aspect_warning}</p>
         )}

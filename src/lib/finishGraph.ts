@@ -5,6 +5,88 @@
  * identical semantics. Keep the algorithms simple and deterministic.
  */
 
+/** F4 poster aspect (10571x15118 px at 300dpi) — the default output. */
+export const F4_RATIO = 10571 / 15118;
+
+/**
+ * Output node settings, stored as the output node's params. Defaults
+ * reproduce the original hardcoded export: F4 895x1280mm at 300dpi,
+ * sRGB. Mirrored by the Rust exporter (render/export.rs) — keep the
+ * rounding/clamps in lockstep.
+ */
+export type OutputSettings = {
+  unit: "mm" | "px";
+  width: number;
+  height: number;
+  dpi: number;
+  /** "srgb" | "rgb" encode identical bytes (declared intent only);
+   *  "cmyk" converts TIFF/PDF (PNG stays RGB — the format has no CMYK). */
+  color: "srgb" | "rgb" | "cmyk";
+  /** Artwork placement on the page: fill = cover-crop, fit = contain
+   *  (letterboxed), place = centered at 100% (1 artwork px = 1 output px).
+   *  Bars/overflow background is black. The input is never modified. */
+  fit: "fill" | "fit" | "place";
+};
+
+export const DEFAULT_OUTPUT: OutputSettings = {
+  unit: "mm",
+  width: 895,
+  height: 1280,
+  dpi: 300,
+  color: "srgb",
+  fit: "fill",
+};
+
+/** Renderable ceiling (wgpu/WebGL texture limit headroom). */
+export const MAX_OUTPUT_PX = 16384;
+
+/** Read the output node's settings with defaults + sane clamps. */
+export function outputSettings(g: FinishGraph): OutputSettings {
+  return outputSettingsFrom(g.nodes.find((n) => n.kind === "output")?.params);
+}
+
+/** Same, from an output node's raw params (ParamsPanel has only the node). */
+export function outputSettingsFrom(
+  params: Record<string, number | string | boolean> | undefined
+): OutputSettings {
+  const p = params ?? {};
+  const num = (v: unknown, def: number, min: number, max: number) => {
+    const n = typeof v === "number" && Number.isFinite(v) ? v : def;
+    return Math.min(max, Math.max(min, n));
+  };
+  const unit = p.unit === "px" ? "px" : "mm";
+  const color = p.color === "cmyk" ? "cmyk" : p.color === "rgb" ? "rgb" : "srgb";
+  const fit = p.fit === "fit" ? "fit" : p.fit === "place" ? "place" : "fill";
+  const dim = (v: unknown, def: number) =>
+    unit === "px" ? Math.round(num(v, def, 16, MAX_OUTPUT_PX)) : num(v, def, 10, 5000);
+  return {
+    unit,
+    width: dim(p.width, unit === "px" ? 10571 : DEFAULT_OUTPUT.width),
+    height: dim(p.height, unit === "px" ? 15118 : DEFAULT_OUTPUT.height),
+    dpi: Math.round(num(p.dpi, DEFAULT_OUTPUT.dpi, 36, 1200)),
+    color,
+    fit,
+  };
+}
+
+/** Pixel dimensions of the render (mm sizes go through the dpi). */
+export function outputPx(s: OutputSettings): { w: number; h: number } {
+  const toPx = (v: number) =>
+    Math.min(MAX_OUTPUT_PX, s.unit === "px" ? Math.round(v) : Math.round((v / 25.4) * s.dpi));
+  return { w: toPx(s.width), h: toPx(s.height) };
+}
+
+/** Physical page size in mm (px sizes go through the dpi). */
+export function outputMm(s: OutputSettings): { w: number; h: number } {
+  const toMm = (v: number) => (s.unit === "mm" ? v : (v / s.dpi) * 25.4);
+  return { w: toMm(s.width), h: toMm(s.height) };
+}
+
+export function outputRatio(s: OutputSettings): number {
+  const { w, h } = outputPx(s);
+  return h > 0 ? w / h : F4_RATIO;
+}
+
 export type GraphNode = {
   id: string;
   kind: "source" | "effect" | "output";

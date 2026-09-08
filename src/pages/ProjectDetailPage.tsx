@@ -126,8 +126,6 @@ export function ProjectDetailPage() {
     }
   };
 
-  const artworkName = artworkPath ? artworkPath.split("/").pop() : null;
-
   const handleRenameKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -257,35 +255,9 @@ export function ProjectDetailPage() {
         </p>
       </Modal>
 
-      <section className="mt-8">
-        <h2 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">
-          {t.project_artwork_title}
-        </h2>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="secondary"
-            onClick={pickArtwork}
-            loading={setArtwork.isPending}
-          >
-            {t.project_pick_artwork}
-          </Button>
-          {artworkName &&
-            (artworkMissing ? (
-              <span className="text-sm text-[var(--color-danger-text)]">
-                {t.artwork_missing}
-              </span>
-            ) : (
-              <span className="text-sm text-[var(--color-text-secondary)] truncate">
-                {artworkName}
-              </span>
-            ))}
-        </div>
-      </section>
-
-      {/* Tab strip: Fonts | Finish (Finish gated on artwork) */}
-      {artworkPath && (
-        <>
-          <div
+      {/* Tab strip: Fonts | Finish (artwork attach lives in the Finish
+          tab's Source operator) */}
+      <div
             role="tablist"
             aria-label={t.finish_tab}
             className="mt-6 flex gap-1 border-b border-[var(--color-border)]"
@@ -319,16 +291,17 @@ export function ProjectDetailPage() {
           </div>
 
           {activeTab === "finish" && (
-            <div className="mt-4 h-[600px]">
+            <div className="mt-4 h-[calc(100vh-240px)] min-h-[600px]">
               <FinishTab
                 projectId={project.id}
                 artworkPath={artworkPath}
+                artworkMissing={artworkMissing}
+                onPickArtwork={pickArtwork}
+                pickPending={setArtwork.isPending}
                 graph={parseGraph(project.graph_json)}
               />
             </div>
           )}
-        </>
-      )}
     </>
   );
 }

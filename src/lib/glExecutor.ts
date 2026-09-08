@@ -13,8 +13,8 @@
 
 import { EFFECTS, FRAG_SOURCES } from "./effects";
 import type { EffectSpec, ParamSpec } from "./effects";
-import { executionOrder } from "./finishGraph";
-import type { FinishGraph, GraphWire } from "./finishGraph";
+import { executionOrder, outputPx, outputSettings } from "./finishGraph";
+import type { FinishGraph, GraphWire, OutputSettings } from "./finishGraph";
 
 // Effect texture assets (e.g. shaders/dither/glyph-atlas.png) resolve to
 // URLs via a `?url` glob so any effect directory's PNGs are picked up
@@ -198,8 +198,8 @@ export class GlExecutor {
   private programs = new Map<string, ProgramEntry>();
   /** nodeId -> compile/effect error from the last render (null = ok). */
   private nodeErrors = new Map<string, string | null>();
-  /** source nodeId -> uploaded texture. */
-  private sourceTex = new Map<string, WebGLTexture>();
+  /** source nodeId -> uploaded texture + native pixel size. */
+  private sourceTex = new Map<string, { tex: WebGLTexture; w: number; h: number }>();
   /** `${effectId}/${file}` -> effect texture asset (async-loaded). */
   private assetTex = new Map<string, WebGLTexture>();
 
@@ -217,6 +217,16 @@ export class GlExecutor {
 
   /** Fired when an async effect texture finishes loading (re-render cue). */
   onAssetLoaded: (() => void) | null = null;
+
+  /**
+   * TouchDesigner-style operator viewers: when thumbSize > 0, render()
+   * also reads every node's output back (longest side = thumbSize,
+   * shaped per node) and reports PNG data URLs through onThumbnails.
+   */
+  thumbSize = 0;
+  onThumbnails: ((thumbs: Record<string, string>) => void) | null = null;
+  private thumbTargets = new Map<string, Target>();
+  private thumbCanvas: HTMLCanvasElement | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -262,15 +272,19 @@ export class GlExecutor {
     );
   }
 
-  /** Upload a source node's image (replaces any previous upload). */
+  /** Upload a source node's image UNMODIFIED (native resolution; the
+   *  output node is the only place placement/resizing happens). */
   setSource(nodeId: string, image: ImageBitmap): void {
     const gl = this.gl;
     if (!gl) return;
-    let tex = this.sourceTex.get(nodeId);
-    if (!tex) {
-      tex = this.makeTex(1, 1)!;
-      this.sourceTex.set(nodeId, tex);
+    let entry = this.sourceTex.get(nodeId);
+    if (!entry) {
+      entry = { tex: this.makeTex(1, 1)!, w: 1, h: 1 };
+      this.sourceTex.set(nodeId, entry);
     }
+    entry.w = image.width;
+    entry.h = image.height;
+    const tex = entry.tex;
     gl.bindTexture(gl.TEXTURE_2D, tex);
     // UNPACK_FLIP_Y_WEBGL is specified to have no effect on ImageBitmap
     // uploads, so route through a 2D canvas (where it does apply) to get
@@ -315,7 +329,25 @@ export class GlExecutor {
     if (!gl || width <= 0 || height <= 0) return;
     if (this.canvas.width !== width) this.canvas.width = width;
     if (this.canvas.height !== height) this.canvas.height = height;
-    this.ensurePool(width, height);
+
+    // Chain semantics: sources and effects run at the source's native
+    // resolution (capped for preview perf); the OUTPUT node is the only
+    // place the image is fitted/resized to the page. The canvas is a
+    // scaled view of the page (width/height are page-shaped).
+    const settings = outputSettings(graph);
+    const pagePx = outputPx(settings);
+    const firstSource = graph.nodes.find(
+      (n) => n.kind === "source" && this.sourceTex.has(n.id)
+    );
+    const native = firstSource ? this.sourceTex.get(firstSource.id)! : null;
+    const iw = native?.w ?? width;
+    const ih = native?.h ?? height;
+    const cap = 2048;
+    const wScale = Math.min(1, cap / Math.max(iw, ih));
+    const ww = Math.max(1, Math.round(iw * wScale));
+    const wh = Math.max(1, Math.round(ih * wScale));
+
+    this.ensurePool(ww, wh);
     this.poolCursor = 0;
     gl.bindVertexArray(this.vao);
 
@@ -337,11 +369,13 @@ export class GlExecutor {
       const node = byId.get(id);
       if (!node) continue;
       if (node.kind === "source") {
-        outputs.set(id, this.sourceTex.get(id) ?? black);
+        outputs.set(id, this.sourceTex.get(id)?.tex ?? black);
         continue;
       }
       if (node.kind === "output") {
-        this.blitToCanvas(inputTex(id, 0), width, height);
+        const tex = inputTex(id, 0);
+        this.blitToCanvasPlaced(tex, width, height, settings, iw, ih, pagePx);
+        outputs.set(id, tex); // so the output operator gets a thumbnail too
         continue;
       }
       const spec = node.effectId ? EFFECTS[node.effectId] : undefined;
@@ -360,7 +394,7 @@ export class GlExecutor {
         }
         const target = this.acquireTarget();
         gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
-        gl.viewport(0, 0, width, height);
+        gl.viewport(0, 0, ww, wh);
         gl.useProgram(entry.prog);
         let unit = 0;
         if (pi === 0) {
@@ -384,7 +418,7 @@ export class GlExecutor {
         // stripped (e.g. dither's declared-but-unread uSeed) - skip
         // silently in that case.
         const locRes = gl.getUniformLocation(entry.prog, "uRes");
-        if (locRes) gl.uniform2f(locRes, width, height);
+        if (locRes) gl.uniform2f(locRes, ww, wh);
         for (const p of spec.params) {
           const loc = gl.getUniformLocation(entry.prog, uniformName(p.name));
           if (!loc) continue;
@@ -404,7 +438,139 @@ export class GlExecutor {
       this.nodeErrors.set(id, failed);
       outputs.set(id, failed ? inputTex(id, 0) : prev ?? black);
     }
+
+    if (this.thumbSize > 0 && this.onThumbnails) {
+      const thumbs: Record<string, string> = {};
+      for (const [id, tex] of outputs) {
+        // Chain operators show their working-res output (source aspect);
+        // the output operator shows the placed PAGE.
+        const isOut = byId.get(id)?.kind === "output";
+        const url = isOut
+          ? this.captureThumb(tex, pagePx.w / pagePx.h, settings, iw, ih, pagePx)
+          : this.captureThumb(tex, ww / wh);
+        if (url) thumbs[id] = url;
+      }
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this.onThumbnails(thumbs);
+      return;
+    }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  /** Destination rect (centered) for placing an iw:ih image on a
+   *  (w, h)-pixel view of the page, per the output fit mode. `k` is the
+   *  view's scale relative to the page in real pixels. */
+  private static placeRect(
+    w: number,
+    h: number,
+    mode: OutputSettings["fit"],
+    iw: number,
+    ih: number,
+    k: number
+  ): { dx: number; dy: number; dw: number; dh: number } {
+    const ar = iw / ih;
+    let dw: number;
+    let dh: number;
+    if (mode === "place") {
+      dw = iw * k;
+      dh = ih * k;
+    } else if (mode === "fit" ? w / h > ar : w / h <= ar) {
+      dh = h;
+      dw = h * ar;
+    } else {
+      dw = w;
+      dh = w / ar;
+    }
+    return {
+      dx: Math.round((w - dw) / 2),
+      dy: Math.round((h - dh) / 2),
+      dw: Math.max(1, Math.round(dw)),
+      dh: Math.max(1, Math.round(dh)),
+    };
+  }
+
+  /** Blit a node output into a small thumb FBO and read it back as a
+   *  PNG data URL (rows flipped from GL order). Longest side =
+   *  thumbSize, shaped by `ratio`. When `settings` is given, the input
+   *  is PLACED like the page (output-operator viewer). */
+  private captureThumb(
+    tex: WebGLTexture,
+    ratio: number,
+    settings?: OutputSettings,
+    iw = 1,
+    ih = 1,
+    pagePx?: { w: number; h: number }
+  ): string | null {
+    const gl = this.gl;
+    if (!gl) return null;
+    if (!this.copyProg) this.copyProg = this.compile(COPY_FRAG);
+    if (!this.copyProg.prog) return null;
+    const r = ratio > 0 ? ratio : 1;
+    const tw = r >= 1 ? this.thumbSize : Math.max(1, Math.round(this.thumbSize * r));
+    const th = r >= 1 ? Math.max(1, Math.round(this.thumbSize / r)) : this.thumbSize;
+    // Chain and page thumbs alternate shapes every render: keep a small
+    // pool of targets keyed by size instead of thrashing one.
+    const key = `${tw}x${th}`;
+    let target = this.thumbTargets.get(key);
+    if (!target) {
+      const t = this.makeTex(tw, th);
+      if (!t) return null;
+      const fbo = gl.createFramebuffer()!;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D,
+        t,
+        0
+      );
+      target = { tex: t, fbo };
+      if (this.thumbTargets.size > 6) {
+        for (const [k, old] of this.thumbTargets) {
+          gl.deleteTexture(old.tex);
+          gl.deleteFramebuffer(old.fbo);
+          this.thumbTargets.delete(k);
+        }
+      }
+      this.thumbTargets.set(key, target);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
+    gl.viewport(0, 0, tw, th);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(this.copyProg.prog);
+    this.bindTex(this.copyProg.prog, "uTex0", tex, 0);
+    if (settings && pagePx) {
+      const { dx, dy, dw, dh } = GlExecutor.placeRect(
+        tw,
+        th,
+        settings.fit,
+        iw,
+        ih,
+        tw / pagePx.w
+      );
+      gl.viewport(dx, dy, dw, dh);
+    }
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.viewport(0, 0, tw, th);
+    const pixels = new Uint8Array(tw * th * 4);
+    gl.readPixels(0, 0, tw, th, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    if (!this.thumbCanvas) this.thumbCanvas = document.createElement("canvas");
+    const c = this.thumbCanvas;
+    c.width = tw;
+    c.height = th;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    const img = ctx.createImageData(tw, th);
+    // GL reads rows bottom-up; ImageData wants top-down.
+    for (let y = 0; y < th; y++) {
+      img.data.set(
+        pixels.subarray((th - 1 - y) * tw * 4, (th - y) * tw * 4),
+        y * tw * 4
+      );
+    }
+    ctx.putImageData(img, 0, 0);
+    return c.toDataURL("image/png");
   }
 
   dispose(): void {
@@ -417,7 +583,7 @@ export class GlExecutor {
     this.programs.clear();
     if (this.copyProg?.prog) gl.deleteProgram(this.copyProg.prog);
     this.copyProg = null;
-    for (const t of this.sourceTex.values()) gl.deleteTexture(t);
+    for (const t of this.sourceTex.values()) gl.deleteTexture(t.tex);
     this.sourceTex.clear();
     for (const t of this.assetTex.values()) gl.deleteTexture(t);
     this.assetTex.clear();
@@ -426,6 +592,11 @@ export class GlExecutor {
       gl.deleteFramebuffer(t.fbo);
     }
     this.pool = [];
+    for (const t of this.thumbTargets.values()) {
+      gl.deleteTexture(t.tex);
+      gl.deleteFramebuffer(t.fbo);
+    }
+    this.thumbTargets.clear();
     if (this.black) gl.deleteTexture(this.black);
     if (this.vao) gl.deleteVertexArray(this.vao);
     if (this.buf) gl.deleteBuffer(this.buf);
@@ -603,12 +774,34 @@ export class GlExecutor {
     return target;
   }
 
-  private blitToCanvas(tex: WebGLTexture, w: number, h: number): void {
+  /** Output-node blit: clear the page black, then draw the chain result
+   *  into the fit/fill/place destination rect (viewport does the scale;
+   *  overflow is clipped by the drawing buffer). */
+  private blitToCanvasPlaced(
+    tex: WebGLTexture,
+    w: number,
+    h: number,
+    settings: OutputSettings,
+    iw: number,
+    ih: number,
+    pagePx: { w: number; h: number }
+  ): void {
     const gl = this.gl!;
     if (!this.copyProg) this.copyProg = this.compile(COPY_FRAG);
     if (!this.copyProg.prog) return;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, w, h);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    const { dx, dy, dw, dh } = GlExecutor.placeRect(
+      w,
+      h,
+      settings.fit,
+      iw,
+      ih,
+      w / pagePx.w
+    );
+    gl.viewport(dx, dy, dw, dh);
     gl.useProgram(this.copyProg.prog);
     this.bindTex(this.copyProg.prog, "uTex0", tex, 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

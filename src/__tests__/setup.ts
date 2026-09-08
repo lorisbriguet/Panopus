@@ -92,6 +92,8 @@ vi.mock("@xyflow/react", async () => {
     Panel: (p: { children?: unknown }) => p.children,
     Handle: () => null,
     Position: { Left: "left", Right: "right", Top: "top", Bottom: "bottom" },
+    // Passthrough: tests assert on the graph, not rf-internal node state.
+    applyNodeChanges: (_changes: unknown[], nodes: XyMockNode[]) => nodes,
   };
 });
 

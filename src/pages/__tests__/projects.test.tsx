@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ProjectsPage } from "../ProjectsPage";
 import { ProjectDetailPage } from "../ProjectDetailPage";
@@ -287,9 +287,24 @@ describe("ProjectDetailPage activation (Task 5)", () => {
 });
 
 describe("ProjectDetailPage artwork (Task 6)", () => {
+  // The picker lives in the Finish tab's Source operator now: open the
+  // Finish tab, then drive selection through the xyflow mock's parked
+  // onNodesChange (the default graph's source node id is "src").
+  const openSourceParams = async () => {
+    fireEvent.click(screen.getByRole("tab", { name: "Finish" }));
+    const props = (globalThis as Record<string, unknown>).__xyflowProps as {
+      onNodesChange: (changes: unknown[]) => void;
+    };
+    act(() => {
+      props.onNodesChange([{ type: "select", id: "src", selected: true }]);
+    });
+    await screen.findByRole("button", { name: "Choose artwork..." });
+  };
+
   it("picker sends the chosen path to useSetProjectArtwork with image filters", async () => {
     openMock.mockResolvedValue("/art/new-piece.tiff");
     renderDetail(1);
+    await openSourceParams();
     fireEvent.click(screen.getByRole("button", { name: "Choose artwork..." }));
     await waitFor(() =>
       expect(setArtworkMutate).toHaveBeenCalledWith({
@@ -304,14 +319,16 @@ describe("ProjectDetailPage artwork (Task 6)", () => {
 
   it("does not mutate when the picker is cancelled (null)", async () => {
     renderDetail(1);
+    await openSourceParams();
     fireEvent.click(screen.getByRole("button", { name: "Choose artwork..." }));
     // Flush the resolved-null picker promise before asserting the negative.
     await waitFor(() => expect(openMock).toHaveBeenCalledTimes(1));
     expect(setArtworkMutate).not.toHaveBeenCalled();
   });
 
-  it("shows the artwork file name after a successful liveness probe", async () => {
+  it("shows the artwork file name in the Source operator after a successful probe", async () => {
     renderDetail(3);
+    await openSourceParams();
     expect(await screen.findByText("poster.png")).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith("read_artwork_bytes", {
       path: "/art/poster.png",
@@ -322,6 +339,7 @@ describe("ProjectDetailPage artwork (Task 6)", () => {
   it("shows the relink prompt when read_artwork_bytes rejects", async () => {
     invokeMock.mockRejectedValue("failed to read artwork");
     renderDetail(3);
+    await openSourceParams();
     expect(
       await screen.findByText(/artwork file not found/i)
     ).toBeInTheDocument();
@@ -339,9 +357,9 @@ describe("ProjectDetailPage artwork (Task 6)", () => {
     expect(finishTab).not.toHaveAttribute("aria-disabled");
   });
 
-  it("has no Finish tab and no probe when artwork is unset", () => {
+  it("shows the Finish tab without artwork but skips the probe", () => {
     renderDetail(1);
-    expect(screen.queryByRole("tab", { name: "Finish" })).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Finish" })).toBeInTheDocument();
     expect(invokeMock).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { GlExecutor } from "../../lib/glExecutor";
+import { F4_RATIO } from "../../lib/finishGraph";
 import type { FinishGraph } from "../../lib/finishGraph";
 import { useT } from "../../i18n/useT";
 
@@ -7,22 +8,39 @@ interface PreviewCanvasProps {
   graph: FinishGraph;
   artworkBitmap: ImageBitmap | null;
   artworkPath: string;
+  /** Output aspect (w/h) from the output node settings. */
+  ratio?: number;
   onCompileErrors?: (errors: Record<string, string | null>) => void;
+  /** Per-node output thumbnails (TouchDesigner-style operator viewers). */
+  onThumbnails?: (thumbs: Record<string, string>) => void;
 }
 
 /**
  * Owns a GlExecutor, re-renders rAF-throttled on graph/param changes, fit-to-panel size.
  * Recreates executor when artworkPath changes (per decision 1: sourceTex leak prevention).
  */
-export function PreviewCanvas({ graph, artworkBitmap, artworkPath, onCompileErrors }: PreviewCanvasProps) {
+export function PreviewCanvas({
+  graph,
+  artworkBitmap,
+  artworkPath,
+  ratio = F4_RATIO,
+  onCompileErrors,
+  onThumbnails,
+}: PreviewCanvasProps) {
   const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const executorRef = useRef<GlExecutor | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
   const [needsRender, setNeedsRender] = useState(false);
+  // Ref so the executor keeps one stable callback across re-renders.
+  const onThumbnailsRef = useRef(onThumbnails);
+  onThumbnailsRef.current = onThumbnails;
 
-  // Recreate executor when artwork changes
+  // Recreate executor when artwork changes. Also keyed on artworkBitmap:
+  // while it is null the placeholder branch renders and the canvas is NOT
+  // mounted, so the executor can only be created on the re-run after the
+  // bitmap lands (the setSource effect below runs after this one).
   useEffect(() => {
     if (!canvasRef.current) return;
 
@@ -40,6 +58,11 @@ export function PreviewCanvas({ graph, artworkBitmap, artworkPath, onCompileErro
     executor.onAssetLoaded = () => {
       setNeedsRender(true);
     };
+    // Operator viewers: capture node outputs alongside every render.
+    executor.thumbSize = 128;
+    executor.onThumbnails = (thumbs) => {
+      onThumbnailsRef.current?.(thumbs);
+    };
 
     return () => {
       if (executorRef.current) {
@@ -47,7 +70,7 @@ export function PreviewCanvas({ graph, artworkBitmap, artworkPath, onCompileErro
         executorRef.current = null;
       }
     };
-  }, [artworkPath]);
+  }, [artworkPath, artworkBitmap]);
 
   // Upload source image when bitmap loads
   useEffect(() => {
@@ -66,12 +89,22 @@ export function PreviewCanvas({ graph, artworkBitmap, artworkPath, onCompileErro
 
   // rAF-throttled render loop
   const render = useCallback(() => {
+    // Clear FIRST: an early return that leaves the stale rAF id behind
+    // wedges the `rafRef.current === null` gate forever.
+    rafRef.current = null;
     if (!executorRef.current || !canvasRef.current || !containerRef.current) return;
 
+    // Contain-fit the output aspect inside the panel: the canvas keeps
+    // the poster's proportions (the bitmap is already cover-cropped to
+    // it), whatever shape the container has.
     const container = containerRef.current;
-    const width = container.clientWidth;
-    const height = container.clientHeight;
+    let width = container.clientWidth;
+    let height = container.clientHeight;
+    if (width / height > ratio) width = Math.floor(height * ratio);
+    else height = Math.floor(width / ratio);
 
+    width = Math.max(1, width);
+    height = Math.max(1, height);
     if (width > 0 && height > 0) {
       executorRef.current.render(graph, width, height);
 
@@ -84,9 +117,7 @@ export function PreviewCanvas({ graph, artworkBitmap, artworkPath, onCompileErro
         onCompileErrors(errors);
       }
     }
-
-    rafRef.current = null;
-  }, [graph, onCompileErrors]);
+  }, [graph, ratio, onCompileErrors]);
 
   useEffect(() => {
     if (needsRender && rafRef.current === null) {
@@ -113,9 +144,15 @@ export function PreviewCanvas({ graph, artworkBitmap, artworkPath, onCompileErro
   return (
     <div
       ref={containerRef}
-      className="h-full border border-[var(--color-input-border)] rounded-lg bg-[var(--color-bg)] overflow-hidden"
+      className="relative h-full bg-[var(--color-bg)] overflow-hidden"
     >
-      <canvas ref={canvasRef} className="w-full h-full" />
+      {/* No CSS size: the canvas displays at its attribute (render) size,
+          centered — pixels stay square and the output aspect exact. The
+          page frame keeps extreme formats reading as a page, not a glitch. */}
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 m-auto border border-white/15 shadow-[0_0_48px_rgba(0,0,0,0.55)]"
+      />
     </div>
   );
 }

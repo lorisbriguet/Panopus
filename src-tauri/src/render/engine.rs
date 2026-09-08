@@ -275,6 +275,36 @@ fn write_params(
     buf
 }
 
+/// Artwork placement on the page. Mirror of the fit modes composed by
+/// FinishTab's preview compositor (src/components/finish/FinishTab.tsx):
+/// bars/overflow background is black, input pixels are never modified
+/// beyond the resample fill/fit require.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FitMode {
+    /// Scale to cover, center-crop the overflow (default).
+    Fill,
+    /// Scale to contain, letterbox on black.
+    Fit,
+    /// Center at 100%: 1 artwork px = 1 output px, crop/pad on black.
+    Place,
+}
+
+/// The output node's "fit" param ("fill" | "fit" | "place").
+pub fn fit_mode(graph: &FinishGraphRs) -> FitMode {
+    match graph
+        .nodes
+        .iter()
+        .find(|n| n.kind == "output")
+        .and_then(|n| n.params.as_ref())
+        .and_then(|p| p.get("fit"))
+        .and_then(|v| v.as_str())
+    {
+        Some("fit") => FitMode::Fit,
+        Some("place") => FitMode::Place,
+        _ => FitMode::Fill,
+    }
+}
+
 /// Cover-fit `img` to (w, h): scale to fill, center-crop the overflow.
 fn cover_fit(img: &RgbaImage, w: u32, h: u32) -> RgbaImage {
     let (iw, ih) = img.dimensions();
@@ -286,6 +316,43 @@ fn cover_fit(img: &RgbaImage, w: u32, h: u32) -> RgbaImage {
     let sh = (ih as f64 * scale).ceil().max(h as f64) as u32;
     let resized = image::imageops::resize(img, sw, sh, image::imageops::FilterType::CatmullRom);
     image::imageops::crop_imm(&resized, (sw - w) / 2, (sh - h) / 2, w, h).to_image()
+}
+
+/// Compose `img` onto a black (w, h) page per the fit mode.
+fn place_fit(img: &RgbaImage, w: u32, h: u32, mode: FitMode) -> RgbaImage {
+    let (iw, ih) = img.dimensions();
+    match mode {
+        FitMode::Fill => cover_fit(img, w, h),
+        FitMode::Fit => {
+            let scale = (w as f64 / iw as f64).min(h as f64 / ih as f64);
+            let sw = ((iw as f64 * scale).round() as u32).clamp(1, w);
+            let sh = ((ih as f64 * scale).round() as u32).clamp(1, h);
+            let resized =
+                image::imageops::resize(img, sw, sh, image::imageops::FilterType::CatmullRom);
+            let mut out = RgbaImage::from_pixel(w, h, image::Rgba([0, 0, 0, 255]));
+            image::imageops::overlay(
+                &mut out,
+                &resized,
+                i64::from((w - sw) / 2),
+                i64::from((h - sh) / 2),
+            );
+            out
+        }
+        FitMode::Place => {
+            let cw = iw.min(w);
+            let ch = ih.min(h);
+            let cropped =
+                image::imageops::crop_imm(img, (iw - cw) / 2, (ih - ch) / 2, cw, ch).to_image();
+            let mut out = RgbaImage::from_pixel(w, h, image::Rgba([0, 0, 0, 255]));
+            image::imageops::overlay(
+                &mut out,
+                &cropped,
+                i64::from((w - cw) / 2),
+                i64::from((h - ch) / 2),
+            );
+            out
+        }
+    }
 }
 
 const VERTEX_WGSL: &str = r#"
@@ -364,11 +431,18 @@ impl RenderEngine {
             ..Default::default()
         }))
         .map_err(|e| format!("no GPU adapter: {e}"))?;
-        // F4 export is 10571x15118 - above the 8192 default limit.
-        let adapter_max = adapter.limits().max_texture_dimension_2d;
+        // F4 export is 10571x15118 - above the 8192 default texture limit,
+        // and its readback buffer (row-aligned 10571*4 x 15118 ~ 613 MiB)
+        // is above the 256 MiB default buffer limit.
+        let adapter_limits = adapter.limits();
+        let defaults = wgpu::Limits::default();
         let limits = wgpu::Limits {
-            max_texture_dimension_2d: adapter_max.min(16384).max(8192),
-            ..wgpu::Limits::default()
+            max_texture_dimension_2d: adapter_limits.max_texture_dimension_2d.min(16384).max(8192),
+            max_buffer_size: adapter_limits
+                .max_buffer_size
+                .min(1 << 30)
+                .max(defaults.max_buffer_size),
+            ..defaults
         };
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("panopus-finish"),
@@ -661,7 +735,9 @@ impl RenderEngine {
         Ok(tex)
     }
 
-    /// Render the graph at out_w x out_h and read back RGBA8 pixels.
+    /// Render the chain at the source's native resolution, then place the
+    /// result onto an out_w x out_h page (fit/fill/place from the output
+    /// node's settings) and read back RGBA8 pixels.
     pub fn render_graph(
         &mut self,
         graph: &FinishGraphRs,
@@ -673,6 +749,22 @@ impl RenderEngine {
         use wgpu::util::DeviceExt;
 
         let order = execution_order(graph);
+        let fit = fit_mode(graph);
+        // Chain semantics: sources/effects run at the source's NATIVE
+        // resolution; only the final place_fit below resizes to the page
+        // (mirrors glExecutor.render, minus its preview-perf cap).
+        let (sw, sh) = graph
+            .nodes
+            .iter()
+            .find(|n| n.kind == "source")
+            .and_then(|n| sources.get(&n.id))
+            .map(|img| img.dimensions())
+            .unwrap_or((out_w, out_h));
+        // Cap at the device texture limit (oversized scans etc.).
+        const CAP: f64 = 16384.0;
+        let scale = (CAP / f64::from(sw.max(sh))).min(1.0);
+        let ww = ((f64::from(sw) * scale).round() as u32).max(1);
+        let wh = ((f64::from(sh) * scale).round() as u32).max(1);
         let black = self.upload_rgba(&RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 255])), "black");
 
         // Node output textures (kept alive until their consumers ran).
@@ -724,8 +816,23 @@ impl RenderEngine {
                     let img = sources
                         .get(id)
                         .ok_or_else(|| format!("no source image for node {id}"))?;
-                    let fitted = cover_fit(img, out_w, out_h);
-                    let flipped = image::imageops::flip_vertical(&fitted);
+                    // Uploaded unmodified — placement is the output stage.
+                    // (Only exception: shrink to the device texture cap.)
+                    let (iw, ih) = img.dimensions();
+                    let flipped = if iw.max(ih) as f64 > CAP {
+                        let s = CAP / f64::from(iw.max(ih));
+                        let rw = ((f64::from(iw) * s).round() as u32).max(1);
+                        let rh = ((f64::from(ih) * s).round() as u32).max(1);
+                        let small = image::imageops::resize(
+                            img,
+                            rw,
+                            rh,
+                            image::imageops::FilterType::CatmullRom,
+                        );
+                        image::imageops::flip_vertical(&small)
+                    } else {
+                        image::imageops::flip_vertical(img)
+                    };
                     node_out.insert(id.clone(), self.upload_rgba(&flipped, id));
                 }
                 "output" => {
@@ -733,8 +840,8 @@ impl RenderEngine {
                     let tex = self.device.create_texture(&wgpu::TextureDescriptor {
                         label: Some("finish-out"),
                         size: wgpu::Extent3d {
-                            width: out_w,
-                            height: out_h,
+                            width: ww,
+                            height: wh,
                             depth_or_array_layers: 1,
                         },
                         mip_level_count: 1,
@@ -815,8 +922,8 @@ impl RenderEngine {
                             node.params.as_ref(),
                             &pp.fields,
                             pp.buf_size,
-                            out_w,
-                            out_h,
+                            ww,
+                            wh,
                         );
                         let ubuf =
                             self.device
@@ -892,8 +999,8 @@ impl RenderEngine {
                                 let tex = self.device.create_texture(&wgpu::TextureDescriptor {
                                     label: Some("finish-pool"),
                                     size: wgpu::Extent3d {
-                                        width: out_w,
-                                        height: out_h,
+                                        width: ww,
+                                        height: wh,
                                         depth_or_array_layers: 1,
                                     },
                                     mip_level_count: 1,
@@ -962,10 +1069,10 @@ impl RenderEngine {
         let out_tex = out_tex.ok_or("graph has no output node")?;
 
         // Readback (256-aligned rows), then flip back from GL row order.
-        let bpr = (out_w * 4 + 255) & !255;
+        let bpr = (ww * 4 + 255) & !255;
         let buf = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("finish-readback"),
-            size: bpr as u64 * out_h as u64,
+            size: bpr as u64 * wh as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -981,12 +1088,12 @@ impl RenderEngine {
                 layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(bpr),
-                    rows_per_image: Some(out_h),
+                    rows_per_image: Some(wh),
                 },
             },
             wgpu::Extent3d {
-                width: out_w,
-                height: out_h,
+                width: ww,
+                height: wh,
                 depth_or_array_layers: 1,
             },
         );
@@ -1009,15 +1116,17 @@ impl RenderEngine {
         let data = slice
             .get_mapped_range()
             .map_err(|e| format!("mapped range: {e}"))?;
-        let mut pixels = Vec::with_capacity((out_w * out_h * 4) as usize);
-        for row in 0..out_h {
+        let mut pixels = Vec::with_capacity((ww * wh * 4) as usize);
+        for row in 0..wh {
             let start = (row * bpr) as usize;
-            pixels.extend_from_slice(&data[start..start + (out_w * 4) as usize]);
+            pixels.extend_from_slice(&data[start..start + (ww * 4) as usize]);
         }
         drop(data);
         buf.unmap();
-        let img = RgbaImage::from_raw(out_w, out_h, pixels)
+        let img = RgbaImage::from_raw(ww, wh, pixels)
             .ok_or("readback size mismatch")?;
-        Ok(image::imageops::flip_vertical(&img))
+        let img = image::imageops::flip_vertical(&img);
+        // Place the processed chain onto the page — the ONLY resize.
+        Ok(place_fit(&img, out_w, out_h, fit))
     }
 }

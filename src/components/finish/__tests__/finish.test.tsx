@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { NodeCanvas } from "../NodeCanvas";
 import { ParamsPanel } from "../ParamsPanel";
 import { emptyGraph } from "../../../lib/finishGraph";
@@ -168,16 +168,39 @@ describe("NodeCanvas", () => {
 });
 
 describe("ParamsPanel", () => {
-  it("shows empty state when no effect selected", () => {
+  it("renders the Source panel with artwork picker for source nodes", () => {
     const node: GraphNode = {
       id: "src",
       kind: "source",
       x: 0,
       y: 0,
     };
-    const onParamsChange = vi.fn();
+    const onPickArtwork = vi.fn();
 
-    render(<ParamsPanel node={node} onParamsChange={onParamsChange} />);
+    render(
+      <ParamsPanel
+        node={node}
+        onParamsChange={vi.fn()}
+        artworkPath="/art/poster.png"
+        onPickArtwork={onPickArtwork}
+      />
+    );
+
+    expect(screen.getByText("poster.png")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Choose artwork..." }));
+    expect(onPickArtwork).toHaveBeenCalled();
+  });
+
+  it("shows empty state for an unknown effect", () => {
+    const node: GraphNode = {
+      id: "e",
+      kind: "effect",
+      effectId: "does-not-exist",
+      x: 0,
+      y: 0,
+    };
+
+    render(<ParamsPanel node={node} onParamsChange={vi.fn()} />);
 
     expect(screen.getByText(/no parameters/i)).toBeInTheDocument();
   });

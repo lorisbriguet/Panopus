@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ReactFlow,
+  applyNodeChanges,
   type Node,
+  type NodeChange,
   type Edge,
   type Connection,
   Handle,
@@ -22,38 +24,103 @@ interface NodeCanvasProps {
   onGraphChange: (graph: FinishGraph) => void;
   selectedNodeId: string | null;
   onNodeSelect: (nodeId: string | null) => void;
+  /** nodeId -> PNG data URL of the node's live output (operator viewers). */
+  thumbnails?: Record<string, string>;
+  /** Page aspect (w/h): shapes the OUTPUT operator's viewer frame. */
+  ratio?: number;
+  /** Artwork aspect (w/h): shapes source/effect viewer frames — the
+   *  chain runs at source resolution, only output is page-shaped. */
+  sourceRatio?: number;
 }
 
-// Custom node components for @xyflow/react
-function SourceNode({ data }: { data: { label: string } }) {
+type OperatorData = { label: string; thumb?: string; ratio?: number };
+
+/** Viewer frame: fixed 96px wide, height follows the output aspect but
+ *  stays usable on extreme formats (thumbs letterbox via object-contain). */
+function viewerHeight(ratio: number | undefined): number {
+  const r = ratio && ratio > 0 ? ratio : 10571 / 15118;
+  return Math.round(Math.min(137, Math.max(28, 96 / r)));
+}
+
+const HANDLE_CLASS =
+  "!w-[7px] !h-[7px] !rounded-[1px] !border-0 !bg-[var(--color-text-secondary)]";
+
+/**
+ * TouchDesigner-style operator: the node body IS a live viewer of its
+ * output (F4 portrait), name in small technical type underneath with a
+ * family tint mark. Selection = accent outline, like TD's active OP.
+ */
+function Operator({
+  data,
+  selected,
+  tint,
+  hasInput,
+  hasOutput,
+}: {
+  data: OperatorData;
+  selected?: boolean;
+  tint: string;
+  hasInput: boolean;
+  hasOutput: boolean;
+}) {
   return (
-    <div className="px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-input-border)] rounded-lg text-sm">
-      <div className="font-medium">{data.label}</div>
-      <Handle type="source" position={Position.Right} />
+    <div className="w-24 font-mono">
+      <div
+        className={`relative overflow-hidden rounded-[2px] border bg-black/70 ${
+          selected
+            ? "border-accent shadow-[0_0_0_1px_var(--color-accent-ring,transparent),0_0_14px_rgba(0,0,0,0.6)]"
+            : "border-white/15"
+        }`}
+        style={{ height: viewerHeight(data.ratio) }}
+      >
+        {data.thumb ? (
+          <img
+            src={data.thumb}
+            alt=""
+            draggable={false}
+            className="absolute inset-0 w-full h-full object-contain"
+          />
+        ) : (
+          <div className="absolute inset-0 grid place-items-center text-[10px] text-muted">
+            •
+          </div>
+        )}
+        {hasInput && (
+          <Handle type="target" position={Position.Left} className={HANDLE_CLASS} />
+        )}
+        {hasOutput && (
+          <Handle type="source" position={Position.Right} className={HANDLE_CLASS} />
+        )}
+      </div>
+      <div className="mt-1 flex items-center gap-1.5 px-0.5">
+        <span className={`inline-block w-1.5 h-1.5 rounded-[1px] ${tint}`} />
+        <span
+          className={`text-[10px] tracking-[0.08em] uppercase ${
+            selected ? "text-accent" : "text-[var(--color-text-secondary)]"
+          }`}
+        >
+          {data.label}
+        </span>
+      </div>
     </div>
   );
 }
 
-function EffectNode({ data, selected }: { data: { label: string }; selected: boolean }) {
+function SourceNode({ data }: { data: OperatorData }) {
   return (
-    <div
-      className={`px-4 py-2 bg-[var(--color-surface)] border rounded-lg text-sm ${
-        selected ? "border-accent ring-2 ring-accent/20" : "border-[var(--color-input-border)]"
-      }`}
-    >
-      <Handle type="target" position={Position.Left} />
-      <div className="font-medium">{data.label}</div>
-      <Handle type="source" position={Position.Right} />
-    </div>
+    <Operator data={data} tint="bg-white/35" hasInput={false} hasOutput />
   );
 }
 
-function OutputNode({ data }: { data: { label: string } }) {
+function EffectNode({ data, selected }: { data: OperatorData; selected: boolean }) {
   return (
-    <div className="px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-input-border)] rounded-lg text-sm">
-      <Handle type="target" position={Position.Left} />
-      <div className="font-medium">{data.label}</div>
-    </div>
+    <Operator data={data} selected={selected} tint="bg-accent" hasInput hasOutput />
+  );
+}
+
+function OutputNode({ data }: { data: OperatorData }) {
+  return (
+    <Operator data={data} tint="bg-white/70" hasInput hasOutput={false} />
   );
 }
 
@@ -61,6 +128,11 @@ const nodeTypes = {
   source: SourceNode,
   effect: EffectNode,
   output: OutputNode,
+};
+
+/** Thin, light wires — TD network look. */
+const EDGE_OPTIONS = {
+  style: { stroke: "rgba(255,255,255,0.35)", strokeWidth: 1 },
 };
 
 /**
@@ -73,29 +145,48 @@ export function NodeCanvas({
   onGraphChange,
   selectedNodeId,
   onNodeSelect,
+  thumbnails,
+  ratio,
+  sourceRatio,
 }: NodeCanvasProps) {
   const t = useT();
   const [showAddMenu, setShowAddMenu] = useState(false);
 
-  // Convert graph to ReactFlow format
-  const nodes: Node[] = useMemo(
-    () =>
-      graph.nodes.map((n) => ({
-        id: n.id,
-        type: n.kind,
-        position: { x: n.x, y: n.y },
-        data: {
+  // ReactFlow owns the node objects (applyNodeChanges keeps its internal
+  // measurements alive — rebuilding fresh objects per change left nodes
+  // unmeasured and they vanished mid-drag). The graph stays the source of
+  // truth for topology; positions flow back on drag end.
+  const [nodes, setNodes] = useState<Node[]>([]);
+  useEffect(() => {
+    setNodes((prev) => {
+      const byId = new Map(prev.map((n) => [n.id, n]));
+      return graph.nodes.map((n) => {
+        const data = {
           label:
             n.kind === "source"
               ? "Source"
               : n.kind === "output"
               ? "Output"
               : EFFECTS[n.effectId ?? ""]?.label ?? "?",
-        },
-        selected: n.id === selectedNodeId,
-      })),
-    [graph.nodes, selectedNodeId]
-  );
+          thumb: thumbnails?.[n.id],
+          ratio: n.kind === "output" ? ratio : sourceRatio ?? ratio,
+        };
+        const existing = byId.get(n.id);
+        // Keep the live object (position + measured dims) while dragging;
+        // only data/selection may change from outside.
+        if (existing) {
+          return { ...existing, data, selected: n.id === selectedNodeId };
+        }
+        return {
+          id: n.id,
+          type: n.kind,
+          position: { x: n.x, y: n.y },
+          data,
+          selected: n.id === selectedNodeId,
+        };
+      });
+    });
+  }, [graph.nodes, selectedNodeId, thumbnails, ratio, sourceRatio]);
 
   const edges: Edge[] = useMemo(
     () =>
@@ -149,30 +240,26 @@ export function NodeCanvas({
   );
 
   const handleNodesChange = useCallback(
-    (changes: unknown[]) => {
-      // Handle node position changes and selection
+    (changes: NodeChange[]) => {
+      // Let ReactFlow apply everything (dimensions, drag positions,
+      // selection) to its own node objects...
+      setNodes((nds) => applyNodeChanges(changes, nds));
+      // ...and mirror the graph-relevant parts back: final positions
+      // (drag end only — persisting every drag frame thrashed autosave)
+      // and selection.
       const newNodes = [...graph.nodes];
       let changed = false;
-
-      for (const change of changes as Array<{
-        type: string;
-        id: string;
-        position?: { x: number; y: number };
-        selected?: boolean;
-      }>) {
-        if (change.type === "position" && change.position) {
+      for (const change of changes) {
+        if (change.type === "position" && change.position && !change.dragging) {
           const idx = newNodes.findIndex((n) => n.id === change.id);
           if (idx !== -1) {
             newNodes[idx] = { ...newNodes[idx], ...change.position };
             changed = true;
           }
-        } else if (change.type === "select") {
-          if (change.selected) {
-            onNodeSelect(change.id);
-          }
+        } else if (change.type === "select" && change.selected) {
+          onNodeSelect(change.id);
         }
       }
-
       if (changed) {
         onGraphChange({ ...graph, nodes: newNodes });
       }
@@ -236,11 +323,12 @@ export function NodeCanvas({
   }, [handleKeyDown]);
 
   return (
-    <div className="h-full border border-[var(--color-input-border)] rounded-lg relative bg-[var(--color-surface)]">
+    <div className="h-full relative [background-image:radial-gradient(rgba(255,255,255,0.09)_1px,transparent_1px)] [background-size:18px_18px]">
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        defaultEdgeOptions={EDGE_OPTIONS}
         onConnect={handleConnect}
         onNodesChange={handleNodesChange}
         fitView
