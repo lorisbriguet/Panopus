@@ -150,6 +150,18 @@ engines pick them up automatically.
 - **P4 — Confidence**: proof render (+ diff), variation strip, A/B
   snapshots, 1:1 zoom/pan.
 
+## Parked: single-renderer collapse (P5+)
+
+The dual-renderer architecture (WebGL2 preview / wgpu export) carries a
+recurring tax: every engine-semantic change is implemented twice and
+guarded by the parity harness. If mirror maintenance ever starts
+dominating (each phase pays it — P1 paid it for resolution propagation,
+P2 will for composite/transform), the escape hatch is NOT a rewrite:
+collapse to ONE renderer by running the wgpu engine headless for the
+preview too, streaming frames to the webview (IPC or shared texture).
+Kills the parity problem outright; costs preview latency work. Revisit
+only when the tax demonstrably outweighs the harness.
+
 ## Open questions (park until their phase)
 
 - Text raster cache location & invalidation policy (P3).
