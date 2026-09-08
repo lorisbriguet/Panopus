@@ -352,6 +352,42 @@ fn run_export(
     }
 }
 
+/// Store a text node's webview-rendered raster (D3). One file per
+/// node, overwritten on change; the caller records the returned path
+/// on the graph node.
+pub fn save_raster_in(
+    dir: &Path,
+    project_id: i64,
+    node_id: &str,
+    bytes: &[u8],
+) -> Result<PathBuf, String> {
+    let safe: String = node_id
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '-' })
+        .collect();
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let path = dir.join(format!("{project_id}-{safe}.png"));
+    std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(path)
+}
+
+#[tauri::command]
+pub fn save_finish_raster(
+    app: tauri::AppHandle,
+    project_id: i64,
+    node_id: String,
+    bytes: Vec<u8>,
+) -> Result<String, String> {
+    use tauri::Manager;
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app data dir: {e}"))?
+        .join("finish-rasters");
+    let path = save_raster_in(&dir, project_id, &node_id, &bytes)?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
 #[tauri::command]
 pub async fn export_finish(
     app: tauri::AppHandle,

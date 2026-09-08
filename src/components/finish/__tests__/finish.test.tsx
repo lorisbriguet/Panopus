@@ -6,6 +6,7 @@ import { FinishTab } from "../FinishTab";
 
 vi.mock("../../../hooks/useProjects", () => ({
   useSaveProjectGraph: () => ({ mutate: vi.fn(), isPending: false }),
+  useProjectFontFamilies: () => ({ data: ["Alpha", "Beta"], isLoading: false }),
 }));
 
 const recipeCreateMutate = vi.fn();
@@ -201,6 +202,34 @@ describe("NodeCanvas", () => {
 });
 
 describe("ParamsPanel", () => {
+  it("renders the Text panel with content, font list and placement (D3)", () => {
+    const node: GraphNode = {
+      id: "t",
+      kind: "text",
+      params: { content: "PANOPUS", font: "Alpha", size: 0.2 },
+      x: 0,
+      y: 0,
+    };
+    const onParamsChange = vi.fn();
+    render(
+      <ParamsPanel
+        node={node}
+        onParamsChange={onParamsChange}
+        textFonts={["Alpha", "Beta"]}
+      />
+    );
+    expect(screen.getByLabelText("content")).toHaveValue("PANOPUS");
+    expect(screen.getByRole("option", { name: "Beta" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("content"), {
+      target: { value: "NEW" },
+    });
+    expect(onParamsChange).toHaveBeenCalledWith(
+      expect.objectContaining({ content: "NEW", font: "Alpha" })
+    );
+    expect(screen.getByLabelText("size")).toBeInTheDocument();
+  });
+
+
   it("renders the Source panel with artwork picker for source nodes", () => {
     const node: GraphNode = {
       id: "src",

@@ -314,6 +314,24 @@ export function NodeCanvas({
     setShowAddMenu(false);
   }, [graph, onGraphChange]);
 
+  const handleAddText = useCallback(() => {
+    const nodeId = `text_${Date.now()}`;
+    onGraphChange({
+      ...graph,
+      nodes: [
+        ...graph.nodes,
+        {
+          id: nodeId,
+          kind: "text",
+          params: { content: "Panopus", font: "", size: 0.15, fill: "#f2ede4" },
+          x: 380,
+          y: 300,
+        },
+      ],
+    });
+    setShowAddMenu(false);
+  }, [graph, onGraphChange]);
+
   const handleAddScale = useCallback(() => {
     const nodeId = `scale_${Date.now()}`;
     onGraphChange({
@@ -387,6 +405,7 @@ export function NodeCanvas({
             node &&
             (node.kind === "effect" ||
               node.kind === "scale" ||
+              node.kind === "text" ||
               (node.kind === "output" && outputNodes(graph).length > 1) ||
               (node.kind === "source" && sourceNodes(graph).length > 1));
           if (deletable) {
@@ -451,6 +470,13 @@ export function NodeCanvas({
                 className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
               >
                 Source
+              </button>
+              <button
+                type="button"
+                onClick={handleAddText}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
+              >
+                Text
               </button>
               <button
                 type="button"

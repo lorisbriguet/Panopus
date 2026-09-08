@@ -604,6 +604,7 @@ pub fn run() {
             read_artwork_bytes,
             activation::set_fonts_active,
             render::export::export_finish,
+            render::export::save_finish_raster,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

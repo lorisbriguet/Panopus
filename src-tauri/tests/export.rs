@@ -161,3 +161,21 @@ fn assemble_sources_errors_on_extra_without_path() {
         .unwrap_err();
     assert!(err.contains("srcB"), "{err}");
 }
+
+#[test]
+fn save_raster_in_writes_and_returns_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let bytes = {
+        // any bytes will do - the fn stores, it doesn't decode
+        vec![137u8, 80, 78, 71, 0, 1, 2, 3]
+    };
+    let path =
+        panopus_lib::render::export::save_raster_in(dir.path(), 7, "text_123", &bytes).unwrap();
+    assert!(path.ends_with("7-text_123.png"), "{path:?}");
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    // overwrite is fine
+    let again =
+        panopus_lib::render::export::save_raster_in(dir.path(), 7, "text_123", &[9]).unwrap();
+    assert_eq!(again, path);
+    assert_eq!(std::fs::read(&path).unwrap(), vec![9]);
+}

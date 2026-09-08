@@ -252,6 +252,9 @@ const ui = {
     cycle_rejected: "Cannot connect: would create a cycle",
     finish_no_artwork: "Loading artwork...",
 
+    // Text operator (Finish 2 D3)
+    font_inactive: "Font not active — activate it for a faithful raster",
+
     // Recipes (Finish 2 D5)
     recipes: "Recipes",
     recipe_save: "Save as recipe...",
@@ -522,6 +525,9 @@ const ui = {
     finish_params_empty: "Aucun parametre",
     cycle_rejected: "Impossible de connecter : creerait un cycle",
     finish_no_artwork: "Chargement de la maquette...",
+
+    // Text operator (Finish 2 D3)
+    font_inactive: "Police non active — activez-la pour un rendu fidele",
 
     // Recipes (Finish 2 D5)
     recipes: "Recettes",

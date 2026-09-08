@@ -10,6 +10,8 @@ interface PreviewCanvasProps {
   artworkBitmap: ImageBitmap | null;
   /** Every source node's bitmap, keyed by node id (D7 multi-source). */
   sourceBitmaps?: ReadonlyMap<string, ImageBitmap>;
+  /** Text nodes' raster bitmaps, keyed by node id (D3). */
+  rasterBitmaps?: Record<string, ImageBitmap>;
   artworkPath: string;
   /** Output aspect (w/h) from the PREVIEW output node's settings. */
   ratio?: number;
@@ -28,6 +30,7 @@ export function PreviewCanvas({
   graph,
   artworkBitmap,
   sourceBitmaps,
+  rasterBitmaps,
   artworkPath,
   ratio = F4_RATIO,
   previewOutputId = null,
@@ -98,6 +101,18 @@ export function PreviewCanvas({
     }
     if (uploaded) setNeedsRender(true);
   }, [artworkBitmap, sourceBitmaps, graph.nodes]);
+
+  // Upload text rasters (D3).
+  useEffect(() => {
+    const executor = executorRef.current;
+    if (!executor || !rasterBitmaps) return;
+    let uploaded = false;
+    for (const [nodeId, bitmap] of Object.entries(rasterBitmaps)) {
+      executor.setNodeRaster(nodeId, bitmap);
+      uploaded = true;
+    }
+    if (uploaded) setNeedsRender(true);
+  }, [rasterBitmaps]);
 
   // Trigger re-render on graph/param changes
   useEffect(() => {

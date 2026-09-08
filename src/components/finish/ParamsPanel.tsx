@@ -55,6 +55,8 @@ interface ParamsPanelProps {
   /** Source operator: the SELECTED source node's artwork + picker
    *  (primary = project artwork; extras = the node's sourcePath). */
   sourceInfo?: SourceInfo;
+  /** Text operator: the project's font families (D3). */
+  textFonts?: string[];
 }
 
 export interface SourceInfo {
@@ -219,6 +221,102 @@ function ScaleParams({
   );
 }
 
+const TEXT_SCRUBS: { name: string; min: number; max: number; step: number; def: number }[] = [
+  { name: "size", min: 0.01, max: 1, step: 0.005, def: 0.15 },
+  { name: "x", min: -1, max: 1, step: 0.005, def: 0 },
+  { name: "y", min: -1, max: 1, step: 0.005, def: 0 },
+  { name: "rotate", min: -180, max: 180, step: 0.5, def: 0 },
+  { name: "opacity", min: 0, max: 1, step: 0.01, def: 1 },
+];
+
+/** Text operator (D3): content + project font + placement. */
+function TextParams({
+  node,
+  onParamsChange,
+  textFonts,
+}: {
+  node: GraphNode;
+  onParamsChange: ParamsPanelProps["onParamsChange"];
+  textFonts: string[];
+}) {
+  const t = useT();
+  const p = node.params ?? {};
+  const content = typeof p.content === "string" ? p.content : "";
+  const font = typeof p.font === "string" ? p.font : "";
+  const fill = typeof p.fill === "string" ? p.fill : "#f2ede4";
+  const set = (patch: Record<string, number | string | boolean>) =>
+    onParamsChange({ ...p, ...patch });
+  const fontMissing =
+    font !== "" &&
+    typeof document !== "undefined" &&
+    "fonts" in document &&
+    !document.fonts.check(`12px "${font}"`);
+
+  return (
+    <div className="h-full border border-white/10 rounded-[3px] bg-black/50 backdrop-blur-[3px] overflow-y-auto font-mono">
+      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
+        <span className="inline-block w-1.5 h-1.5 rounded-[1px] bg-accent" />
+        <h3 className="text-[10px] tracking-[0.08em] uppercase text-[var(--color-text-secondary)]">
+          Text
+        </h3>
+      </div>
+      <div className="divide-y divide-white/[0.06]">
+        <div className="px-3 py-2">
+          <textarea
+            value={content}
+            aria-label="content"
+            rows={3}
+            onChange={(e) => set({ content: e.target.value })}
+            className="w-full bg-white/[0.06] border border-white/10 rounded-[2px] px-2 py-1 text-[11px] text-[var(--color-text-secondary)] outline-none focus:border-accent resize-y"
+          />
+        </div>
+        <div className={ROW}>
+          <label className={NAME}>font</label>
+          <Select value={font} onChange={(e) => set({ font: e.target.value })}>
+            <option value="">system</option>
+            {textFonts.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+            {font !== "" && !textFonts.includes(font) && (
+              <option value={font}>{font}</option>
+            )}
+          </Select>
+        </div>
+        {fontMissing && (
+          <div className={ROW}>
+            <p className="text-xs text-[var(--color-danger-text)]">{t.font_inactive}</p>
+          </div>
+        )}
+        <div className={ROW}>
+          <label className={NAME}>fill</label>
+          <input
+            type="color"
+            value={fill}
+            onChange={(e) => set({ fill: e.target.value })}
+            className="flex-1 h-7 rounded-[3px] border border-white/15 bg-[var(--color-input-bg)]"
+          />
+        </div>
+        {TEXT_SCRUBS.map((s) => {
+          const value = typeof p[s.name] === "number" ? (p[s.name] as number) : s.def;
+          return (
+            <div key={s.name} className={ROW}>
+              <label className={NAME}>{s.name}</label>
+              <ScrubBar
+                p={{ name: s.name, type: "float", min: s.min, max: s.max, step: s.step, default: s.def }}
+                value={value}
+                onChange={(v) => set({ [s.name]: v })}
+              />
+              <div className={READOUT}>{value}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /** Output operator settings: size (mm or px), density, color space. */
 function OutputParams({
   node,
@@ -364,6 +462,7 @@ export function ParamsPanel({
   compileError,
   onExport,
   sourceInfo,
+  textFonts,
 }: ParamsPanelProps) {
   const t = useT();
   const spec = node.effectId ? EFFECTS[node.effectId] : undefined;
@@ -378,6 +477,16 @@ export function ParamsPanel({
 
   if (node.kind === "scale") {
     return <ScaleParams node={node} onParamsChange={onParamsChange} />;
+  }
+
+  if (node.kind === "text") {
+    return (
+      <TextParams
+        node={node}
+        onParamsChange={onParamsChange}
+        textFonts={textFonts ?? []}
+      />
+    );
   }
 
   if (node.kind === "output") {

@@ -159,3 +159,19 @@ export function useSaveProjectGraph() {
       qc.invalidateQueries({ queryKey: ["projects", id] }),
   });
 }
+
+/** Distinct font families in the project — the Text operator's font
+ *  list (D3). */
+export function useProjectFontFamilies(projectId: number) {
+  return useQuery({
+    queryKey: ["projects", projectId, "font-families"],
+    queryFn: async (): Promise<string[]> => {
+      const db = await getDb();
+      const rows = await db.select<{ family: string }[]>(
+        "SELECT DISTINCT f.family FROM fonts f JOIN project_fonts pf ON pf.font_id = f.id WHERE pf.project_id = $1 ORDER BY f.family",
+        [projectId]
+      );
+      return rows.map((r) => r.family);
+    },
+  });
+}

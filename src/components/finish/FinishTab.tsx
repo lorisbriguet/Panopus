@@ -5,7 +5,8 @@ import { NodeCanvas } from "./NodeCanvas";
 import { ParamsPanel } from "./ParamsPanel";
 import { PreviewCanvas } from "./PreviewCanvas";
 import { ExportDialog } from "./ExportDialog";
-import { useSaveProjectGraph } from "../../hooks/useProjects";
+import { useProjectFontFamilies, useSaveProjectGraph } from "../../hooks/useProjects";
+import { rasterKey, rasterizeText } from "../../lib/textRaster";
 import { useCreateRecipe, useRecipes } from "../../hooks/useRecipes";
 import { Modal } from "../ui/Modal";
 import { Input } from "../ui/Input";
@@ -56,6 +57,8 @@ export function FinishTab({
   /** Extra source nodes' bitmaps + per-node load errors (D7). */
   const [extraBitmaps, setExtraBitmaps] = useState<Record<string, ImageBitmap>>({});
   const [sourceErrors, setSourceErrors] = useState<Record<string, string>>({});
+  /** Text nodes' raster bitmaps (D3), fed to the executor as uTex1. */
+  const [textBitmaps, setTextBitmaps] = useState<Record<string, ImageBitmap>>({});
   const [compileErrors, setCompileErrors] = useState<Record<string, string | null>>({});
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [exportOpen, setExportOpen] = useState(false);
@@ -176,6 +179,72 @@ export function FinishTab({
     [graph, commitGraph]
   );
 
+  // Text rasters (D3): re-raster when content/font change (rasterKey
+  // mismatch); load the cached file when only the bitmap is missing.
+  // Raster refs are patched QUIETLY (no undo entry) — undo restoring an
+  // old key simply re-triggers this effect.
+  const { data: textFonts } = useProjectFontFamilies(projectId);
+  const textKeySig = graph.nodes
+    .filter((n) => n.kind === "text")
+    .map((n) => `${n.id}:${n.params?.content ?? ""}:${n.params?.font ?? ""}:${n.rasterKey ?? ""}`)
+    .join("|");
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      for (const n of graph.nodes) {
+        if (n.kind !== "text") continue;
+        const content = String(n.params?.content ?? "");
+        const font = String(n.params?.font ?? "");
+        const key = rasterKey(content, font);
+        if (key === n.rasterKey && n.rasterPath) {
+          if (!textBitmaps[n.id]) {
+            try {
+              const bytes = await invoke<number[]>("read_artwork_bytes", {
+                path: n.rasterPath,
+              });
+              if (cancelled) return;
+              const bmp = await createImageBitmap(new Blob([new Uint8Array(bytes)]));
+              setTextBitmaps((prev) => ({ ...prev, [n.id]: bmp }));
+            } catch (e) {
+              console.warn("[finish] text raster load failed:", e);
+            }
+          }
+          continue;
+        }
+        const raster = await rasterizeText(content === "" ? " " : content, font);
+        if (!raster || cancelled) continue;
+        const path = await invoke<string>("save_finish_raster", {
+          projectId,
+          nodeId: n.id,
+          bytes: Array.from(raster.bytes),
+        });
+        if (cancelled) return;
+        if (typeof path !== "string") continue; // test stub environment
+        const bmp = await createImageBitmap(
+          new Blob([new Uint8Array(raster.bytes)])
+        );
+        setTextBitmaps((prev) => ({ ...prev, [n.id]: bmp }));
+        setGraph((g) => ({
+          ...g,
+          nodes: g.nodes.map((m) =>
+            m.id === n.id
+              ? {
+                  ...m,
+                  rasterPath: path,
+                  rasterKey: key,
+                  params: { ...m.params, rasterAspect: raster.aspect },
+                }
+              : m
+          ),
+        }));
+      }
+    })().catch((e) => console.warn("[finish] text raster failed:", e));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- textKeySig covers the text nodes
+  }, [textKeySig, projectId]);
+
   // The PREVIEW output (selected output node, else the first) drives
   // the page aspect of the big canvas; the artwork itself stays
   // untouched and the executor places it at the output nodes.
@@ -262,6 +331,7 @@ export function FinishTab({
           graph={graph}
           artworkBitmap={artworkFull}
           sourceBitmaps={sourceBitmaps}
+          rasterBitmaps={textBitmaps}
           artworkPath={artworkPath ?? ""}
           ratio={ratio}
           previewOutputId={previewOutputId}
@@ -344,6 +414,7 @@ export function FinishTab({
             }}
             compileError={compileErrors[selectedNode.id] ?? null}
             onExport={() => setExportOpen(true)}
+            textFonts={textFonts ?? []}
             sourceInfo={
               selectedNode.kind === "source"
                 ? sourceNodes(graph)[0]?.id === selectedNode.id
