@@ -87,7 +87,9 @@ shaders/<id>/
   *.png           # optional texture assets referenced by passes
 ```
 
-The same folder feeds both renderers: the WebGL2 preview in the webview and the wgpu/naga export engine in Rust. `npm run parity` (see RELEASING.md) diffs the two against committed goldens; shaders must stay bit-stable across compilers (integer hashes, no `fract(sin(...))`).
+The same folder feeds both renderers: the WebGL2 preview in the webview and the wgpu/naga export engine in Rust. `npm run parity` (see RELEASING.md) renders the graph cases in `test/parity/cases/` through both and diffs against committed goldens; shaders must stay bit-stable across compilers (integer hashes, no `fract(sin(...))`).
+
+**Operators beyond effects** — the graph also has built-in operators: **Scale** (resolution is a chain property: de-res before an effect, up-res after, smooth or pixel resampling) and multiple named **Output** operators (each a deliverable with its own size/unit/dpi/color/fit; export writes every checked output in one run). Graph editing has local undo (Cmd+Z / Cmd+Shift+Z).
 
 ## Project Structure
 

@@ -1,0 +1,17 @@
+{
+  "name": "two-outputs",
+  "graph": {
+    "v": 1,
+    "nodes": [
+      { "id": "src", "kind": "source", "x": 0, "y": 0 },
+      { "id": "e", "kind": "effect", "effectId": "dither", "params": {}, "x": 0, "y": 0 },
+      { "id": "a", "kind": "output", "params": { "name": "full", "unit": "px", "width": 512, "height": 731, "dpi": 300 }, "x": 0, "y": 0 },
+      { "id": "b", "kind": "output", "params": { "name": "tall", "unit": "px", "width": 512, "height": 800, "dpi": 300, "fit": "fit" }, "x": 0, "y": 0 }
+    ],
+    "wires": [
+      { "from": "src", "to": "e", "toIn": 0 },
+      { "from": "e", "to": "a", "toIn": 0 },
+      { "from": "e", "to": "b", "toIn": 0 }
+    ]
+  }
+}

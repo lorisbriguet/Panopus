@@ -1,16 +1,18 @@
-//! Golden writer for the preview/export parity harness (Task 15).
+//! Golden writer for the preview/export parity harness (Task 15 / P1-T4).
 //! Ignored by default — run it to (re)generate the committed goldens:
 //!
 //!     cargo test --test parity_goldens -- --ignored
 //!
-//! Renders each effect (default params, seed 0) over the shared source
-//! image at 512x731 through the wgpu engine into
-//! test/parity/goldens/<id>.png. `npm run parity` renders the same
-//! graphs through the WebGL2 preview executor and diffs against these.
+//! Renders every graph CASE in test/parity/cases/*.json through the wgpu
+//! engine: one golden per output node — `<case>.png` for single-output
+//! cases, `<case>-<outputname>.png` otherwise. `npm run parity` renders
+//! the same cases through the WebGL2 executor and diffs against these.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use panopus_lib::render::engine::{fit_mode_for, place_fit};
+use panopus_lib::render::export::output_settings_for;
 use panopus_lib::render::FinishGraphRs;
 
 const W: u32 = 512;
@@ -46,6 +48,12 @@ fn ensure_source(path: &Path) -> image::RgbaImage {
     img
 }
 
+#[derive(serde::Deserialize)]
+struct Case {
+    name: String,
+    graph: FinishGraphRs,
+}
+
 #[test]
 #[ignore = "writes test/parity/goldens; pre-release, see RELEASING.md"]
 fn write_goldens() {
@@ -57,28 +65,52 @@ fn write_goldens() {
     let goldens = dir.join("goldens");
     std::fs::create_dir_all(&goldens).unwrap();
 
-    for id in ["dither", "vhs", "jpeg", "mix"] {
-        let graph: FinishGraphRs = serde_json::from_str(&format!(
-            r#"{{"v":1,"nodes":[
-                {{"id":"src","kind":"source","x":0,"y":0}},
-                {{"id":"e","kind":"effect","effectId":"{id}","x":0,"y":0}},
-                {{"id":"out","kind":"output","x":0,"y":0}}],
-            "wires":[
-                {{"from":"src","to":"e","toIn":0}},
-                {{"from":"e","to":"out","toIn":0}}]}}"#
-        ))
-        .unwrap();
+    let mut case_files: Vec<PathBuf> = std::fs::read_dir(dir.join("cases"))
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|e| e == "json"))
+        .collect();
+    case_files.sort();
+    assert!(!case_files.is_empty(), "no parity cases found");
+
+    for file in case_files {
+        let case: Case =
+            serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
         let mut sources = HashMap::new();
-        sources.insert("src".to_string(), source.clone());
-        let out = engine
-            .render_graph(&graph, &sources, &effects, W, H)
-            .unwrap_or_else(|e| panic!("{id}: {e}"));
-        assert!(
-            out.pixels().any(|p| p[0] > 8 || p[1] > 8 || p[2] > 8),
-            "{id} golden looks black — eyeball before committing"
-        );
-        let path = goldens.join(format!("{id}.png"));
-        out.save(&path).unwrap();
-        println!("golden written: {}", path.display());
+        for n in case.graph.nodes.iter().filter(|n| n.kind == "source") {
+            sources.insert(n.id.clone(), source.clone());
+        }
+        let tails = engine
+            .render_chain(&case.graph, &sources, &effects)
+            .unwrap_or_else(|e| panic!("{}: {e}", case.name));
+        let outputs: Vec<_> = case
+            .graph
+            .nodes
+            .iter()
+            .filter(|n| n.kind == "output")
+            .collect();
+        for out in &outputs {
+            let s = output_settings_for(&case.graph, &out.id);
+            let page = place_fit(
+                &tails[&out.id],
+                s.px.0,
+                s.px.1,
+                fit_mode_for(&case.graph, &out.id),
+            );
+            assert!(
+                page.pixels().any(|p| p[0] > 8 || p[1] > 8 || p[2] > 8),
+                "{}/{} golden looks black — eyeball before committing",
+                case.name,
+                s.name
+            );
+            let file_name = if outputs.len() == 1 {
+                format!("{}.png", case.name)
+            } else {
+                format!("{}-{}.png", case.name, s.name)
+            };
+            let path = goldens.join(file_name);
+            page.save(&path).unwrap();
+            println!("golden written: {}", path.display());
+        }
     }
 }

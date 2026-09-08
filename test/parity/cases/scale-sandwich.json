@@ -1,0 +1,19 @@
+{
+  "name": "scale-sandwich",
+  "graph": {
+    "v": 1,
+    "nodes": [
+      { "id": "src", "kind": "source", "x": 0, "y": 0 },
+      { "id": "down", "kind": "scale", "params": { "factor": 0.25, "filter": "smooth" }, "x": 0, "y": 0 },
+      { "id": "e", "kind": "effect", "effectId": "dither", "params": {}, "x": 0, "y": 0 },
+      { "id": "up", "kind": "scale", "params": { "factor": 4, "filter": "pixel" }, "x": 0, "y": 0 },
+      { "id": "out", "kind": "output", "params": { "unit": "px", "width": 512, "height": 732, "dpi": 300 }, "x": 0, "y": 0 }
+    ],
+    "wires": [
+      { "from": "src", "to": "down", "toIn": 0 },
+      { "from": "down", "to": "e", "toIn": 0 },
+      { "from": "e", "to": "up", "toIn": 0 },
+      { "from": "up", "to": "out", "toIn": 0 }
+    ]
+  }
+}

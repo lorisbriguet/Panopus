@@ -1,27 +1,29 @@
-// Parity harness page: renders each effect through the REAL WebGL2
+// Parity harness page: renders graph CASES through the REAL WebGL2
 // preview executor (same modules the app bundles) and diffs the pixels
-// against the wgpu goldens. Driven by run.mjs via window.runParity.
+// against the wgpu goldens. Driven by run.mjs via window.runParityCase.
 
 import { GlExecutor } from "../../src/lib/glExecutor";
 import { EFFECTS } from "../../src/lib/effects";
+import { outputPx, outputSettingsFrom } from "../../src/lib/finishGraph";
 import type { FinishGraph } from "../../src/lib/finishGraph";
 
-const W = 512;
-const H = 731;
-
 export interface ParityResult {
-  effect: string;
   total: number;
   bad: number;
   max: number;
   error?: string;
-  /** PNG data URL of the JS render, so run.mjs can dump failures. */
+  /** PNG data URL (amplified diff on failure), so run.mjs can dump it. */
   dump?: string;
 }
 
 declare global {
   interface Window {
-    runParity: (effectId: string, tol: number) => Promise<ParityResult>;
+    runParityCase: (
+      graph: FinishGraph,
+      outputId: string,
+      goldenName: string,
+      tol: number
+    ) => Promise<ParityResult>;
     parityReady: boolean;
   }
 }
@@ -43,63 +45,69 @@ async function loadPixels(url: string): Promise<ImageData> {
   return ctx.getImageData(0, 0, c.width, c.height);
 }
 
-async function renderEffect(
-  effectId: string
+async function renderCase(
+  graph: FinishGraph,
+  outputId: string
 ): Promise<{ data: ImageData; dump: string }> {
+  const out = graph.nodes.find((n) => n.id === outputId);
+  const px = outputPx(outputSettingsFrom(out?.params));
   const canvas = document.createElement("canvas");
   document.body.appendChild(canvas);
   const ex = new GlExecutor(canvas);
-  ex.setSource("src", await createImageBitmap(await loadImage("../source.png")));
-  const graph: FinishGraph = {
-    v: 1,
-    nodes: [
-      { id: "src", kind: "source", x: 0, y: 0 },
-      { id: "e", kind: "effect", effectId, params: {}, x: 0, y: 0 },
-      { id: "out", kind: "output", x: 0, y: 0 },
-    ],
-    wires: [
-      { from: "src", to: "e", toIn: 0 },
-      { from: "e", to: "out", toIn: 0 },
-    ],
-  };
+  const bitmap = await createImageBitmap(await loadImage("../source.png"));
+  for (const n of graph.nodes) {
+    if (n.kind === "source") ex.setSource(n.id, bitmap);
+  }
+  ex.previewOutput = outputId;
   // Effect texture assets load async behind a 1x1 placeholder; the first
   // render kicks the fetch off, onAssetLoaded cues the real one.
-  const hasAssets = EFFECTS[effectId].passes.some(
-    (p) => (p.textures ?? []).length > 0
+  const hasAssets = graph.nodes.some(
+    (n) =>
+      n.kind === "effect" &&
+      EFFECTS[n.effectId ?? ""]?.passes.some((p) => (p.textures ?? []).length > 0)
   );
   if (hasAssets) {
     const loaded = new Promise<void>((resolve) => {
       ex.onAssetLoaded = () => resolve();
     });
-    ex.render(graph, W, H);
+    ex.render(graph, px.w, px.h);
     await loaded;
   }
-  ex.render(graph, W, H);
-  const err = ex.getCompileError("e");
+  ex.render(graph, px.w, px.h);
+  const errs = graph.nodes
+    .map((n) => ex.getCompileError(n.id))
+    .filter((e): e is string => e !== null);
   // Same-task readback (drawing buffer still intact). Alpha is 255
   // everywhere, so the 2D canvas premultiply roundtrip is lossless.
   const c = document.createElement("canvas");
-  c.width = W;
-  c.height = H;
+  c.width = px.w;
+  c.height = px.h;
   const ctx = c.getContext("2d")!;
   ctx.drawImage(canvas, 0, 0);
-  const data = ctx.getImageData(0, 0, W, H);
+  const data = ctx.getImageData(0, 0, px.w, px.h);
   const dump = c.toDataURL("image/png");
   ex.dispose();
-  if (err) throw new Error(err);
+  if (errs.length > 0) throw new Error(errs[0]);
   return { data, dump };
 }
 
-window.runParity = async (effectId: string, tol: number): Promise<ParityResult> => {
+window.runParityCase = async (
+  graph: FinishGraph,
+  outputId: string,
+  goldenName: string,
+  tol: number
+): Promise<ParityResult> => {
   try {
-    const { data: got, dump } = await renderEffect(effectId);
-    const want = await loadPixels(`../goldens/${effectId}.png`);
-    if (want.width !== W || want.height !== H) {
-      throw new Error(`golden is ${want.width}x${want.height}, expected ${W}x${H}`);
+    const { data: got, dump } = await renderCase(graph, outputId);
+    const want = await loadPixels(`../goldens/${goldenName}`);
+    if (want.width !== got.width || want.height !== got.height) {
+      throw new Error(
+        `golden is ${want.width}x${want.height}, render is ${got.width}x${got.height}`
+      );
     }
     let bad = 0;
     let max = 0;
-    const diff = new ImageData(W, H);
+    const diff = new ImageData(got.width, got.height);
     for (let i = 0; i < got.data.length; i += 4) {
       let pixelBad = false;
       let pixelMax = 0;
@@ -118,18 +126,17 @@ window.runParity = async (effectId: string, tol: number): Promise<ParityResult> 
       diff.data[i + 3] = 255;
     }
     const dc = document.createElement("canvas");
-    dc.width = W;
-    dc.height = H;
+    dc.width = got.width;
+    dc.height = got.height;
     dc.getContext("2d")!.putImageData(diff, 0, 0);
     return {
-      effect: effectId,
-      total: W * H,
+      total: got.width * got.height,
       bad,
       max,
       dump: bad > 0 ? dc.toDataURL("image/png") : dump,
     };
   } catch (e) {
-    return { effect: effectId, total: 0, bad: 0, max: 0, error: String(e) };
+    return { total: 0, bad: 0, max: 0, error: String(e) };
   }
 };
 window.parityReady = true;
