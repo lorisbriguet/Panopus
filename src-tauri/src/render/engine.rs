@@ -858,6 +858,9 @@ impl RenderEngine {
         let resolutions = super::node_resolutions(graph, &source_dims, CAP as u32);
         let res_of = |id: &str| resolutions.get(id).copied().unwrap_or((8, 8));
         let black = self.upload_rgba(&RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 255])), "black");
+        // Unwired effect inputs bind TRANSPARENT black so composite-over
+        // of an absent layer is a no-op (mirrors glExecutor's `clear`).
+        let clear = self.upload_rgba(&RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 0])), "clear");
 
         // Node output textures (kept alive until their consumers ran).
         let mut node_out: HashMap<String, wgpu::Texture> = HashMap::new();
@@ -1022,7 +1025,7 @@ impl RenderEngine {
                     // Resampling blit: input -> a pool target at this
                     // node's resolution, linear or nearest per filter.
                     let (nw, nh) = res_of(id);
-                    let input = input_tex(graph, &node_out, id, 0, &black);
+                    let input = input_tex(graph, &node_out, id, 0, &clear);
                     let nearest = node
                         .params
                         .as_ref()
@@ -1131,7 +1134,7 @@ impl RenderEngine {
                                     .and_then(|s| s.parse::<u32>().ok())
                                 {
                                     if pi == 0 {
-                                        input_tex(graph, &node_out, id, k, &black)
+                                        input_tex(graph, &node_out, id, k, &clear)
                                     } else if k == 0 {
                                         prev.map(|i| pools[&(nw, nh)][i].tex.clone())
                                             .unwrap_or_else(|| black.clone())

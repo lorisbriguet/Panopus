@@ -198,6 +198,9 @@ export class GlExecutor {
   private vao: WebGLVertexArrayObject | null = null;
   private buf: WebGLBuffer | null = null;
   private black: WebGLTexture | null = null;
+  /** Transparent black: what UNWIRED effect inputs bind (composite-over
+   *  of an absent layer is a no-op). Missing SOURCES stay opaque black. */
+  private clear: WebGLTexture | null = null;
   private copyProg: ProgramEntry | null = null;
 
   /** `${effectId}/${passIndex}` -> compiled program or its error. */
@@ -278,6 +281,19 @@ export class GlExecutor {
       gl.RGBA,
       gl.UNSIGNED_BYTE,
       new Uint8Array([0, 0, 0, 255])
+    );
+    this.clear = this.makeTex(1, 1);
+    gl.bindTexture(gl.TEXTURE_2D, this.clear);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      1,
+      1,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      new Uint8Array([0, 0, 0, 0])
     );
   }
 
@@ -376,9 +392,14 @@ export class GlExecutor {
     }
     const outputs = new Map<string, WebGLTexture>();
     const black = this.black!;
-    const inputTex = (id: string, slot: number): WebGLTexture => {
+    const clear = this.clear!;
+    const inputTex = (
+      id: string,
+      slot: number,
+      fallback: WebGLTexture = clear // unwired = transparent (over = no-op)
+    ): WebGLTexture => {
       const w = (incoming.get(id) ?? []).find((x) => x.toIn === slot);
-      return (w && outputs.get(w.from)) || black;
+      return (w && outputs.get(w.from)) || fallback;
     };
 
     for (const id of executionOrder(graph)) {
@@ -389,7 +410,8 @@ export class GlExecutor {
         continue;
       }
       if (node.kind === "output") {
-        const tex = inputTex(id, 0);
+        // Unwired output = opaque black page, not transparent.
+        const tex = inputTex(id, 0, black);
         if (id === previewId) {
           const s = settingsOf(id);
           const t = trueOf(id);
@@ -656,9 +678,11 @@ export class GlExecutor {
     }
     this.thumbTargets.clear();
     if (this.black) gl.deleteTexture(this.black);
+    if (this.clear) gl.deleteTexture(this.clear);
     if (this.vao) gl.deleteVertexArray(this.vao);
     if (this.buf) gl.deleteBuffer(this.buf);
     this.black = null;
+    this.clear = null;
     this.vao = null;
     this.buf = null;
     this.gl = null;

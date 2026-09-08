@@ -96,15 +96,26 @@ describe("effect registry", () => {
     expect(quality?.default).toBe(25);
   });
 
-  test("mix is a 2-input single-pass blend", () => {
+  test("mix is a 2-input single-pass composite (Finish 2 D8)", () => {
     const mixSpec = EFFECTS.mix;
     expect(mixSpec.inputs).toBe(2);
     expect(mixSpec.passes.length).toBe(1);
     const mode = mixSpec.params.find((p) => p.name === "mode");
-    expect(mode?.options).toEqual(["blend", "add", "multiply", "screen"]);
-    expect(mode?.default).toBe("blend");
+    expect(mode?.options).toEqual([
+      "normal",
+      "multiply",
+      "screen",
+      "overlay",
+      "add",
+      "difference",
+      "darken",
+      "lighten",
+    ]);
+    expect(mode?.default).toBe("normal");
+    // amount now means OPACITY of B over A; old stored values keep
+    // their meaning, old "blend" mode falls back to normal (index 0).
     const amount = mixSpec.params.find((p) => p.name === "amount");
-    expect(amount?.default).toBe(0.5);
+    expect(amount?.default).toBe(1);
   });
 
   test("every param name is uniform-name safe", () => {
