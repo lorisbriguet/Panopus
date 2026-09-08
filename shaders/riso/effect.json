@@ -1,0 +1,13 @@
+{
+  "id": "riso",
+  "label": "Riso",
+  "inputs": 1,
+  "passes": [{ "frag": "riso.frag" }],
+  "params": [
+    { "name": "ink", "type": "color", "default": "#ff4fa3" },
+    { "name": "paper", "type": "color", "default": "#f4efe6" },
+    { "name": "threshold", "type": "float", "min": 0, "max": 1, "step": 0.01, "default": 0.55 },
+    { "name": "offset", "type": "float", "min": 0, "max": 20, "step": 0.5, "default": 3 },
+    { "name": "grain", "type": "float", "min": 0, "max": 1, "step": 0.01, "default": 0.35 }
+  ]
+}
