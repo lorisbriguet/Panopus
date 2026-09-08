@@ -14,7 +14,12 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../ui";
 import { EFFECTS } from "../../lib/effects";
-import { wouldCycle } from "../../lib/finishGraph";
+import {
+  outputNodes,
+  outputRatio,
+  outputSettingsFrom,
+  wouldCycle,
+} from "../../lib/finishGraph";
 import type { FinishGraph, GraphNode, GraphWire } from "../../lib/finishGraph";
 import { useT } from "../../i18n/useT";
 import "@xyflow/react/dist/style.css";
@@ -169,7 +174,12 @@ export function NodeCanvas({
               ? "Output"
               : EFFECTS[n.effectId ?? ""]?.label ?? "?",
           thumb: thumbnails?.[n.id],
-          ratio: n.kind === "output" ? ratio : sourceRatio ?? ratio,
+          // Output viewers are shaped by THEIR OWN page settings; chain
+          // viewers by the artwork.
+          ratio:
+            n.kind === "output"
+              ? outputRatio(outputSettingsFrom(n.params))
+              : sourceRatio ?? ratio,
         };
         const existing = byId.get(n.id);
         // Keep the live object (position + measured dims) while dragging;
@@ -267,6 +277,24 @@ export function NodeCanvas({
     [graph, onGraphChange, onNodeSelect]
   );
 
+  const handleAddOutput = useCallback(() => {
+    const nodeId = `output_${Date.now()}`;
+    onGraphChange({
+      ...graph,
+      nodes: [
+        ...graph.nodes,
+        {
+          id: nodeId,
+          kind: "output",
+          params: { name: "output" },
+          x: 480,
+          y: 280,
+        },
+      ],
+    });
+    setShowAddMenu(false);
+  }, [graph, onGraphChange]);
+
   const handleAddEffect = useCallback(
     (effectId: string) => {
       const spec = EFFECTS[effectId];
@@ -299,8 +327,12 @@ export function NodeCanvas({
       if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedNodeId) {
           const node = graph.nodes.find((n) => n.id === selectedNodeId);
-          // Never delete source/output
-          if (node && node.kind === "effect") {
+          // Sources are undeletable; outputs only while another remains.
+          const deletable =
+            node &&
+            (node.kind === "effect" ||
+              (node.kind === "output" && outputNodes(graph).length > 1));
+          if (deletable) {
             onGraphChange({
               ...graph,
               nodes: graph.nodes.filter((n) => n.id !== selectedNodeId),
@@ -353,6 +385,14 @@ export function NodeCanvas({
                   {spec.label}
                 </button>
               ))}
+              <div className="my-1 border-t border-[var(--color-border-divider)]" />
+              <button
+                type="button"
+                onClick={handleAddOutput}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
+              >
+                Output
+              </button>
             </div>
           )}
         </Panel>

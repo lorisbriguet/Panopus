@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use image::RgbaImage;
 use tauri::Emitter;
 
-use super::engine::RenderEngine;
+use super::engine::{fit_mode_for, place_fit, RenderEngine};
 use super::{manifest, shaders_dir, FinishGraphRs};
 
 /// F4 poster at 300dpi (portrait) — the DEFAULT output when the graph's
@@ -23,21 +23,44 @@ pub const F4_MM: (f32, f32) = (895.0, 1280.0);
 /// Output node settings, resolved to concrete render/page numbers.
 /// Mirror of src/lib/finishGraph.ts's outputSettings/outputPx/outputMm —
 /// keep clamps and rounding in lockstep.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct OutputSettingsRs {
     pub px: (u32, u32),
     pub mm: (f32, f32),
     pub dpi: u32,
     /// TIFF/PDF encode DeviceCMYK (naive conversion); PNG stays RGB.
     pub cmyk: bool,
+    /// Deliverable name (raw; path-scrubbed at filename time).
+    pub name: String,
 }
 
+/// First output's settings (single-deliverable callers).
 pub fn output_settings(graph: &FinishGraphRs) -> OutputSettingsRs {
-    let p = graph
+    output_settings_from(
+        graph
+            .nodes
+            .iter()
+            .find(|n| n.kind == "output")
+            .and_then(|n| n.params.as_ref()),
+    )
+}
+
+/// A specific output node's settings; unknown id falls back to the
+/// first output. Mirror of finishGraph.ts's outputSettingsForNode.
+pub fn output_settings_for(graph: &FinishGraphRs, node_id: &str) -> OutputSettingsRs {
+    match graph
         .nodes
         .iter()
-        .find(|n| n.kind == "output")
-        .and_then(|n| n.params.as_ref());
+        .find(|n| n.kind == "output" && n.id == node_id)
+    {
+        Some(n) => output_settings_from(n.params.as_ref()),
+        None => output_settings(graph),
+    }
+}
+
+fn output_settings_from(
+    p: Option<&serde_json::Map<String, serde_json::Value>>,
+) -> OutputSettingsRs {
     let get = |k: &str| p.and_then(|m| m.get(k));
     let num = |k: &str, def: f64, min: f64, max: f64| {
         get(k)
@@ -71,6 +94,12 @@ pub fn output_settings(graph: &FinishGraphRs) -> OutputSettingsRs {
         mm: (to_mm(w), to_mm(h)),
         dpi: dpi as u32,
         cmyk: get("color").and_then(|v| v.as_str()) == Some("cmyk"),
+        name: get("name")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("output")
+            .to_string(),
     }
 }
 
@@ -182,73 +211,96 @@ pub fn encode_pdf(
         .map_err(|e| format!("pdf {}: {e}", path.display()))
 }
 
-fn emit_progress(app: &tauri::AppHandle, stage: &str, pct: u8) {
+fn emit_progress(app: &tauri::AppHandle, stage: &str, pct: u8, output: Option<&str>) {
     let _ = app.emit(
         "finish-export-progress",
-        serde_json::json!({ "stage": stage, "pct": pct }),
+        serde_json::json!({ "stage": stage, "pct": pct, "output": output }),
     );
 }
 
-/// Render + encode, blocking. Written files are removed again on error.
+/// Path-safe scrub shared by project and output names.
+fn scrub(name: &str) -> String {
+    let safe: String = name
+        .trim()
+        .chars()
+        .map(|c| if matches!(c, '/' | '\\' | ':') { '-' } else { c })
+        .collect();
+    if safe.is_empty() {
+        "untitled".into()
+    } else {
+        safe
+    }
+}
+
+/// Render + encode every requested output, blocking. Written files are
+/// removed again on error.
 fn run_export(
     app: tauri::AppHandle,
     name: String,
     artwork_path: String,
     graph_json: String,
     formats: Vec<String>,
+    outputs: Vec<String>,
     dest_dir: String,
     shader_root: PathBuf,
 ) -> Result<Vec<String>, String> {
-    emit_progress(&app, "render", 0);
+    emit_progress(&app, "render", 0, None);
     let graph: FinishGraphRs = serde_json::from_str(&graph_json)
         .map_err(|e| format!("project has no valid finish graph: {e}"))?;
     let artwork = image::open(&artwork_path)
         .map_err(|e| format!("artwork {artwork_path}: {e}"))?
         .to_rgba8();
     let effects = manifest::load_effects(&shader_root)?;
-    let settings = output_settings(&graph);
     let mut engine = RenderEngine::new()?;
     engine.shader_root = shader_root;
     let mut sources: HashMap<String, RgbaImage> = HashMap::new();
     for node in graph.nodes.iter().filter(|n| n.kind == "source") {
         sources.insert(node.id.clone(), artwork.clone());
     }
-    let (out_w, out_h) = settings.px;
-    let out = engine.render_graph(&graph, &sources, &effects, out_w, out_h)?;
-    emit_progress(&app, "render", 50);
+    // One chain render, then a placement + encode per output node.
+    let tails = engine.render_chain(&graph, &sources, &effects)?;
+    emit_progress(&app, "render", 40, None);
 
-    // "<name>-<w>x<h>-<dpi>dpi.<ext>", name made path-safe.
-    let safe: String = name
-        .trim()
-        .chars()
-        .map(|c| if matches!(c, '/' | '\\' | ':') { '-' } else { c })
-        .collect();
-    let base = if safe.is_empty() { "untitled".into() } else { safe };
+    let out_ids: Vec<String> = if outputs.is_empty() {
+        graph
+            .nodes
+            .iter()
+            .filter(|n| n.kind == "output")
+            .map(|n| n.id.clone())
+            .collect()
+    } else {
+        outputs
+    };
+    let base = scrub(&name);
+    let total_files = (out_ids.len() * formats.len()).max(1) as u32;
+    let mut done_files = 0u32;
 
     let mut written: Vec<String> = Vec::new();
-    let per = 50 / formats.len().max(1) as u8;
     let result = (|| {
-        for (i, format) in formats.iter().enumerate() {
-            let ext = format.as_str();
-            let path = Path::new(&dest_dir).join(format!(
-                "{base}-{out_w}x{out_h}-{}dpi.{ext}",
-                settings.dpi
-            ));
-            match ext {
-                "png" => encode_png(&out, &path)?,
-                "tiff" => encode_tiff(&out, &path, settings.cmyk)?,
-                "pdf" => encode_pdf(
-                    &out,
-                    &path,
-                    settings.mm.0,
-                    settings.mm.1,
-                    settings.dpi as f32,
-                    settings.cmyk,
-                )?,
-                other => return Err(format!("unknown export format: {other}")),
+        for out_id in &out_ids {
+            let s = output_settings_for(&graph, out_id);
+            let tail = tails
+                .get(out_id)
+                .ok_or_else(|| format!("no chain tail for output {out_id}"))?;
+            let page = place_fit(tail, s.px.0, s.px.1, fit_mode_for(&graph, out_id));
+            let oname = scrub(&s.name);
+            for format in &formats {
+                let ext = format.as_str();
+                let path = Path::new(&dest_dir).join(format!(
+                    "{base}-{oname}-{}x{}-{}dpi.{ext}",
+                    s.px.0, s.px.1, s.dpi
+                ));
+                match ext {
+                    "png" => encode_png(&page, &path)?,
+                    "tiff" => encode_tiff(&page, &path, s.cmyk)?,
+                    "pdf" => encode_pdf(&page, &path, s.mm.0, s.mm.1, s.dpi as f32, s.cmyk)?,
+                    other => return Err(format!("unknown export format: {other}")),
+                }
+                written.push(path.to_string_lossy().into_owned());
+                done_files += 1;
+                let pct = 40 + (60 * done_files / total_files) as u8;
+                emit_progress(&app, ext, pct.min(100), Some(&s.name));
             }
-            written.push(path.to_string_lossy().into_owned());
-            emit_progress(&app, ext, 50 + per * (i as u8 + 1));
         }
         Ok(())
     })();
@@ -268,6 +320,7 @@ pub async fn export_finish(
     app: tauri::AppHandle,
     project_id: i64,
     formats: Vec<String>,
+    outputs: Option<Vec<String>>,
     dest_dir: String,
 ) -> Result<Vec<String>, String> {
     let (name, artwork_path, graph_json) = {
@@ -294,6 +347,7 @@ pub async fn export_finish(
             artwork_path,
             graph_json,
             formats,
+            outputs.unwrap_or_default(),
             dest_dir,
             shader_root,
         )

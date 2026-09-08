@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { ExportDialog } from "../ExportDialog";
+import { DEFAULT_OUTPUT } from "../../../lib/finishGraph";
 
 vi.mock("sonner", () => ({
   toast: { error: vi.fn() },
@@ -40,6 +41,8 @@ vi.mock("@tauri-apps/plugin-dialog", tauriMocks.factory);
 vi.mock("@tauri-apps/api/event", tauriMocks.factory);
 const { invokeMock, openMock, emit } = tauriMocks;
 
+const ONE_OUTPUT = [{ id: "out", settings: DEFAULT_OUTPUT }];
+
 function renderDialog(overrides: Partial<Parameters<typeof ExportDialog>[0]> = {}) {
   return render(
     <ExportDialog
@@ -47,6 +50,7 @@ function renderDialog(overrides: Partial<Parameters<typeof ExportDialog>[0]> = {
       onClose={() => {}}
       projectId={7}
       artworkBitmap={null}
+      outputs={ONE_OUTPUT}
       {...overrides}
     />
   );
@@ -74,6 +78,30 @@ describe("ExportDialog", () => {
       expect(invokeMock).toHaveBeenCalledWith("export_finish", {
         projectId: 7,
         formats: ["png", "tiff"],
+        outputs: ["out"],
+        destDir: "/tmp/out",
+      })
+    );
+  });
+
+  it("exports only the checked outputs", async () => {
+    openMock.mockResolvedValue("/tmp/out");
+    invokeMock.mockResolvedValue([]);
+    renderDialog({
+      outputs: [
+        { id: "print", settings: { ...DEFAULT_OUTPUT, name: "f4-print" } },
+        { id: "ig", settings: { ...DEFAULT_OUTPUT, name: "ig-square" } },
+      ],
+    });
+    fireEvent.click(screen.getByRole("switch", { name: "ig-square" }));
+    fireEvent.click(screen.getByRole("button", { name: /choose destination/i }));
+    await waitFor(() => expect(screen.getByText("/tmp/out")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("export_finish", {
+        projectId: 7,
+        formats: ["png"],
+        outputs: ["print"],
         destDir: "/tmp/out",
       })
     );

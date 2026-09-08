@@ -7,8 +7,9 @@ import { ExportDialog } from "./ExportDialog";
 import { useSaveProjectGraph } from "../../hooks/useProjects";
 import type { FinishGraph } from "../../lib/finishGraph";
 import {
+  outputNodes,
   outputRatio,
-  outputSettings,
+  outputSettingsForNode,
   parseGraph,
   serializeGraph,
 } from "../../lib/finishGraph";
@@ -89,10 +90,17 @@ export function FinishTab({
     };
   }, [artworkPath]);
 
-  // Output settings drive the page aspect (preview canvas shape); the
-  // artwork itself stays untouched and the executor places it at the
-  // output node.
-  const settings = outputSettings(graph);
+  // The PREVIEW output (selected output node, else the first) drives
+  // the page aspect of the big canvas; the artwork itself stays
+  // untouched and the executor places it at the output nodes.
+  const selectedNodeForOutput = selectedNodeId
+    ? graph.nodes.find((n) => n.id === selectedNodeId)
+    : null;
+  const previewOutputId =
+    selectedNodeForOutput?.kind === "output"
+      ? selectedNodeForOutput.id
+      : outputNodes(graph)[0]?.id ?? null;
+  const settings = outputSettingsForNode(graph, previewOutputId ?? "");
   const ratio = outputRatio(settings);
   const artRatio = artworkFull ? artworkFull.width / artworkFull.height : undefined;
 
@@ -158,6 +166,7 @@ export function FinishTab({
           artworkBitmap={artworkFull}
           artworkPath={artworkPath ?? ""}
           ratio={ratio}
+          previewOutputId={previewOutputId}
           onCompileErrors={setCompileErrors}
           onThumbnails={setThumbs}
         />
@@ -181,7 +190,10 @@ export function FinishTab({
         onClose={() => setExportOpen(false)}
         projectId={projectId}
         artworkBitmap={artworkFull}
-        settings={settings}
+        outputs={outputNodes(graph).map((n) => ({
+          id: n.id,
+          settings: outputSettingsForNode(graph, n.id),
+        }))}
       />
 
       {/* Parameter dialog floats on the right, TD-style */}

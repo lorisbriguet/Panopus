@@ -255,6 +255,7 @@ const ui = {
     // Export dialog (Finish T14)
     export_title: "Export",
     export_run: "Export",
+    export_outputs: "Outputs",
     export_dest: "Choose destination...",
     aspect_warning:
       "Artwork aspect ratio is more than 1% off the output size — the export will crop",
@@ -518,6 +519,7 @@ const ui = {
     // Export dialog (Finish T14)
     export_title: "Export",
     export_run: "Exporter",
+    export_outputs: "Sorties",
     export_dest: "Choisir la destination...",
     aspect_warning:
       "Le ratio de la maquette s'ecarte de plus de 1% du format de sortie — l'export recadrera",

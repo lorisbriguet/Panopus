@@ -13,7 +13,12 @@
 
 import { EFFECTS, FRAG_SOURCES } from "./effects";
 import type { EffectSpec, ParamSpec } from "./effects";
-import { executionOrder, outputPx, outputSettings } from "./finishGraph";
+import {
+  executionOrder,
+  outputNodes,
+  outputPx,
+  outputSettingsFrom,
+} from "./finishGraph";
 import type { FinishGraph, GraphWire, OutputSettings } from "./finishGraph";
 
 // Effect texture assets (e.g. shaders/dither/glyph-atlas.png) resolve to
@@ -224,6 +229,9 @@ export class GlExecutor {
    * shaped per node) and reports PNG data URLs through onThumbnails.
    */
   thumbSize = 0;
+  /** Which output node's page the CANVAS shows (null = first output).
+   *  Every output's THUMB always uses its own node settings. */
+  previewOutput: string | null = null;
   onThumbnails: ((thumbs: Record<string, string>) => void) | null = null;
   private thumbTargets = new Map<string, Target>();
   private thumbCanvas: HTMLCanvasElement | null = null;
@@ -331,11 +339,16 @@ export class GlExecutor {
     if (this.canvas.height !== height) this.canvas.height = height;
 
     // Chain semantics: sources and effects run at the source's native
-    // resolution (capped for preview perf); the OUTPUT node is the only
-    // place the image is fitted/resized to the page. The canvas is a
-    // scaled view of the page (width/height are page-shaped).
-    const settings = outputSettings(graph);
-    const pagePx = outputPx(settings);
+    // resolution (capped for preview perf); OUTPUT nodes are the only
+    // place the image is fitted/resized to a page. The canvas is a
+    // scaled view of the PREVIEW output's page.
+    const outs = outputNodes(graph);
+    const previewId =
+      this.previewOutput && outs.some((n) => n.id === this.previewOutput)
+        ? this.previewOutput
+        : outs[0]?.id ?? null;
+    const settingsOf = (id: string) =>
+      outputSettingsFrom(outs.find((n) => n.id === id)?.params);
     const firstSource = graph.nodes.find(
       (n) => n.kind === "source" && this.sourceTex.has(n.id)
     );
@@ -374,7 +387,10 @@ export class GlExecutor {
       }
       if (node.kind === "output") {
         const tex = inputTex(id, 0);
-        this.blitToCanvasPlaced(tex, width, height, settings, iw, ih, pagePx);
+        if (id === previewId) {
+          const s = settingsOf(id);
+          this.blitToCanvasPlaced(tex, width, height, s, iw, ih, outputPx(s));
+        }
         outputs.set(id, tex); // so the output operator gets a thumbnail too
         continue;
       }
@@ -443,12 +459,17 @@ export class GlExecutor {
       const thumbs: Record<string, string> = {};
       for (const [id, tex] of outputs) {
         // Chain operators show their working-res output (source aspect);
-        // the output operator shows the placed PAGE.
+        // each output operator shows ITS OWN placed page.
         const isOut = byId.get(id)?.kind === "output";
-        const url = isOut
-          ? this.captureThumb(tex, pagePx.w / pagePx.h, settings, iw, ih, pagePx)
-          : this.captureThumb(tex, ww / wh);
-        if (url) thumbs[id] = url;
+        if (isOut) {
+          const s = settingsOf(id);
+          const px = outputPx(s);
+          const url = this.captureThumb(tex, px.w / px.h, s, iw, ih, px);
+          if (url) thumbs[id] = url;
+        } else {
+          const url = this.captureThumb(tex, ww / wh);
+          if (url) thumbs[id] = url;
+        }
       }
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       this.onThumbnails(thumbs);

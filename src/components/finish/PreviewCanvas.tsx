@@ -8,8 +8,10 @@ interface PreviewCanvasProps {
   graph: FinishGraph;
   artworkBitmap: ImageBitmap | null;
   artworkPath: string;
-  /** Output aspect (w/h) from the output node settings. */
+  /** Output aspect (w/h) from the PREVIEW output node's settings. */
   ratio?: number;
+  /** Which output node's page the canvas shows (null = first). */
+  previewOutputId?: string | null;
   onCompileErrors?: (errors: Record<string, string | null>) => void;
   /** Per-node output thumbnails (TouchDesigner-style operator viewers). */
   onThumbnails?: (thumbs: Record<string, string>) => void;
@@ -24,6 +26,7 @@ export function PreviewCanvas({
   artworkBitmap,
   artworkPath,
   ratio = F4_RATIO,
+  previewOutputId = null,
   onCompileErrors,
   onThumbnails,
 }: PreviewCanvasProps) {
@@ -105,6 +108,7 @@ export function PreviewCanvas({
 
     width = Math.max(1, width);
     height = Math.max(1, height);
+    executorRef.current.previewOutput = previewOutputId;
     if (width > 0 && height > 0) {
       executorRef.current.render(graph, width, height);
 
@@ -117,7 +121,7 @@ export function PreviewCanvas({
         onCompileErrors(errors);
       }
     }
-  }, [graph, ratio, onCompileErrors]);
+  }, [graph, ratio, previewOutputId, onCompileErrors]);
 
   useEffect(() => {
     if (needsRender && rafRef.current === null) {

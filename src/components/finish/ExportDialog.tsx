@@ -6,12 +6,7 @@ import { toast } from "sonner";
 import { Modal } from "../ui/Modal";
 import { Toggle } from "../ui/Toggle";
 import { Button } from "../ui/Button";
-import {
-  DEFAULT_OUTPUT,
-  outputPx,
-  outputRatio,
-  type OutputSettings,
-} from "../../lib/finishGraph";
+import { outputPx, outputRatio, type OutputSettings } from "../../lib/finishGraph";
 import { useT } from "../../i18n/useT";
 
 const ALL_FORMATS = ["png", "tiff", "pdf"] as const;
@@ -20,6 +15,12 @@ type Format = (typeof ALL_FORMATS)[number];
 interface ExportProgress {
   stage: string;
   pct: number;
+  output?: string | null;
+}
+
+export interface ExportOutput {
+  id: string;
+  settings: OutputSettings;
 }
 
 interface ExportDialogProps {
@@ -28,20 +29,21 @@ interface ExportDialogProps {
   projectId: number;
   /** For the aspect warning; null while the artwork is still loading. */
   artworkBitmap: ImageBitmap | null;
-  /** Output node settings (size, density, color space). */
-  settings?: OutputSettings;
+  /** The graph's output nodes — one deliverable each. */
+  outputs: ExportOutput[];
 }
 
 /**
- * Export dialog: pick formats + destination, run export_finish, follow
- * its finish-export-progress events, list the written files.
+ * Export dialog: pick outputs + formats + destination, run
+ * export_finish, follow its finish-export-progress events, list the
+ * written files.
  */
 export function ExportDialog({
   open,
   onClose,
   projectId,
   artworkBitmap,
-  settings = DEFAULT_OUTPUT,
+  outputs,
 }: ExportDialogProps) {
   const t = useT();
   const [formats, setFormats] = useState<Record<Format, boolean>>({
@@ -49,6 +51,8 @@ export function ExportDialog({
     tiff: false,
     pdf: false,
   });
+  /** Unchecked output ids (default: everything exports). */
+  const [excluded, setExcluded] = useState<Record<string, boolean>>({});
   const [destDir, setDestDir] = useState<string | null>(null);
   const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [running, setRunning] = useState(false);
@@ -70,13 +74,15 @@ export function ExportDialog({
     };
   }, [open]);
 
-  const ratio = outputRatio(settings);
-  const px = outputPx(settings);
+  const checkedOutputs = outputs.filter((o) => !excluded[o.id]);
   // Cropping only happens in fill mode; fit/place never lose pixels.
   const aspectOff =
-    settings.fit === "fill" &&
     artworkBitmap !== null &&
-    Math.abs(artworkBitmap.width / artworkBitmap.height - ratio) / ratio > 0.01;
+    checkedOutputs.some((o) => {
+      if (o.settings.fit !== "fill") return false;
+      const r = outputRatio(o.settings);
+      return Math.abs(artworkBitmap.width / artworkBitmap.height - r) / r > 0.01;
+    });
 
   const chosen = ALL_FORMATS.filter((f) => formats[f]);
 
@@ -86,7 +92,7 @@ export function ExportDialog({
   };
 
   const run = async () => {
-    if (!destDir || chosen.length === 0) return;
+    if (!destDir || chosen.length === 0 || checkedOutputs.length === 0) return;
     setRunning(true);
     setProgress(null);
     setWritten(null);
@@ -94,6 +100,7 @@ export function ExportDialog({
       const paths = await invoke<string[]>("export_finish", {
         projectId,
         formats: chosen,
+        outputs: checkedOutputs.map((o) => o.id),
         destDir,
       });
       setWritten(paths);
@@ -118,7 +125,9 @@ export function ExportDialog({
       footer={
         <Button
           onClick={run}
-          disabled={!destDir || chosen.length === 0 || running}
+          disabled={
+            !destDir || chosen.length === 0 || checkedOutputs.length === 0 || running
+          }
           loading={running}
         >
           {t.export_run}
@@ -126,12 +135,36 @@ export function ExportDialog({
       }
     >
       <div className="flex flex-col gap-4">
-        <p className="text-xs text-muted font-mono tabular-nums">
-          {px.w} × {px.h} px · {settings.dpi} dpi · {settings.color.toUpperCase()}
-        </p>
         {aspectOff && (
           <p className="text-xs text-[var(--color-danger-text)]">{t.aspect_warning}</p>
         )}
+
+        {/* One deliverable per output operator */}
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-muted uppercase tracking-wide">{t.export_outputs}</p>
+          {outputs.map((o) => {
+            const px = outputPx(o.settings);
+            return (
+              <label
+                key={o.id}
+                className="flex items-center justify-between gap-3 text-sm"
+              >
+                <span className="font-mono text-xs tabular-nums truncate">
+                  {o.settings.name} · {px.w}×{px.h}px · {o.settings.dpi}dpi ·{" "}
+                  {o.settings.color.toUpperCase()}
+                </span>
+                <Toggle
+                  checked={!excluded[o.id]}
+                  onChange={(checked) =>
+                    setExcluded((prev) => ({ ...prev, [o.id]: !checked }))
+                  }
+                  disabled={running}
+                  ariaLabel={o.settings.name}
+                />
+              </label>
+            );
+          })}
+        </div>
 
         <div className="flex flex-col gap-2">
           {ALL_FORMATS.map((f) => (

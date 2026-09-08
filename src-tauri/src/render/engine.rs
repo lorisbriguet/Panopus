@@ -289,13 +289,29 @@ pub enum FitMode {
     Place,
 }
 
-/// The output node's "fit" param ("fill" | "fit" | "place").
+/// The FIRST output node's "fit" param ("fill" | "fit" | "place").
 pub fn fit_mode(graph: &FinishGraphRs) -> FitMode {
-    match graph
+    graph
         .nodes
         .iter()
         .find(|n| n.kind == "output")
-        .and_then(|n| n.params.as_ref())
+        .map_or(FitMode::Fill, fit_of)
+}
+
+/// A specific output node's fit mode; unknown id falls back to the
+/// first output.
+pub fn fit_mode_for(graph: &FinishGraphRs, node_id: &str) -> FitMode {
+    graph
+        .nodes
+        .iter()
+        .find(|n| n.kind == "output" && n.id == node_id)
+        .map_or_else(|| fit_mode(graph), fit_of)
+}
+
+fn fit_of(n: &super::GraphNodeRs) -> FitMode {
+    match n
+        .params
+        .as_ref()
         .and_then(|p| p.get("fit"))
         .and_then(|v| v.as_str())
     {
@@ -319,7 +335,7 @@ fn cover_fit(img: &RgbaImage, w: u32, h: u32) -> RgbaImage {
 }
 
 /// Compose `img` onto a black (w, h) page per the fit mode.
-fn place_fit(img: &RgbaImage, w: u32, h: u32, mode: FitMode) -> RgbaImage {
+pub fn place_fit(img: &RgbaImage, w: u32, h: u32, mode: FitMode) -> RgbaImage {
     let (iw, ih) = img.dimensions();
     match mode {
         FitMode::Fill => cover_fit(img, w, h),
@@ -735,9 +751,9 @@ impl RenderEngine {
         Ok(tex)
     }
 
-    /// Render the chain at the source's native resolution, then place the
-    /// result onto an out_w x out_h page (fit/fill/place from the output
-    /// node's settings) and read back RGBA8 pixels.
+    /// Back-compat wrapper: render the chain, then place the FIRST
+    /// output's tail onto an out_w x out_h page (fit/fill/place from
+    /// that node's settings).
     pub fn render_graph(
         &mut self,
         graph: &FinishGraphRs,
@@ -746,20 +762,40 @@ impl RenderEngine {
         out_w: u32,
         out_h: u32,
     ) -> Result<RgbaImage, String> {
+        let tails = self.render_chain(graph, sources, effects)?;
+        let first = graph
+            .nodes
+            .iter()
+            .find(|n| n.kind == "output")
+            .ok_or("graph has no output node")?;
+        let tail = tails
+            .get(&first.id)
+            .ok_or("output tail missing from chain render")?;
+        Ok(place_fit(tail, out_w, out_h, fit_mode(graph)))
+    }
+
+    /// Render the chain at the source's native resolution and read back
+    /// each OUTPUT node's input ("tail") as an RGBA8 image at chain
+    /// resolution — one deliverable per output node; placement onto
+    /// pages is the caller's move (place_fit + per-node settings).
+    pub fn render_chain(
+        &mut self,
+        graph: &FinishGraphRs,
+        sources: &HashMap<String, RgbaImage>,
+        effects: &HashMap<String, EffectSpec>,
+    ) -> Result<HashMap<String, RgbaImage>, String> {
         use wgpu::util::DeviceExt;
 
         let order = execution_order(graph);
-        let fit = fit_mode(graph);
         // Chain semantics: sources/effects run at the source's NATIVE
-        // resolution; only the final place_fit below resizes to the page
-        // (mirrors glExecutor.render, minus its preview-perf cap).
+        // resolution (mirrors glExecutor.render, minus its preview cap).
         let (sw, sh) = graph
             .nodes
             .iter()
             .find(|n| n.kind == "source")
             .and_then(|n| sources.get(&n.id))
             .map(|img| img.dimensions())
-            .unwrap_or((out_w, out_h));
+            .unwrap_or((64, 64));
         // Cap at the device texture limit (oversized scans etc.).
         const CAP: f64 = 16384.0;
         let scale = (CAP / f64::from(sw.max(sh))).min(1.0);
@@ -803,7 +839,7 @@ impl RenderEngine {
                 label: Some("finish-graph"),
             });
 
-        let mut out_tex: Option<wgpu::Texture> = None;
+        let mut tail_bufs: Vec<(String, wgpu::Buffer)> = Vec::new();
         let by_id: HashMap<&str, &super::GraphNodeRs> =
             graph.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
 
@@ -892,7 +928,37 @@ impl RenderEngine {
                         rp.set_bind_group(0, &bind, &[]);
                         rp.draw(0..3, 0..1);
                     }
-                    out_tex = Some(tex);
+                    // Queue this output's readback (one buffer per output;
+                    // all copies ride the same encoder/submit).
+                    let bpr = (ww * 4 + 255) & !255;
+                    let buf = self.device.create_buffer(&wgpu::BufferDescriptor {
+                        label: Some("finish-readback"),
+                        size: bpr as u64 * wh as u64,
+                        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                        mapped_at_creation: false,
+                    });
+                    encoder.copy_texture_to_buffer(
+                        wgpu::TexelCopyTextureInfo {
+                            texture: &tex,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d::ZERO,
+                            aspect: wgpu::TextureAspect::All,
+                        },
+                        wgpu::TexelCopyBufferInfo {
+                            buffer: &buf,
+                            layout: wgpu::TexelCopyBufferLayout {
+                                offset: 0,
+                                bytes_per_row: Some(bpr),
+                                rows_per_image: Some(wh),
+                            },
+                        },
+                        wgpu::Extent3d {
+                            width: ww,
+                            height: wh,
+                            depth_or_array_layers: 1,
+                        },
+                    );
+                    tail_bufs.push((id.clone(), buf));
                 }
                 "effect" => {
                     let effect_id = node
@@ -1066,67 +1132,47 @@ impl RenderEngine {
             }
         }
 
-        let out_tex = out_tex.ok_or("graph has no output node")?;
-
-        // Readback (256-aligned rows), then flip back from GL row order.
-        let bpr = (ww * 4 + 255) & !255;
-        let buf = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("finish-readback"),
-            size: bpr as u64 * wh as u64,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
-                texture: &out_tex,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::TexelCopyBufferInfo {
-                buffer: &buf,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(bpr),
-                    rows_per_image: Some(wh),
-                },
-            },
-            wgpu::Extent3d {
-                width: ww,
-                height: wh,
-                depth_or_array_layers: 1,
-            },
-        );
+        if tail_bufs.is_empty() {
+            return Err("graph has no output node".into());
+        }
         self.queue.submit([encoder.finish()]);
 
-        let slice = buf.slice(..);
-        let (tx, rx) = std::sync::mpsc::channel();
-        slice.map_async(wgpu::MapMode::Read, move |r| {
-            let _ = tx.send(r);
-        });
+        // Map every tail buffer, then read them all after one wait.
+        let bpr = (ww * 4 + 255) & !255;
+        let mut rxs = Vec::with_capacity(tail_bufs.len());
+        for (_, buf) in &tail_bufs {
+            let (tx, rx) = std::sync::mpsc::channel();
+            buf.slice(..).map_async(wgpu::MapMode::Read, move |r| {
+                let _ = tx.send(r);
+            });
+            rxs.push(rx);
+        }
         self.device
             .poll(wgpu::PollType::Wait {
                 submission_index: None,
                 timeout: None,
             })
             .map_err(|e| format!("device poll: {e}"))?;
-        rx.recv()
-            .map_err(|e| format!("map channel: {e}"))?
-            .map_err(|e| format!("map buffer: {e}"))?;
-        let data = slice
-            .get_mapped_range()
-            .map_err(|e| format!("mapped range: {e}"))?;
-        let mut pixels = Vec::with_capacity((ww * wh * 4) as usize);
-        for row in 0..wh {
-            let start = (row * bpr) as usize;
-            pixels.extend_from_slice(&data[start..start + (ww * 4) as usize]);
+        let mut tails: HashMap<String, RgbaImage> = HashMap::new();
+        for ((id, buf), rx) in tail_bufs.into_iter().zip(rxs) {
+            rx.recv()
+                .map_err(|e| format!("map channel: {e}"))?
+                .map_err(|e| format!("map buffer: {e}"))?;
+            let slice = buf.slice(..);
+            let data = slice
+                .get_mapped_range()
+                .map_err(|e| format!("mapped range: {e}"))?;
+            let mut pixels = Vec::with_capacity((ww * wh * 4) as usize);
+            for row in 0..wh {
+                let start = (row * bpr) as usize;
+                pixels.extend_from_slice(&data[start..start + (ww * 4) as usize]);
+            }
+            drop(data);
+            buf.unmap();
+            let img = RgbaImage::from_raw(ww, wh, pixels)
+                .ok_or("readback size mismatch")?;
+            tails.insert(id, image::imageops::flip_vertical(&img));
         }
-        drop(data);
-        buf.unmap();
-        let img = RgbaImage::from_raw(ww, wh, pixels)
-            .ok_or("readback size mismatch")?;
-        let img = image::imageops::flip_vertical(&img);
-        // Place the processed chain onto the page — the ONLY resize.
-        Ok(place_fit(&img, out_w, out_h, fit))
+        Ok(tails)
     }
 }

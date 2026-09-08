@@ -7,6 +7,8 @@ import {
   parseGraph,
   serializeGraph,
   outputSettings,
+  outputSettingsForNode,
+  outputNodes,
   outputPx,
   outputMm,
 } from "../finishGraph";
@@ -172,6 +174,7 @@ describe("outputSettings", () => {
       dpi: 300,
       color: "srgb",
       fit: "fill",
+      name: "output",
     });
     expect(outputPx(s)).toEqual({ w: 10571, h: 15118 });
     expect(outputMm(s)).toEqual({ w: 895, h: 1280 });
@@ -204,5 +207,62 @@ describe("outputSettings", () => {
     expect(outputSettings(withParams({ fit: "place" })).fit).toBe("place");
     expect(outputSettings(withParams({ fit: "fit" })).fit).toBe("fit");
     expect(outputSettings(withParams({ fit: "stretch" })).fit).toBe("fill");
+  });
+});
+
+describe("multiple outputs", () => {
+  const twoOutputGraph = (): FinishGraph => ({
+    v: 1,
+    nodes: [
+      { id: "src", kind: "source", x: 0, y: 0 },
+      {
+        id: "print",
+        kind: "output",
+        params: { name: "f4-print", unit: "mm", width: 895, height: 1280, dpi: 300 },
+        x: 0,
+        y: 0,
+      },
+      {
+        id: "ig",
+        kind: "output",
+        params: { name: "ig-square", unit: "px", width: 1080, height: 1080, dpi: 72 },
+        x: 0,
+        y: 0,
+      },
+    ],
+    wires: [
+      { from: "src", to: "print", toIn: 0 },
+      { from: "src", to: "ig", toIn: 0 },
+    ],
+  });
+
+  test("parseGraph accepts graphs with several output nodes", () => {
+    const g = parseGraph(serializeGraph(twoOutputGraph()));
+    expect(outputNodes(g).map((n) => n.id)).toEqual(["print", "ig"]);
+  });
+
+  test("outputSettingsForNode reads each node's own settings", () => {
+    const g = twoOutputGraph();
+    expect(outputPx(outputSettingsForNode(g, "print"))).toEqual({ w: 10571, h: 15118 });
+    expect(outputPx(outputSettingsForNode(g, "ig"))).toEqual({ w: 1080, h: 1080 });
+    expect(outputSettingsForNode(g, "ig").name).toBe("ig-square");
+  });
+
+  test("outputSettingsForNode falls back to the first output for unknown ids", () => {
+    const g = twoOutputGraph();
+    expect(outputSettingsForNode(g, "nope").name).toBe("f4-print");
+  });
+
+  test("output name defaults and non-strings are rejected", () => {
+    expect(outputSettings(emptyGraph()).name).toBe("output");
+    const g = emptyGraph();
+    g.nodes.find((n) => n.kind === "output")!.params = { name: 42 as unknown as number };
+    expect(outputSettings(g).name).toBe("output");
+  });
+
+  test("executionOrder covers both outputs", () => {
+    const order = executionOrder(twoOutputGraph());
+    expect(order).toContain("print");
+    expect(order).toContain("ig");
   });
 });

@@ -172,6 +172,16 @@ function OutputParams({
       </div>
       <div className="divide-y divide-white/[0.06]">
         <div className={ROW}>
+          <label className={NAME}>name</label>
+          <input
+            type="text"
+            value={s.name}
+            aria-label="name"
+            onChange={(e) => set({ name: e.target.value })}
+            className="flex-1 min-w-0 h-6 bg-white/[0.06] border border-white/10 rounded-[2px] px-2 text-right text-[11px] text-[var(--color-text-secondary)] outline-none focus:border-accent"
+          />
+        </div>
+        <div className={ROW}>
           <label className={NAME}>unit</label>
           <Select
             value={s.unit}

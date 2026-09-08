@@ -26,6 +26,8 @@ export type OutputSettings = {
    *  (letterboxed), place = centered at 100% (1 artwork px = 1 output px).
    *  Bars/overflow background is black. The input is never modified. */
   fit: "fill" | "fit" | "place";
+  /** Deliverable name — used in export filenames (path-scrubbed there). */
+  name: string;
 };
 
 export const DEFAULT_OUTPUT: OutputSettings = {
@@ -35,14 +37,27 @@ export const DEFAULT_OUTPUT: OutputSettings = {
   dpi: 300,
   color: "srgb",
   fit: "fill",
+  name: "output",
 };
 
 /** Renderable ceiling (wgpu/WebGL texture limit headroom). */
 export const MAX_OUTPUT_PX = 16384;
 
-/** Read the output node's settings with defaults + sane clamps. */
+/** All output nodes, in graph order (each one is a deliverable). */
+export function outputNodes(g: FinishGraph): GraphNode[] {
+  return g.nodes.filter((n) => n.kind === "output");
+}
+
+/** First output's settings (single-deliverable callers). */
 export function outputSettings(g: FinishGraph): OutputSettings {
   return outputSettingsFrom(g.nodes.find((n) => n.kind === "output")?.params);
+}
+
+/** A specific output node's settings; unknown id falls back to the
+ *  first output (then to defaults). */
+export function outputSettingsForNode(g: FinishGraph, nodeId: string): OutputSettings {
+  const node = g.nodes.find((n) => n.kind === "output" && n.id === nodeId);
+  return node ? outputSettingsFrom(node.params) : outputSettings(g);
 }
 
 /** Same, from an output node's raw params (ParamsPanel has only the node). */
@@ -66,6 +81,10 @@ export function outputSettingsFrom(
     dpi: Math.round(num(p.dpi, DEFAULT_OUTPUT.dpi, 36, 1200)),
     color,
     fit,
+    name:
+      typeof p.name === "string" && p.name.trim() !== ""
+        ? p.name
+        : DEFAULT_OUTPUT.name,
   };
 }
 

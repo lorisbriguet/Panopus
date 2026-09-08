@@ -105,3 +105,26 @@ fn output_settings_mm_unit_rounds_like_ts() {
     assert_eq!(s.px, (4961, 7016)); // A2 at 300dpi
     assert!(!s.cmyk);
 }
+
+#[test]
+fn output_settings_for_reads_each_node() {
+    let graph: FinishGraphRs = serde_json::from_str(
+        r#"{"v":1,"nodes":[
+            {"id":"src","kind":"source","x":0,"y":0},
+            {"id":"print","kind":"output","params":{"name":"f4-print"},"x":0,"y":0},
+            {"id":"ig","kind":"output","params":{"name":"ig-square","unit":"px","width":1080,"height":1080,"dpi":72},"x":0,"y":0}],
+        "wires":[
+            {"from":"src","to":"print","toIn":0},
+            {"from":"src","to":"ig","toIn":0}]}"#,
+    )
+    .unwrap();
+    let print = panopus_lib::render::export::output_settings_for(&graph, "print");
+    assert_eq!(print.px, F4_PX);
+    assert_eq!(print.name, "f4-print");
+    let ig = panopus_lib::render::export::output_settings_for(&graph, "ig");
+    assert_eq!(ig.px, (1080, 1080));
+    assert_eq!(ig.name, "ig-square");
+    // unknown id falls back to the first output
+    let fb = panopus_lib::render::export::output_settings_for(&graph, "nope");
+    assert_eq!(fb.name, "f4-print");
+}

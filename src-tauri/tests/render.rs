@@ -93,3 +93,36 @@ fn engine_renders_mix_passthrough() {
         );
     }
 }
+
+#[test]
+fn render_chain_returns_a_tail_per_output() {
+    let mut engine = match panopus_lib::render::engine::RenderEngine::new() {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("skipping engine test: {e}");
+            return;
+        }
+    };
+    let effects = panopus_lib::render::manifest::load_effects(&shaders_dir()).unwrap();
+    let graph: FinishGraphRs = serde_json::from_str(
+        r#"{"v":1,"nodes":[
+            {"id":"src","kind":"source","x":0,"y":0},
+            {"id":"a","kind":"output","x":0,"y":0},
+            {"id":"b","kind":"output","x":0,"y":0}],
+        "wires":[
+            {"from":"src","to":"a","toIn":0},
+            {"from":"src","to":"b","toIn":0}]}"#,
+    )
+    .unwrap();
+    let red = image::RgbaImage::from_pixel(8, 8, image::Rgba([255, 0, 0, 255]));
+    let mut sources = HashMap::new();
+    sources.insert("src".to_string(), red);
+    let tails = engine.render_chain(&graph, &sources, &effects).unwrap();
+    assert_eq!(tails.len(), 2);
+    for id in ["a", "b"] {
+        let img = &tails[id];
+        assert_eq!(img.dimensions(), (8, 8), "{id}");
+        let p = img.get_pixel(4, 4);
+        assert!(p[0] > 250 && p[1] < 5, "{id}: {p:?}");
+    }
+}
