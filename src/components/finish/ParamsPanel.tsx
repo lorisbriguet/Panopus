@@ -52,11 +52,16 @@ interface ParamsPanelProps {
   compileError?: string | null;
   /** Output operator: opens the export dialog. */
   onExport?: () => void;
-  /** Source operator: attached artwork + picker. */
-  artworkPath?: string | null;
-  artworkMissing?: boolean;
-  onPickArtwork?: () => void;
-  pickPending?: boolean;
+  /** Source operator: the SELECTED source node's artwork + picker
+   *  (primary = project artwork; extras = the node's sourcePath). */
+  sourceInfo?: SourceInfo;
+}
+
+export interface SourceInfo {
+  path: string | null;
+  missing: boolean;
+  pending?: boolean;
+  onPick: () => void;
 }
 
 // TD-style parameter dialog rows: flat hairlines, name | control | value.
@@ -96,17 +101,9 @@ function NumField({
 }
 
 /** Source operator: the attached artwork, untouched by the chain. */
-function SourceParams({
-  artworkPath,
-  artworkMissing,
-  onPickArtwork,
-  pickPending,
-}: Pick<
-  ParamsPanelProps,
-  "artworkPath" | "artworkMissing" | "onPickArtwork" | "pickPending"
->) {
+function SourceParams({ info }: { info?: SourceInfo }) {
   const t = useT();
-  const name = artworkPath ? artworkPath.split("/").pop() : null;
+  const name = info?.path ? info.path.split("/").pop() : null;
   return (
     <div className="h-full border border-white/10 rounded-[3px] bg-black/50 backdrop-blur-[3px] overflow-y-auto font-mono">
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
@@ -120,12 +117,12 @@ function SourceParams({
           <label className={NAME}>{t.project_artwork_title}</label>
           <span
             className="flex-1 min-w-0 text-right text-[10px] text-[var(--color-text-secondary)] truncate"
-            title={artworkPath ?? undefined}
+            title={info?.path ?? undefined}
           >
             {name ?? "—"}
           </span>
         </div>
-        {artworkMissing && (
+        {info?.missing && (
           <div className={ROW}>
             <p className="text-xs text-[var(--color-danger-text)]">
               {t.artwork_missing}
@@ -136,8 +133,8 @@ function SourceParams({
           <Button
             variant="ghost"
             size="sm"
-            onClick={onPickArtwork}
-            loading={pickPending}
+            onClick={info?.onPick}
+            loading={info?.pending}
           >
             {t.project_pick_artwork}
           </Button>
@@ -366,10 +363,7 @@ export function ParamsPanel({
   onParamsChange,
   compileError,
   onExport,
-  artworkPath,
-  artworkMissing,
-  onPickArtwork,
-  pickPending,
+  sourceInfo,
 }: ParamsPanelProps) {
   const t = useT();
   const spec = node.effectId ? EFFECTS[node.effectId] : undefined;
@@ -377,10 +371,7 @@ export function ParamsPanel({
   if (node.kind === "source") {
     return (
       <SourceParams
-        artworkPath={artworkPath}
-        artworkMissing={artworkMissing}
-        onPickArtwork={onPickArtwork}
-        pickPending={pickPending}
+        info={sourceInfo}
       />
     );
   }

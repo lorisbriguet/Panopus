@@ -128,3 +128,36 @@ fn output_settings_for_reads_each_node() {
     let fb = panopus_lib::render::export::output_settings_for(&graph, "nope");
     assert_eq!(fb.name, "f4-print");
 }
+
+#[test]
+fn assemble_sources_maps_primary_and_extra_nodes() {
+    let graph: FinishGraphRs = serde_json::from_str(
+        r#"{"v":1,"nodes":[
+            {"id":"srcA","kind":"source","x":0,"y":0},
+            {"id":"srcB","kind":"source","sourcePath":"/art/layer.png","x":0,"y":0},
+            {"id":"out","kind":"output","x":0,"y":0}],
+        "wires":[
+            {"from":"srcA","to":"out","toIn":0}]}"#,
+    )
+    .unwrap();
+    let paths =
+        panopus_lib::render::export::assemble_source_paths(&graph, "/art/main.png").unwrap();
+    assert_eq!(paths.len(), 2);
+    assert_eq!(paths[0], ("srcA".to_string(), "/art/main.png".to_string()));
+    assert_eq!(paths[1], ("srcB".to_string(), "/art/layer.png".to_string()));
+}
+
+#[test]
+fn assemble_sources_errors_on_extra_without_path() {
+    let graph: FinishGraphRs = serde_json::from_str(
+        r#"{"v":1,"nodes":[
+            {"id":"srcA","kind":"source","x":0,"y":0},
+            {"id":"srcB","kind":"source","x":0,"y":0},
+            {"id":"out","kind":"output","x":0,"y":0}],
+        "wires":[{"from":"srcA","to":"out","toIn":0}]}"#,
+    )
+    .unwrap();
+    let err = panopus_lib::render::export::assemble_source_paths(&graph, "/art/main.png")
+        .unwrap_err();
+    assert!(err.contains("srcB"), "{err}");
+}

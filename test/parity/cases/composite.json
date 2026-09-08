@@ -1,0 +1,19 @@
+{
+  "name": "composite",
+  "graph": {
+    "v": 1,
+    "nodes": [
+      { "id": "srcA", "kind": "source", "x": 0, "y": 0 },
+      { "id": "srcB", "kind": "source", "sourcePath": "source2.png", "x": 0, "y": 0 },
+      { "id": "t", "kind": "effect", "effectId": "transform", "params": { "x": -0.12, "y": 0.08, "scale": 0.5, "rotate": -15 }, "x": 0, "y": 0 },
+      { "id": "m", "kind": "effect", "effectId": "mix", "params": { "amount": 0.85, "mode": "multiply" }, "x": 0, "y": 0 },
+      { "id": "out", "kind": "output", "params": { "unit": "px", "width": 512, "height": 731, "dpi": 300 }, "x": 0, "y": 0 }
+    ],
+    "wires": [
+      { "from": "srcA", "to": "m", "toIn": 0 },
+      { "from": "srcB", "to": "t", "toIn": 0 },
+      { "from": "t", "to": "m", "toIn": 1 },
+      { "from": "m", "to": "out", "toIn": 0 }
+    ]
+  }
+}

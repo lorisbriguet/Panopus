@@ -48,6 +48,12 @@ export function outputNodes(g: FinishGraph): GraphNode[] {
   return g.nodes.filter((n) => n.kind === "output");
 }
 
+/** All source nodes, in graph order. The FIRST is the primary (project
+ *  artwork); extras carry their own `sourcePath` (D7). */
+export function sourceNodes(g: FinishGraph): GraphNode[] {
+  return g.nodes.filter((n) => n.kind === "source");
+}
+
 /** First output's settings (single-deliverable callers). */
 export function outputSettings(g: FinishGraph): OutputSettings {
   return outputSettingsFrom(g.nodes.find((n) => n.kind === "output")?.params);

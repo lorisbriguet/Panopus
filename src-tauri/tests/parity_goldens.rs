@@ -48,6 +48,30 @@ fn ensure_source(path: &Path) -> image::RgbaImage {
     img
 }
 
+/// Second source for composite cases: inverted ramps + an offset dark
+/// circle so blends against source.png are visually obvious.
+fn ensure_source2(path: &Path) -> image::RgbaImage {
+    if path.is_file() {
+        return image::open(path).unwrap().to_rgba8();
+    }
+    let img = image::RgbaImage::from_fn(W, H, |x, y| {
+        let dx = x as f32 - 150.0;
+        let dy = y as f32 - 200.0;
+        if (dx * dx + dy * dy).sqrt() < 100.0 {
+            image::Rgba([20, 24, 60, 255])
+        } else {
+            image::Rgba([
+                255 - (x as f32 / (W - 1) as f32 * 255.0) as u8,
+                255 - (y as f32 / (H - 1) as f32 * 255.0) as u8,
+                64,
+                255,
+            ])
+        }
+    });
+    img.save(path).unwrap();
+    img
+}
+
 #[derive(serde::Deserialize)]
 struct Case {
     name: String,
@@ -62,6 +86,7 @@ fn write_goldens() {
     let effects = panopus_lib::render::manifest::load_effects(&shaders).unwrap();
     let dir = parity_dir();
     let source = ensure_source(&dir.join("source.png"));
+    ensure_source2(&dir.join("source2.png"));
     let goldens = dir.join("goldens");
     std::fs::create_dir_all(&goldens).unwrap();
 
@@ -76,9 +101,17 @@ fn write_goldens() {
     for file in case_files {
         let case: Case =
             serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        // Convention: a case source node's `sourcePath` names a file in
+        // the parity dir (harness mirrors it); default = source.png.
         let mut sources = HashMap::new();
         for n in case.graph.nodes.iter().filter(|n| n.kind == "source") {
-            sources.insert(n.id.clone(), source.clone());
+            let img = match n.source_path.as_deref() {
+                Some(file) => image::open(dir.join(file))
+                    .unwrap_or_else(|e| panic!("{}: {file}: {e}", case.name))
+                    .to_rgba8(),
+                None => source.clone(),
+            };
+            sources.insert(n.id.clone(), img);
         }
         let tails = engine
             .render_chain(&case.graph, &sources, &effects)

@@ -6,7 +6,10 @@ import { useT } from "../../i18n/useT";
 
 interface PreviewCanvasProps {
   graph: FinishGraph;
+  /** PRIMARY artwork (placeholder gating + executor lifecycle key). */
   artworkBitmap: ImageBitmap | null;
+  /** Every source node's bitmap, keyed by node id (D7 multi-source). */
+  sourceBitmaps?: ReadonlyMap<string, ImageBitmap>;
   artworkPath: string;
   /** Output aspect (w/h) from the PREVIEW output node's settings. */
   ratio?: number;
@@ -24,6 +27,7 @@ interface PreviewCanvasProps {
 export function PreviewCanvas({
   graph,
   artworkBitmap,
+  sourceBitmaps,
   artworkPath,
   ratio = F4_RATIO,
   previewOutputId = null,
@@ -75,15 +79,25 @@ export function PreviewCanvas({
     };
   }, [artworkPath, artworkBitmap]);
 
-  // Upload source image when bitmap loads
+  // Upload every source node's bitmap when they load/change.
   useEffect(() => {
-    if (!artworkBitmap || !executorRef.current) return;
-    const srcNode = graph.nodes.find((n) => n.kind === "source");
-    if (srcNode) {
-      executorRef.current.setSource(srcNode.id, artworkBitmap);
-      setNeedsRender(true);
+    const executor = executorRef.current;
+    if (!executor) return;
+    let uploaded = false;
+    if (sourceBitmaps) {
+      for (const [nodeId, bitmap] of sourceBitmaps) {
+        executor.setSource(nodeId, bitmap);
+        uploaded = true;
+      }
+    } else if (artworkBitmap) {
+      const srcNode = graph.nodes.find((n) => n.kind === "source");
+      if (srcNode) {
+        executor.setSource(srcNode.id, artworkBitmap);
+        uploaded = true;
+      }
     }
-  }, [artworkBitmap, graph.nodes]);
+    if (uploaded) setNeedsRender(true);
+  }, [artworkBitmap, sourceBitmaps, graph.nodes]);
 
   // Trigger re-render on graph/param changes
   useEffect(() => {

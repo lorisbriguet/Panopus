@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { NodeCanvas } from "./NodeCanvas";
 import { ParamsPanel } from "./ParamsPanel";
 import { PreviewCanvas } from "./PreviewCanvas";
@@ -13,6 +14,7 @@ import {
   outputSettingsForNode,
   parseGraph,
   serializeGraph,
+  sourceNodes,
 } from "../../lib/finishGraph";
 import { createHistory } from "../../lib/graphHistory";
 import type { GraphHistory } from "../../lib/graphHistory";
@@ -44,6 +46,9 @@ export function FinishTab({
   /** The original artwork, untouched — placement is the output node's
    *  job (executor + Rust exporter both compose at the output stage). */
   const [artworkFull, setArtworkFull] = useState<ImageBitmap | null>(null);
+  /** Extra source nodes' bitmaps + per-node load errors (D7). */
+  const [extraBitmaps, setExtraBitmaps] = useState<Record<string, ImageBitmap>>({});
+  const [sourceErrors, setSourceErrors] = useState<Record<string, string>>({});
   const [compileErrors, setCompileErrors] = useState<Record<string, string | null>>({});
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [exportOpen, setExportOpen] = useState(false);
@@ -91,6 +96,74 @@ export function FinishTab({
     };
   }, [artworkPath]);
 
+  // Extra sources: load each additional source node's own artwork.
+  const extraKey = sourceNodes(graph)
+    .slice(1)
+    .map((n) => `${n.id}:${n.sourcePath ?? ""}`)
+    .join("|");
+  useEffect(() => {
+    let cancelled = false;
+    const extras = sourceNodes(graph).slice(1);
+    (async () => {
+      const bitmaps: Record<string, ImageBitmap> = {};
+      const errors: Record<string, string> = {};
+      for (const n of extras) {
+        if (!n.sourcePath) {
+          errors[n.id] = "no artwork";
+          continue;
+        }
+        try {
+          const bytes = await invoke<number[]>("read_artwork_bytes", {
+            path: n.sourcePath,
+          });
+          bitmaps[n.id] = await createImageBitmap(
+            new Blob([new Uint8Array(bytes)])
+          );
+        } catch (e) {
+          errors[n.id] = String(e);
+        }
+      }
+      if (!cancelled) {
+        setExtraBitmaps(bitmaps);
+        setSourceErrors(errors);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- extraKey covers the graph's source paths
+  }, [extraKey]);
+
+  // Every source node's bitmap, keyed by node id (primary first).
+  const sourceBitmaps = useMemo(() => {
+    const map = new Map<string, ImageBitmap>();
+    const srcs = sourceNodes(graph);
+    if (srcs[0] && artworkFull) map.set(srcs[0].id, artworkFull);
+    for (const n of srcs.slice(1)) {
+      const b = extraBitmaps[n.id];
+      if (b) map.set(n.id, b);
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- extraKey covers the graph's source set
+  }, [artworkFull, extraBitmaps, extraKey]);
+
+  const pickExtraSource = useCallback(
+    async (nodeId: string) => {
+      const picked = await openDialog({
+        filters: [{ name: "Image", extensions: ["png", "tif", "tiff"] }],
+      });
+      if (typeof picked === "string") {
+        commitGraph({
+          ...graph,
+          nodes: graph.nodes.map((n) =>
+            n.id === nodeId ? { ...n, sourcePath: picked } : n
+          ),
+        });
+      }
+    },
+    [graph, commitGraph]
+  );
+
   // The PREVIEW output (selected output node, else the first) drives
   // the page aspect of the big canvas; the artwork itself stays
   // untouched and the executor places it at the output nodes.
@@ -107,11 +180,9 @@ export function FinishTab({
 
   // Per-node viewer aspects (scale nodes reshape mid-chain).
   const nodeRatios: Record<string, number> = {};
-  if (artworkFull) {
+  if (sourceBitmaps.size > 0) {
     const dims = new Map(
-      graph.nodes
-        .filter((n) => n.kind === "source")
-        .map((n) => [n.id, { w: artworkFull.width, h: artworkFull.height }])
+      [...sourceBitmaps].map(([id, b]) => [id, { w: b.width, h: b.height }])
     );
     for (const [id, r] of nodeResolutions(graph, dims, 2048)) {
       nodeRatios[id] = r.w / r.h;
@@ -178,6 +249,7 @@ export function FinishTab({
         <PreviewCanvas
           graph={graph}
           artworkBitmap={artworkFull}
+          sourceBitmaps={sourceBitmaps}
           artworkPath={artworkPath ?? ""}
           ratio={ratio}
           previewOutputId={previewOutputId}
@@ -226,10 +298,24 @@ export function FinishTab({
             }}
             compileError={compileErrors[selectedNode.id] ?? null}
             onExport={() => setExportOpen(true)}
-            artworkPath={artworkPath}
-            artworkMissing={artworkMissing}
-            onPickArtwork={onPickArtwork}
-            pickPending={pickPending}
+            sourceInfo={
+              selectedNode.kind === "source"
+                ? sourceNodes(graph)[0]?.id === selectedNode.id
+                  ? {
+                      path: artworkPath,
+                      missing: !!artworkMissing,
+                      pending: pickPending,
+                      onPick: onPickArtwork,
+                    }
+                  : {
+                      path: selectedNode.sourcePath ?? null,
+                      missing:
+                        !selectedNode.sourcePath ||
+                        !!sourceErrors[selectedNode.id],
+                      onPick: () => pickExtraSource(selectedNode.id),
+                    }
+                : undefined
+            }
           />
         </div>
       )}

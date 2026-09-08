@@ -18,6 +18,7 @@ import {
   outputNodes,
   outputRatio,
   outputSettingsFrom,
+  sourceNodes,
   wouldCycle,
 } from "../../lib/finishGraph";
 import type { FinishGraph, GraphNode, GraphWire } from "../../lib/finishGraph";
@@ -287,6 +288,18 @@ export function NodeCanvas({
     [graph, onGraphChange, onNodeSelect]
   );
 
+  const handleAddSource = useCallback(() => {
+    const nodeId = `source_${Date.now()}`;
+    onGraphChange({
+      ...graph,
+      nodes: [
+        ...graph.nodes,
+        { id: nodeId, kind: "source", x: 80, y: 300 },
+      ],
+    });
+    setShowAddMenu(false);
+  }, [graph, onGraphChange]);
+
   const handleAddScale = useCallback(() => {
     const nodeId = `scale_${Date.now()}`;
     onGraphChange({
@@ -355,12 +368,13 @@ export function NodeCanvas({
       if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedNodeId) {
           const node = graph.nodes.find((n) => n.id === selectedNodeId);
-          // Sources are undeletable; outputs only while another remains.
+          // Sources/outputs deletable only while another remains.
           const deletable =
             node &&
             (node.kind === "effect" ||
               node.kind === "scale" ||
-              (node.kind === "output" && outputNodes(graph).length > 1));
+              (node.kind === "output" && outputNodes(graph).length > 1) ||
+              (node.kind === "source" && sourceNodes(graph).length > 1));
           if (deletable) {
             onGraphChange({
               ...graph,
@@ -415,6 +429,13 @@ export function NodeCanvas({
                 </button>
               ))}
               <div className="my-1 border-t border-[var(--color-border-divider)]" />
+              <button
+                type="button"
+                onClick={handleAddSource}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
+              >
+                Source
+              </button>
               <button
                 type="button"
                 onClick={handleAddScale}

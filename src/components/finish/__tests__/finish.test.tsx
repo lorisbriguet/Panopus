@@ -186,8 +186,11 @@ describe("ParamsPanel", () => {
       <ParamsPanel
         node={node}
         onParamsChange={vi.fn()}
-        artworkPath="/art/poster.png"
-        onPickArtwork={onPickArtwork}
+        sourceInfo={{
+          path: "/art/poster.png",
+          missing: false,
+          onPick: onPickArtwork,
+        }}
       />
     );
 
@@ -333,6 +336,31 @@ describe("FinishTab graph undo (Finish 2 T1)", () => {
 
     fireEvent.keyDown(document, { key: "Z", metaKey: true, shiftKey: true });
     await waitFor(() => expect(screen.getByText("Dither")).toBeInTheDocument());
+  });
+
+  it("adds an extra source whose params show its own picker (D7)", async () => {
+    renderTab();
+    fireEvent.click(screen.getByRole("button", { name: /add/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Source" }));
+    // Two source operators are now on the canvas.
+    const sources = screen.getAllByText("Source", { selector: "span" });
+    expect(sources.length).toBeGreaterThanOrEqual(2);
+    // Select the new node (id is generated: source_<ts>).
+    const el = document.querySelector('[data-nodeid^="source_"]');
+    expect(el).not.toBeNull();
+    const props = (globalThis as Record<string, unknown>).__xyflowProps as {
+      onNodesChange: (changes: unknown[]) => void;
+    };
+    act(() => {
+      props.onNodesChange([
+        { type: "select", id: el!.getAttribute("data-nodeid"), selected: true },
+      ]);
+    });
+    // The extra source has no artwork yet: em-dash + its own picker.
+    expect(await screen.findByText("—")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Choose artwork..." })
+    ).toBeInTheDocument();
   });
 
   it("leaves cmd+z alone while typing in an input", async () => {

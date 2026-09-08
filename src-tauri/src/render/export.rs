@@ -232,6 +232,30 @@ fn scrub(name: &str) -> String {
     }
 }
 
+/// One artwork path per source node: the FIRST source node uses the
+/// project's artwork_path (primary), every additional source node must
+/// carry its own `sourcePath` (D7). Pure so it's unit-testable.
+pub fn assemble_source_paths(
+    graph: &FinishGraphRs,
+    artwork_path: &str,
+) -> Result<Vec<(String, String)>, String> {
+    let mut out = Vec::new();
+    let mut first = true;
+    for n in graph.nodes.iter().filter(|n| n.kind == "source") {
+        let path = if first {
+            first = false;
+            artwork_path.to_string()
+        } else {
+            n.source_path
+                .clone()
+                .filter(|p| !p.trim().is_empty())
+                .ok_or_else(|| format!("source node {} has no artwork attached", n.id))?
+        };
+        out.push((n.id.clone(), path));
+    }
+    Ok(out)
+}
+
 /// Render + encode every requested output, blocking. Written files are
 /// removed again on error.
 fn run_export(
@@ -247,15 +271,15 @@ fn run_export(
     emit_progress(&app, "render", 0, None);
     let graph: FinishGraphRs = serde_json::from_str(&graph_json)
         .map_err(|e| format!("project has no valid finish graph: {e}"))?;
-    let artwork = image::open(&artwork_path)
-        .map_err(|e| format!("artwork {artwork_path}: {e}"))?
-        .to_rgba8();
     let effects = manifest::load_effects(&shader_root)?;
     let mut engine = RenderEngine::new()?;
     engine.shader_root = shader_root;
     let mut sources: HashMap<String, RgbaImage> = HashMap::new();
-    for node in graph.nodes.iter().filter(|n| n.kind == "source") {
-        sources.insert(node.id.clone(), artwork.clone());
+    for (node_id, path) in assemble_source_paths(&graph, &artwork_path)? {
+        let img = image::open(&path)
+            .map_err(|e| format!("artwork {path} ({node_id}): {e}"))?
+            .to_rgba8();
+        sources.insert(node_id, img);
     }
     // One chain render, then a placement + encode per output node.
     let tails = engine.render_chain(&graph, &sources, &effects)?;
