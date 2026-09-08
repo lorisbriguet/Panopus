@@ -91,7 +91,7 @@ The same folder feeds both renderers: the WebGL2 preview in the webview and the 
 
 **Operators beyond effects** — the graph also has built-in operators: multiple **Source** operators (collage: each carries its own artwork), **Scale** (resolution is a chain property: de-res before an effect, up-res after, smooth or pixel resampling) and multiple named **Output** operators (each a deliverable with its own size/unit/dpi/color/fit; export writes every checked output in one run). Graph editing has local undo (Cmd+Z / Cmd+Shift+Z), and effect subchains can be saved as app-wide **recipes** and pasted into any project.
 
-**Effect library** — dither, VHS, JPEG, mix (composite with blend modes), transform (layer placement), gradient map, posterize, halftone (gray/CMYK screens), riso. Shader portability rules earned by the parity harness: integer hashes (no `fract(sin)`), texel-snapped pattern sampling, and portable polynomial trig for rotated lattices — native GPU `sin/cos` isn't cross-backend stable.
+**Effect library** — dither, VHS, JPEG, mix (composite with blend modes), transform (layer placement), gradient map, posterize, halftone (gray/CMYK screens), riso, and a **Text operator**: set type in the project's own fonts, rasterized by the webview (cached in app-data, composited identically by the exporter), with the block draggable directly on the preview — transform layers drag the same way. Shader portability rules earned by the parity harness: integer hashes (no `fract(sin)`), texel-snapped pattern sampling, and portable polynomial trig for rotated lattices — native GPU `sin/cos` isn't cross-backend stable.
 
 ## Project Structure
 

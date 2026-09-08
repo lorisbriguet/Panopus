@@ -6,8 +6,10 @@ a task plan derives from it later.
 
 **Status:** P1 shipped (D1, D2, D4 — plans/2026-09-08-finish-2-p1.md).
 P2 shipped (D5, D7, D8, D9 + gradient map, posterize, halftone, riso —
-plans/2026-09-08-finish-2-p2.md). Remaining: P3 (D3 text operator +
-drag), P4 (D6 proof render, variation strip, A/B).
+plans/2026-09-08-finish-2-p2.md). P3 shipped (D3 text operator, raster
+cache, preview drag for text + transform —
+plans/2026-09-08-finish-2-p3.md). Remaining: P4 (D6 proof render,
+variation strip, A/B, 1:1 zoom).
 
 ## What Finish is for (user's words, distilled)
 
