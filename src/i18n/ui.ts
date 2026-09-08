@@ -252,6 +252,13 @@ const ui = {
     cycle_rejected: "Cannot connect: would create a cycle",
     finish_no_artwork: "Loading artwork...",
 
+    // Recipes (Finish 2 D5)
+    recipes: "Recipes",
+    recipe_save: "Save as recipe...",
+    recipe_name_placeholder: "Recipe name...",
+    recipe_empty: "No recipes yet",
+    save: "Save",
+
     // Export dialog (Finish T14)
     export_title: "Export",
     export_run: "Export",
@@ -515,6 +522,13 @@ const ui = {
     finish_params_empty: "Aucun parametre",
     cycle_rejected: "Impossible de connecter : creerait un cycle",
     finish_no_artwork: "Chargement de la maquette...",
+
+    // Recipes (Finish 2 D5)
+    recipes: "Recettes",
+    recipe_save: "Enregistrer comme recette...",
+    recipe_name_placeholder: "Nom de la recette...",
+    recipe_empty: "Aucune recette pour le moment",
+    save: "Enregistrer",
 
     // Export dialog (Finish T14)
     export_title: "Export",

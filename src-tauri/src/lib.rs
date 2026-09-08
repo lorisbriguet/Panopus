@@ -167,18 +167,30 @@ CREATE TABLE project_fonts (
 );
 "#;
 
+/// Recipes: named, reusable Finish subchains (Finish 2 D5) — the
+/// intermediate nodes + internal wires, app-wide across projects.
+pub const MIGRATION_V7: &str = r#"
+CREATE TABLE recipes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  nodes_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+"#;
+
 /// All schema migrations in order: (version, description, sql). Single
 /// source of truth shared by the SQL plugin registration in `run()` and the
 /// setup() bootstrap (`bootstrap::ensure_schema`) — the two MUST stay
 /// identical, since sqlx validates a SHA-384 checksum of the exact SQL
 /// string against its `_sqlx_migrations` ledger.
-pub(crate) const MIGRATIONS: [(i64, &str, &str); 6] = [
+pub(crate) const MIGRATIONS: [(i64, &str, &str); 7] = [
     (1, "panopus_initial", MIGRATION_V1),
     (2, "panopus_seed_designers", MIGRATION_V2),
     (3, "panopus_velvetyne_source", MIGRATION_V3),
     (4, "panopus_font_sample_text", MIGRATION_V4),
     (5, "panopus_errorerror_source", MIGRATION_V5),
     (6, "panopus_projects", MIGRATION_V6),
+    (7, "panopus_recipes", MIGRATION_V7),
 ];
 
 /// Global state: the active DB filename (default: "panopus.db").

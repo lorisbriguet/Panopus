@@ -6,8 +6,15 @@ import { ParamsPanel } from "./ParamsPanel";
 import { PreviewCanvas } from "./PreviewCanvas";
 import { ExportDialog } from "./ExportDialog";
 import { useSaveProjectGraph } from "../../hooks/useProjects";
+import { useCreateRecipe, useRecipes } from "../../hooks/useRecipes";
+import { Modal } from "../ui/Modal";
+import { Input } from "../ui/Input";
+import { Button } from "../ui/Button";
+import { useT } from "../../i18n/useT";
 import type { FinishGraph } from "../../lib/finishGraph";
 import {
+  applyRecipe,
+  captureRecipe,
   nodeResolutions,
   outputNodes,
   outputRatio,
@@ -52,6 +59,11 @@ export function FinishTab({
   const [compileErrors, setCompileErrors] = useState<Record<string, string | null>>({});
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [exportOpen, setExportOpen] = useState(false);
+  const [recipeModalOpen, setRecipeModalOpen] = useState(false);
+  const [recipeName, setRecipeName] = useState("");
+  const t = useT();
+  const { data: recipes } = useRecipes();
+  const createRecipe = useCreateRecipe();
   const { mutate: saveGraphMutate } = useSaveProjectGraph();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -269,8 +281,42 @@ export function FinishTab({
           ratio={ratio}
           sourceRatio={artRatio}
           nodeRatios={nodeRatios}
+          recipes={recipes ?? []}
+          onApplyRecipe={(json) => commitGraph(applyRecipe(graph, json))}
+          onSaveRecipe={() => {
+            setRecipeName("");
+            setRecipeModalOpen(true);
+          }}
         />
       </div>
+
+      <Modal
+        open={recipeModalOpen}
+        onClose={() => setRecipeModalOpen(false)}
+        title={t.recipe_save}
+        footer={
+          <Button
+            disabled={recipeName.trim() === ""}
+            loading={createRecipe.isPending}
+            onClick={() => {
+              createRecipe.mutate(
+                { name: recipeName.trim(), nodesJson: captureRecipe(graph) },
+                { onSuccess: () => setRecipeModalOpen(false) }
+              );
+            }}
+          >
+            {t.save}
+          </Button>
+        }
+      >
+        <Input
+          autoFocus
+          value={recipeName}
+          placeholder={t.recipe_name_placeholder}
+          onChange={(e) => setRecipeName(e.target.value)}
+          aria-label={t.recipe_name_placeholder}
+        />
+      </Modal>
 
       <ExportDialog
         open={exportOpen}

@@ -323,3 +323,61 @@ export function parseGraph(json: string): FinishGraph {
 export function serializeGraph(g: FinishGraph): string {
   return JSON.stringify(g);
 }
+
+/**
+ * Recipes (D5): a named, reusable subchain — the graph's INTERMEDIATE
+ * nodes (everything except sources and outputs) plus the wires among
+ * them. Sources/outputs stay project-specific by design.
+ */
+export function captureRecipe(g: FinishGraph): string {
+  const keep = new Set(
+    g.nodes
+      .filter((n) => n.kind !== "source" && n.kind !== "output")
+      .map((n) => n.id)
+  );
+  return JSON.stringify({
+    nodes: g.nodes.filter((n) => keep.has(n.id)),
+    wires: g.wires.filter((w) => keep.has(w.from) && keep.has(w.to)),
+  });
+}
+
+/**
+ * Paste a captured recipe into `g` with FRESH ids and remapped internal
+ * wires, offset so it lands beside the existing chain. Deliberately
+ * connects to NOTHING — the user wires head/tail (a wrong guess is
+ * worse than one manual wire). Garbage input returns `g` unchanged.
+ */
+export function applyRecipe(g: FinishGraph, recipeJson: string): FinishGraph {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(recipeJson);
+  } catch {
+    return g;
+  }
+  if (typeof raw !== "object" || raw === null) return g;
+  const r = raw as { nodes?: unknown; wires?: unknown };
+  if (!Array.isArray(r.nodes) || !Array.isArray(r.wires)) return g;
+  if (!r.nodes.every(isNode) || !r.wires.every(isWire)) return g;
+  const nodes = r.nodes as GraphNode[];
+  if (nodes.length === 0) return g;
+  if (nodes.some((n) => n.kind === "source" || n.kind === "output")) return g;
+
+  const stamp = Date.now();
+  const idMap = new Map<string, string>(
+    nodes.map((n, i) => [n.id, `recipe_${stamp}_${i}`])
+  );
+  const pasted: GraphNode[] = nodes.map((n) => ({
+    ...n,
+    id: idMap.get(n.id)!,
+    x: n.x + 240,
+    y: n.y + 80,
+  }));
+  const pastedWires: GraphWire[] = (r.wires as GraphWire[])
+    .filter((w) => idMap.has(w.from) && idMap.has(w.to))
+    .map((w) => ({ ...w, from: idMap.get(w.from)!, to: idMap.get(w.to)! }));
+  return {
+    ...g,
+    nodes: [...g.nodes, ...pasted],
+    wires: [...g.wires, ...pastedWires],
+  };
+}

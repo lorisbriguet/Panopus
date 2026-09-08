@@ -39,6 +39,10 @@ interface NodeCanvasProps {
   /** Per-node render aspect (w/h) from nodeResolutions — scale nodes
    *  can change it mid-chain. */
   nodeRatios?: Record<string, number>;
+  /** Saved subchains (D5): listed in the add menu. */
+  recipes?: { id: number; name: string; nodes_json: string }[];
+  onApplyRecipe?: (nodesJson: string) => void;
+  onSaveRecipe?: () => void;
 }
 
 type OperatorData = { label: string; thumb?: string; ratio?: number };
@@ -164,6 +168,9 @@ export function NodeCanvas({
   ratio,
   sourceRatio,
   nodeRatios,
+  recipes,
+  onApplyRecipe,
+  onSaveRecipe,
 }: NodeCanvasProps) {
   const t = useT();
   const [showAddMenu, setShowAddMenu] = useState(false);
@@ -449,6 +456,36 @@ export function NodeCanvas({
                 className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
               >
                 Output
+              </button>
+              <div className="my-1 border-t border-[var(--color-border-divider)]" />
+              <p className="px-3 py-1 text-[10px] uppercase tracking-wide text-muted">
+                {t.recipes}
+              </p>
+              {(recipes ?? []).map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => {
+                    onApplyRecipe?.(r.nodes_json);
+                    setShowAddMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
+                >
+                  {r.name}
+                </button>
+              ))}
+              {(recipes ?? []).length === 0 && (
+                <p className="px-3 py-1 text-xs text-muted">{t.recipe_empty}</p>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  onSaveRecipe?.();
+                  setShowAddMenu(false);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
+              >
+                {t.recipe_save}
               </button>
             </div>
           )}

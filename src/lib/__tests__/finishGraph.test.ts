@@ -1,5 +1,7 @@
 import { describe, test, expect } from "vitest";
 import {
+  captureRecipe,
+  applyRecipe,
   nodeResolutions,
   type FinishGraph,
   emptyGraph,
@@ -332,5 +334,58 @@ describe("nodeResolutions", () => {
   test("parseGraph accepts scale nodes", () => {
     const g = parseGraph(serializeGraph(chain()));
     expect(g.nodes.some((n) => n.kind === "scale")).toBe(true);
+  });
+});
+
+describe("recipes", () => {
+  const collage = (): FinishGraph => ({
+    v: 1,
+    nodes: [
+      { id: "src", kind: "source", x: 0, y: 0 },
+      { id: "sc", kind: "scale", params: { factor: 0.5 }, x: 100, y: 0 },
+      { id: "e", kind: "effect", effectId: "dither", params: { levels: 3 }, x: 200, y: 0 },
+      { id: "out", kind: "output", x: 300, y: 0 },
+    ],
+    wires: [
+      { from: "src", to: "sc", toIn: 0 },
+      { from: "sc", to: "e", toIn: 0 },
+      { from: "e", to: "out", toIn: 0 },
+    ],
+  });
+
+  test("captureRecipe keeps intermediates + internal wires only", () => {
+    const r = JSON.parse(captureRecipe(collage()));
+    expect(r.nodes.map((n: { id: string }) => n.id)).toEqual(["sc", "e"]);
+    expect(r.wires).toEqual([{ from: "sc", to: "e", toIn: 0 }]);
+  });
+
+  test("applyRecipe pastes with fresh ids and remapped wires", () => {
+    const g = collage();
+    const json = captureRecipe(g);
+    const next = applyRecipe(g, json);
+    // original untouched nodes still present, two new nodes added
+    expect(next.nodes.length).toBe(g.nodes.length + 2);
+    const added = next.nodes.filter((n) => !g.nodes.some((o) => o.id === n.id));
+    expect(added.length).toBe(2);
+    // params survive, ids are fresh
+    expect(added.some((n) => n.params?.levels === 3)).toBe(true);
+    expect(added.some((n) => n.id === "sc" || n.id === "e")).toBe(false);
+    // exactly one new internal wire, between the two new ids
+    const newWires = next.wires.filter(
+      (w) => !g.wires.some((o) => o.from === w.from && o.to === w.to)
+    );
+    expect(newWires.length).toBe(1);
+    expect(added.map((n) => n.id)).toContain(newWires[0].from);
+    expect(added.map((n) => n.id)).toContain(newWires[0].to);
+    // nothing auto-connects to the existing chain
+    expect(
+      next.wires.filter((w) => added.some((n) => n.id === w.to) && !added.some((n) => n.id === w.from))
+    ).toEqual([]);
+  });
+
+  test("applyRecipe rejects garbage", () => {
+    const g = collage();
+    expect(applyRecipe(g, "not json")).toEqual(g);
+    expect(applyRecipe(g, "{}")).toEqual(g);
   });
 });

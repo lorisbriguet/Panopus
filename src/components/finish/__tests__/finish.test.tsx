@@ -7,6 +7,34 @@ import { FinishTab } from "../FinishTab";
 vi.mock("../../../hooks/useProjects", () => ({
   useSaveProjectGraph: () => ({ mutate: vi.fn(), isPending: false }),
 }));
+
+const recipeCreateMutate = vi.fn();
+vi.mock("../../../hooks/useRecipes", () => ({
+  useRecipes: () => ({
+    data: [
+      {
+        id: 1,
+        name: "House dither",
+        nodes_json: JSON.stringify({
+          nodes: [
+            {
+              id: "e",
+              kind: "effect",
+              effectId: "dither",
+              params: {},
+              x: 200,
+              y: 0,
+            },
+          ],
+          wires: [],
+        }),
+        created_at: "2026-09-08 10:00:00",
+      },
+    ],
+    isLoading: false,
+  }),
+  useCreateRecipe: () => ({ mutate: recipeCreateMutate, isPending: false }),
+}));
 import { emptyGraph } from "../../../lib/finishGraph";
 import type { FinishGraph, GraphNode } from "../../../lib/finishGraph";
 import { EFFECTS } from "../../../lib/effects";
@@ -361,6 +389,40 @@ describe("FinishTab graph undo (Finish 2 T1)", () => {
     expect(
       screen.getByRole("button", { name: "Choose artwork..." })
     ).toBeInTheDocument();
+  });
+
+  it("applies a recipe from the add menu as one undoable paste (D5)", async () => {
+    renderTab();
+    fireEvent.click(screen.getByRole("button", { name: /add/i }));
+    fireEvent.click(screen.getByRole("button", { name: "House dither" }));
+    expect(screen.getByText("Dither")).toBeInTheDocument();
+    // one undo step removes the whole paste
+    fireEvent.keyDown(document, { key: "z", metaKey: true });
+    await waitFor(() =>
+      expect(screen.queryByText("Dither")).not.toBeInTheDocument()
+    );
+  });
+
+  it("save-as-recipe captures the intermediates through the modal", async () => {
+    renderTab();
+    addDither();
+    fireEvent.click(screen.getByRole("button", { name: /add/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save as recipe..." })
+    );
+    fireEvent.change(screen.getByLabelText("Recipe name..."), {
+      target: { value: "My look" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(recipeCreateMutate).toHaveBeenCalled());
+    const arg = recipeCreateMutate.mock.calls[0][0] as {
+      name: string;
+      nodesJson: string;
+    };
+    expect(arg.name).toBe("My look");
+    const captured = JSON.parse(arg.nodesJson);
+    expect(captured.nodes.length).toBe(1);
+    expect(captured.nodes[0].effectId).toBe("dither");
   });
 
   it("leaves cmd+z alone while typing in an input", async () => {

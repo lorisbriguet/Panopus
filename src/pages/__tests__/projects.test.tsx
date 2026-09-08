@@ -81,6 +81,11 @@ vi.mock("../../hooks/useProjects", () => ({
   useSaveProjectGraph: () => ({ mutate: saveGraphMutate, isPending: false }),
 }));
 
+vi.mock("../../hooks/useRecipes", () => ({
+  useRecipes: () => ({ data: [], isLoading: false }),
+  useCreateRecipe: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
 const mockFontRows: FontRow[] = [
   {
     id: 1,
