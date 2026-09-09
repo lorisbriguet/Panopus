@@ -98,7 +98,7 @@ export function layoutText(
 /** djb2 over the raster-relevant inputs — the node's rasterKey. The
  *  layout version participates so cached rasters refresh when the
  *  measurement rules change. */
-const LAYOUT_VERSION = "v5"; // v5: own-registry font gating (#411, check() lies)
+const LAYOUT_VERSION = "v6"; // v6: library-wide font resolution (#411)
 
 export function rasterKey(content: string, font: string): string {
   const s = `${content}|${font}|${LAYOUT_VERSION}`;

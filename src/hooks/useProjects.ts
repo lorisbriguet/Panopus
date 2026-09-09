@@ -177,15 +177,16 @@ export function useProjectFontFamilies(projectId: number) {
 }
 
 /** Font FILE path per family (first style wins) — FontFace loading for
- *  the text rasterizer (#411). */
-export function useProjectFontPaths(projectId: number) {
+ *  the text rasterizer (#411). LIBRARY-WIDE on purpose: the picker is
+ *  project-scoped, but a text node may reference any family the user
+ *  ever picked; rendering must still resolve it. */
+export function useProjectFontPaths(_projectId: number) {
   return useQuery({
-    queryKey: ["projects", projectId, "font-paths"],
+    queryKey: ["fonts", "family-paths"],
     queryFn: async (): Promise<Record<string, string>> => {
       const db = await getDb();
       const rows = await db.select<{ family: string; path: string }[]>(
-        "SELECT f.family, MIN(f.path) AS path FROM fonts f JOIN project_fonts pf ON pf.font_id = f.id WHERE pf.project_id = $1 GROUP BY f.family",
-        [projectId]
+        "SELECT family, MIN(path) AS path FROM fonts GROUP BY family"
       );
       return Object.fromEntries(rows.map((r) => [r.family, r.path]));
     },
