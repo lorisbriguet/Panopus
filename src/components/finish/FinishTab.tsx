@@ -219,8 +219,25 @@ export function FinishTab({
         // The canvas needs the FILE, not CoreText activation (#411).
         const fontPath = textFontPaths?.[font];
         await ensureFontLoaded(font, fontPath ? convertFileSrc(fontPath) : undefined);
+        // Only cache-commit when the requested font actually resolved:
+        // the first pass can run BEFORE the font-paths query lands, and
+        // a committed Times-fallback key would never retry (#411 race).
+        const fontReady =
+          font === "" ||
+          (typeof document !== "undefined" &&
+            "fonts" in document &&
+            document.fonts.check(`16px "${font}"`));
         const raster = await rasterizeText(content === "" ? " " : content, font);
         if (!raster || cancelled) continue;
+        if (!fontReady) {
+          // Preview with the fallback, but leave the node UNKEYED so the
+          // effect re-rasters once the font file arrives.
+          const tmp = await createImageBitmap(
+            new Blob([new Uint8Array(raster.bytes)])
+          );
+          if (!cancelled) setTextBitmaps((prev) => ({ ...prev, [n.id]: tmp }));
+          continue;
+        }
         const path = await invoke<string>("save_finish_raster", {
           projectId,
           nodeId: n.id,
