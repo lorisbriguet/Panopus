@@ -107,7 +107,7 @@ function SourceParams({ info }: { info?: SourceInfo }) {
   const t = useT();
   const name = info?.path ? info.path.split("/").pop() : null;
   return (
-    <div className="h-full border border-white/10 rounded-[3px] bg-black/50 backdrop-blur-[3px] overflow-y-auto font-mono">
+    <div className="h-full border border-white/10 rounded-[3px] bg-[var(--color-surface)] overflow-y-auto font-mono">
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
         <span className="inline-block w-1.5 h-1.5 rounded-[1px] bg-white/35" />
         <h3 className="text-[10px] tracking-[0.08em] uppercase text-[var(--color-text-secondary)]">
@@ -163,7 +163,7 @@ function ScaleParams({
     onParamsChange({ factor, width, height, filter, ...patch });
 
   return (
-    <div className="h-full border border-white/10 rounded-[3px] bg-black/50 backdrop-blur-[3px] overflow-y-auto font-mono">
+    <div className="h-full border border-white/10 rounded-[3px] bg-[var(--color-surface)] overflow-y-auto font-mono">
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
         <span className="inline-block w-1.5 h-1.5 rounded-[1px] bg-white/50" />
         <h3 className="text-[10px] tracking-[0.08em] uppercase text-[var(--color-text-secondary)]">
@@ -253,7 +253,7 @@ function TextParams({
     !document.fonts.check(`12px "${font}"`);
 
   return (
-    <div className="h-full border border-white/10 rounded-[3px] bg-black/50 backdrop-blur-[3px] overflow-y-auto font-mono">
+    <div className="h-full border border-white/10 rounded-[3px] bg-[var(--color-surface)] overflow-y-auto font-mono">
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
         <span className="inline-block w-1.5 h-1.5 rounded-[1px] bg-accent" />
         <h3 className="text-[10px] tracking-[0.08em] uppercase text-[var(--color-text-secondary)]">
@@ -333,7 +333,7 @@ function OutputParams({
     onParamsChange({ ...s, ...patch });
 
   return (
-    <div className="h-full border border-white/10 rounded-[3px] bg-black/50 backdrop-blur-[3px] overflow-y-auto font-mono">
+    <div className="h-full border border-white/10 rounded-[3px] bg-[var(--color-surface)] overflow-y-auto font-mono">
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
         <span className="inline-block w-1.5 h-1.5 rounded-[1px] bg-white/70" />
         <h3 className="text-[10px] tracking-[0.08em] uppercase text-[var(--color-text-secondary)]">
@@ -495,7 +495,7 @@ export function ParamsPanel({
 
   if (!spec) {
     return (
-      <div className="h-full border border-white/10 rounded-[3px] bg-black/50 backdrop-blur-[3px] p-4 font-mono">
+      <div className="h-full border border-white/10 rounded-[3px] bg-[var(--color-surface)] p-4 font-mono">
         <p className="text-xs text-muted">{t.finish_params_empty}</p>
       </div>
     );
@@ -512,7 +512,7 @@ export function ParamsPanel({
   const readout = READOUT;
 
   return (
-    <div className="h-full border border-white/10 rounded-[3px] bg-black/50 backdrop-blur-[3px] overflow-y-auto font-mono">
+    <div className="h-full border border-white/10 rounded-[3px] bg-[var(--color-surface)] overflow-y-auto font-mono">
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
         <span className="inline-block w-1.5 h-1.5 rounded-[1px] bg-accent" />
         <h3 className="text-[10px] tracking-[0.08em] uppercase text-[var(--color-text-secondary)]">

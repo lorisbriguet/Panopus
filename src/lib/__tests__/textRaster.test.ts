@@ -1,26 +1,41 @@
 import { describe, test, expect } from "vitest";
 import { layoutText, rasterKey } from "../textRaster";
 
-const fakeCtx = (widthPerChar = 10) => ({
+const fakeCtx = (
+  widthPerChar = 10,
+  bounds?: { ascent: number; descent: number }
+) => ({
   font: "",
-  measureText: (s: string) => ({ width: s.length * widthPerChar }),
+  measureText: (s: string) => ({
+    width: s.length * widthPerChar,
+    actualBoundingBoxAscent: bounds?.ascent,
+    actualBoundingBoxDescent: bounds?.descent,
+  }),
 });
 
-describe("layoutText", () => {
-  test("single line: width from measure + padding, height from line count", () => {
+describe("layoutText (tight bounds, #403)", () => {
+  test("single line without metrics: em-fraction fallback + minimal pad", () => {
     const l = layoutText("PANOPUS", "Alpha", fakeCtx(50));
     expect(l.fontPx).toBe(160);
-    expect(l.pad).toBe(24);
-    expect(l.h).toBe(Math.round(160 * 1.2 + 48));
-    expect(l.w).toBe(Math.ceil(7 * 50 + 48));
+    expect(l.pad).toBe(8);
+    // (lines-1)*advance + ascent(0.8em) + descent(0.2em) + 2*pad
+    expect(l.h).toBe(Math.round(160 * 0.8 + 160 * 0.2 + 16));
+    expect(l.w).toBe(Math.ceil(7 * 50 + 16));
+    expect(l.ascent).toBeCloseTo(128);
     expect(l.aspect).toBeCloseTo(l.w / l.h, 6);
   });
 
-  test("multi-line grows height and measures the longest line", () => {
+  test("real glyph metrics tighten the box", () => {
+    const l = layoutText("xxxx", "Alpha", fakeCtx(10, { ascent: 90, descent: 6 }));
+    expect(l.h).toBe(Math.round(90 + 6 + 16));
+    expect(l.ascent).toBe(90);
+  });
+
+  test("multi-line grows by line advance and measures the longest line", () => {
     const l = layoutText("AB\nABCD\nA", "Alpha", fakeCtx(10));
     expect(l.lines.length).toBe(3);
-    expect(l.w).toBe(Math.ceil(40 + l.pad * 2));
-    expect(l.h).toBe(Math.round(3 * 160 * 1.2 + l.pad * 2));
+    expect(l.w).toBe(Math.ceil(40 + 16));
+    expect(l.h).toBe(Math.round(2 * 160 * 1.2 + 160 + 16));
   });
 
   test("many lines shrink the font so height stays capped", () => {

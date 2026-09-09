@@ -12,6 +12,7 @@ const renameMutate = vi.fn();
 const removeMutate = vi.fn();
 const setArtworkMutate = vi.fn();
 const saveGraphMutate = vi.fn();
+const addFontsMutate = vi.fn();
 
 // invoke (the read_artwork_bytes liveness probe) and open (the artwork file
 // picker) both live in the shared src/__mocks__/tauri-api.ts stub — the
@@ -80,6 +81,7 @@ vi.mock("../../hooks/useProjects", () => ({
   useSetProjectArtwork: () => ({ mutate: setArtworkMutate, isPending: false }),
   useSaveProjectGraph: () => ({ mutate: saveGraphMutate, isPending: false }),
   useProjectFontFamilies: () => ({ data: [], isLoading: false }),
+  useAddFontsToProject: () => ({ mutate: addFontsMutate, isPending: false }),
 }));
 
 vi.mock("../../hooks/useRecipes", () => ({
@@ -367,5 +369,23 @@ describe("ProjectDetailPage artwork (Task 6)", () => {
     renderDetail(1);
     expect(screen.getByRole("tab", { name: "Finish" })).toBeInTheDocument();
     expect(invokeMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("ProjectDetailPage add fonts (#404)", () => {
+  it("adds a library font from the Fonts tab modal", async () => {
+    renderDetail(1);
+    fireEvent.click(screen.getByRole("button", { name: "Add fonts..." }));
+    const search = await screen.findByLabelText("Search fonts...");
+    fireEvent.change(search, { target: { value: "beta" } });
+    // mockFontRows: font id 1 (Alpha) is IN the project; Beta is not
+    const row = await screen.findByRole("button", { name: /Beta/ });
+    fireEvent.click(row);
+    await waitFor(() =>
+      expect(addFontsMutate).toHaveBeenCalledWith({
+        projectId: 1,
+        fontIds: [expect.any(Number)],
+      })
+    );
   });
 });

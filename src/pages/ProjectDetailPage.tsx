@@ -6,13 +6,14 @@ import {
 import { Link, useParams } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { ArrowLeft, X } from "lucide-react";
+import { ArrowLeft, Plus, X } from "lucide-react";
 import { FontListRow } from "../components/fonts/FontListRow";
 import { FinishTab } from "../components/finish/FinishTab";
 import { Button, EmptyState, Input, Modal, PageSpinner } from "../components/ui";
 import { useSetActive } from "../hooks/useActivation";
 import { useFonts } from "../hooks/useFonts";
 import {
+  useAddFontsToProject,
   useProject,
   useProjectFontIds,
   useRemoveFontFromProject,
@@ -39,6 +40,9 @@ export function ProjectDetailPage() {
   const { data: fonts } = useFonts();
   const renameProject = useRenameProject();
   const removeFont = useRemoveFontFromProject();
+  const addFonts = useAddFontsToProject();
+  const [addFontsOpen, setAddFontsOpen] = useState(false);
+  const [fontQuery, setFontQuery] = useState("");
   const setActive = useSetActive();
   const setArtwork = useSetProjectArtwork();
   const storeProofText = useAppStore((s) => s.proofText);
@@ -178,9 +182,21 @@ export function ProjectDetailPage() {
       {(!artworkPath || activeTab === "fonts") && (
         <>
           <section>
-            <h2 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">
-              {t.project_fonts_title}
-            </h2>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-xs font-medium text-muted uppercase tracking-wide">
+                {t.project_fonts_title}
+              </h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setFontQuery("");
+                  setAddFontsOpen(true);
+                }}
+              >
+                {t.project_add_fonts}
+              </Button>
+            </div>
             {projectFonts.length === 0 ? (
               <EmptyState message={t.project_empty} />
             ) : (
@@ -253,6 +269,49 @@ export function ProjectDetailPage() {
             : t.confirm_exclusive_body
           ).replace("{count}", String(otherActiveIds.length))}
         </p>
+      </Modal>
+
+      {/* Add fonts from the library, right on the Fonts tab (#404) */}
+      <Modal
+        open={addFontsOpen}
+        onClose={() => setAddFontsOpen(false)}
+        title={t.project_add_fonts}
+      >
+        <div className="flex flex-col gap-2">
+          <Input
+            autoFocus
+            value={fontQuery}
+            placeholder={t.search_fonts}
+            onChange={(e) => setFontQuery(e.target.value)}
+            aria-label={t.search_fonts}
+          />
+          <ul className="max-h-64 overflow-y-auto flex flex-col">
+            {(fonts ?? [])
+              .filter((f) => !idSet.has(f.id))
+              .filter((f) =>
+                `${f.family} ${f.style}`
+                  .toLowerCase()
+                  .includes(fontQuery.toLowerCase())
+              )
+              .slice(0, 50)
+              .map((f) => (
+                <li key={f.id}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      addFonts.mutate({ projectId: project.id, fontIds: [f.id] })
+                    }
+                    className="w-full flex items-center justify-between gap-3 px-2 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] rounded-lg text-left"
+                  >
+                    <span className="truncate">
+                      {f.family} <span className="text-muted">{f.style}</span>
+                    </span>
+                    <Plus size={14} aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+          </ul>
+        </div>
       </Modal>
 
       {/* Tab strip: Fonts | Finish (artwork attach lives in the Finish

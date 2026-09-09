@@ -20,45 +20,78 @@ export interface TextLayout {
   aspect: number;
   fontPx: number;
   pad: number;
+  /** Baseline offset of the FIRST line from the top edge. */
+  ascent: number;
   lines: string[];
 }
 
 interface MeasureCtx {
   font: string;
-  measureText(s: string): { width: number };
+  measureText(s: string): {
+    width: number;
+    actualBoundingBoxAscent?: number;
+    actualBoundingBoxDescent?: number;
+  };
 }
 
-/** Pure layout: line split, measure, pad, height cap. Testable with a
- *  fake measuring context. */
+/** Pure layout: line split, TIGHT glyph bounds (actualBoundingBox
+ *  metrics, em-fraction fallback), minimal pad, height cap (#403).
+ *  Testable with a fake measuring context. */
 export function layoutText(
   content: string,
   font: string,
   ctx: MeasureCtx
 ): TextLayout {
   const lines = content.split("\n");
-  let fontPx = FONT_PX;
-  const measure = (px: number) => {
+  const metrics = (px: number) => {
     ctx.font = `${px}px "${font}"`;
-    let max = 1;
+    let w = 1;
+    let ascent = 0;
+    let descent = 0;
     for (const line of lines) {
-      max = Math.max(max, ctx.measureText(line).width);
+      const m = ctx.measureText(line);
+      w = Math.max(w, m.width);
+      ascent = Math.max(ascent, m.actualBoundingBoxAscent ?? px * 0.8);
+      descent = Math.max(descent, m.actualBoundingBoxDescent ?? px * 0.2);
     }
-    return max;
+    return { w, ascent, descent };
   };
-  let pad = Math.round(fontPx * 0.15);
-  let h = Math.round(lines.length * fontPx * LINE_HEIGHT + pad * 2);
-  if (h > MAX_RASTER_H) {
-    fontPx = Math.max(8, Math.floor((fontPx * MAX_RASTER_H) / h));
-    pad = Math.round(fontPx * 0.15);
-    h = Math.round(lines.length * fontPx * LINE_HEIGHT + pad * 2);
+  const dims = (px: number, m: { w: number; ascent: number; descent: number }) => {
+    const pad = Math.round(px * 0.05);
+    return {
+      pad,
+      h: Math.round(
+        (lines.length - 1) * px * LINE_HEIGHT + m.ascent + m.descent + pad * 2
+      ),
+      w: Math.max(1, Math.ceil(m.w + pad * 2)),
+    };
+  };
+  let fontPx = FONT_PX;
+  let m = metrics(fontPx);
+  let d = dims(fontPx, m);
+  if (d.h > MAX_RASTER_H) {
+    fontPx = Math.max(8, Math.floor((fontPx * MAX_RASTER_H) / d.h));
+    m = metrics(fontPx);
+    d = dims(fontPx, m);
   }
-  const w = Math.max(1, Math.ceil(measure(fontPx) + pad * 2));
-  return { w, h, aspect: w / h, fontPx, pad, lines };
+  return {
+    w: d.w,
+    h: d.h,
+    aspect: d.w / d.h,
+    fontPx,
+    pad: d.pad,
+    ascent: m.ascent,
+    lines,
+  };
 }
 
-/** djb2 over the raster-relevant inputs — the node's rasterKey. */
+/** djb2 over the raster-relevant inputs — the node's rasterKey. The
+ *  layout version participates so cached rasters refresh when the
+ *  measurement rules change. */
+const LAYOUT_VERSION = "v2"; // v2: tight actualBoundingBox metrics (#403)
+
 export function rasterKey(content: string, font: string): string {
-  const s = `${content}|${font}`;
+  const s = `${content}|${font}|${LAYOUT_VERSION}`;
   let h = 5381;
   for (let i = 0; i < s.length; i++) {
     h = ((h << 5) + h + s.charCodeAt(i)) | 0;
@@ -91,7 +124,7 @@ export async function rasterizeText(
     ctx.fillText(
       line,
       layout.pad,
-      layout.pad + layout.fontPx * (i * LINE_HEIGHT + 0.85)
+      layout.pad + layout.ascent + i * layout.fontPx * LINE_HEIGHT
     );
   });
   const blob = await new Promise<Blob | null>((resolve) =>

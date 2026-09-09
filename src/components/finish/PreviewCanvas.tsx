@@ -252,6 +252,13 @@ export function PreviewCanvas({
             top: (view.ch - view.h) / 2 + block.top,
             width: block.w,
             height: block.h,
+            // GL-CCW rotation reads clockwise on screen = CSS-positive.
+            transform: `rotate(${
+              typeof selectedNode?.params?.rotate === "number"
+                ? selectedNode.params.rotate
+                : 0
+            }deg)`,
+            transformOrigin: "center",
           }}
           onPointerDown={(e) => {
             if (!selectedNode) return;

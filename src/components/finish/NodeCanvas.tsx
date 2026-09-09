@@ -196,8 +196,12 @@ export function NodeCanvas({
             n.kind === "source"
               ? "Source"
               : n.kind === "output"
-              ? "Output"
-              : EFFECTS[n.effectId ?? ""]?.label ?? "?",
+                ? "Output"
+                : n.kind === "scale"
+                  ? "Scale"
+                  : n.kind === "text"
+                    ? "Text"
+                    : EFFECTS[n.effectId ?? ""]?.label ?? "?",
           thumb: thumbnails?.[n.id],
           // Output viewers are shaped by THEIR OWN page settings; chain
           // viewers by their node's render resolution (artwork fallback).
@@ -439,6 +443,7 @@ export function NodeCanvas({
         defaultEdgeOptions={EDGE_OPTIONS}
         onConnect={handleConnect}
         onNodesChange={handleNodesChange}
+        onPaneClick={() => onNodeSelect(null)}
         fitView
       >
         <Panel position="top-left">
