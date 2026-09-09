@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { NodeCanvas } from "./NodeCanvas";
 import { ParamsPanel } from "./ParamsPanel";
 import { PreviewCanvas } from "./PreviewCanvas";
 import { ExportDialog } from "./ExportDialog";
-import { useProjectFontFamilies, useSaveProjectGraph } from "../../hooks/useProjects";
-import { rasterKey, rasterizeText } from "../../lib/textRaster";
+import {
+  useProjectFontFamilies,
+  useProjectFontPaths,
+  useSaveProjectGraph,
+} from "../../hooks/useProjects";
+import { ensureFontLoaded, rasterKey, rasterizeText } from "../../lib/textRaster";
 import { useCreateRecipe, useRecipes } from "../../hooks/useRecipes";
 import { Modal } from "../ui/Modal";
 import { Input } from "../ui/Input";
@@ -184,6 +188,7 @@ export function FinishTab({
   // Raster refs are patched QUIETLY (no undo entry) — undo restoring an
   // old key simply re-triggers this effect.
   const { data: textFonts } = useProjectFontFamilies(projectId);
+  const { data: textFontPaths } = useProjectFontPaths(projectId);
   const textKeySig = graph.nodes
     .filter((n) => n.kind === "text")
     .map((n) => `${n.id}:${n.params?.content ?? ""}:${n.params?.font ?? ""}:${n.rasterKey ?? ""}`)
@@ -211,6 +216,9 @@ export function FinishTab({
           }
           continue;
         }
+        // The canvas needs the FILE, not CoreText activation (#411).
+        const fontPath = textFontPaths?.[font];
+        await ensureFontLoaded(font, fontPath ? convertFileSrc(fontPath) : undefined);
         const raster = await rasterizeText(content === "" ? " " : content, font);
         if (!raster || cancelled) continue;
         const path = await invoke<string>("save_finish_raster", {
@@ -243,7 +251,7 @@ export function FinishTab({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- textKeySig covers the text nodes
-  }, [textKeySig, projectId]);
+  }, [textKeySig, projectId, textFontPaths]);
 
   // The PREVIEW output (selected output node, else the first) drives
   // the page aspect of the big canvas; the artwork itself stays

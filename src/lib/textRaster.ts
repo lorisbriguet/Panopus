@@ -22,6 +22,8 @@ export interface TextLayout {
   pad: number;
   /** Baseline offset of the FIRST line from the top edge. */
   ascent: number;
+  /** Draw x-origin (pad + max left bearing). */
+  originX: number;
   lines: string[];
 }
 
@@ -31,6 +33,8 @@ interface MeasureCtx {
     width: number;
     actualBoundingBoxAscent?: number;
     actualBoundingBoxDescent?: number;
+    actualBoundingBoxLeft?: number;
+    actualBoundingBoxRight?: number;
   };
 }
 
@@ -48,13 +52,18 @@ export function layoutText(
     let w = 1;
     let ascent = 0;
     let descent = 0;
+    let left = 0;
     for (const line of lines) {
       const m = ctx.measureText(line);
-      w = Math.max(w, m.width);
+      // Ink bounds, not advance width (#410): bearings included.
+      const lineW =
+        (m.actualBoundingBoxLeft ?? 0) + (m.actualBoundingBoxRight ?? m.width);
+      w = Math.max(w, lineW);
+      left = Math.max(left, m.actualBoundingBoxLeft ?? 0);
       ascent = Math.max(ascent, m.actualBoundingBoxAscent ?? px * 0.8);
       descent = Math.max(descent, m.actualBoundingBoxDescent ?? px * 0.2);
     }
-    return { w, ascent, descent };
+    return { w, ascent, descent, left };
   };
   const dims = (px: number, m: { w: number; ascent: number; descent: number }) => {
     const pad = Math.round(px * 0.05);
@@ -81,6 +90,7 @@ export function layoutText(
     fontPx,
     pad: d.pad,
     ascent: m.ascent,
+    originX: d.pad + m.left,
     lines,
   };
 }
@@ -88,7 +98,7 @@ export function layoutText(
 /** djb2 over the raster-relevant inputs — the node's rasterKey. The
  *  layout version participates so cached rasters refresh when the
  *  measurement rules change. */
-const LAYOUT_VERSION = "v2"; // v2: tight actualBoundingBox metrics (#403)
+const LAYOUT_VERSION = "v3"; // v3: ink-bounds width + bearings (#410)
 
 export function rasterKey(content: string, font: string): string {
   const s = `${content}|${font}|${LAYOUT_VERSION}`;
@@ -123,7 +133,7 @@ export async function rasterizeText(
   layout.lines.forEach((line, i) => {
     ctx.fillText(
       line,
-      layout.pad,
+      layout.originX,
       layout.pad + layout.ascent + i * layout.fontPx * LINE_HEIGHT
     );
   });
@@ -135,4 +145,25 @@ export async function rasterizeText(
     bytes: new Uint8Array(await blob.arrayBuffer()),
     aspect: layout.aspect,
   };
+}
+
+/**
+ * Make a project font available to the 2D canvas (#411): CoreText
+ * activation is not what the webview consults — load the actual font
+ * FILE as a FontFace once, keyed by family.
+ */
+export async function ensureFontLoaded(
+  family: string,
+  src: string | undefined
+): Promise<void> {
+  if (!family || !src) return;
+  if (typeof document === "undefined" || !("fonts" in document)) return;
+  if (document.fonts.check(`16px "${family}"`)) return;
+  try {
+    const face = new FontFace(family, `url("${src}")`);
+    await face.load();
+    document.fonts.add(face);
+  } catch (e) {
+    console.warn("[finish] font load failed:", family, e);
+  }
 }

@@ -244,22 +244,34 @@ export function PreviewCanvas({
         className="absolute inset-0 m-auto border border-white/15 shadow-[0_0_48px_rgba(0,0,0,0.55)]"
       />
       {block && (
-        <div
-          data-testid="drag-block"
-          className="absolute z-30 border border-accent cursor-move"
-          style={{
-            left: (view.cw - view.w) / 2 + block.left,
-            top: (view.ch - view.h) / 2 + block.top,
-            width: block.w,
-            height: block.h,
-            // GL-CCW rotation reads clockwise on screen = CSS-positive.
-            transform: `rotate(${
-              typeof selectedNode?.params?.rotate === "number"
-                ? selectedNode.params.rotate
-                : 0
-            }deg)`,
-            transformOrigin: "center",
-          }}
+        <>
+          {/* Outline: visual only, UNDER the network so it never covers
+              node UI (#412); rotation sign flipped per field test (#406). */}
+          <div
+            data-testid="drag-block"
+            className="absolute z-[5] border border-accent pointer-events-none"
+            style={{
+              left: (view.cw - view.w) / 2 + block.left,
+              top: (view.ch - view.h) / 2 + block.top,
+              width: block.w,
+              height: block.h,
+              transform: `rotate(${
+                typeof selectedNode?.params?.rotate === "number"
+                  ? -selectedNode.params.rotate
+                  : 0
+              }deg)`,
+              transformOrigin: "center",
+            }}
+          />
+          {/* Center handle: the interactive drag surface, above the
+              network (small, so it does not occlude). */}
+          <div
+            data-testid="drag-handle"
+            className="absolute z-30 w-3 h-3 -translate-x-1/2 -translate-y-1/2 rounded-[2px] bg-accent cursor-move"
+            style={{
+              left: (view.cw - view.w) / 2 + block.left + block.w / 2,
+              top: (view.ch - view.h) / 2 + block.top + block.h / 2,
+            }}
           onPointerDown={(e) => {
             if (!selectedNode) return;
             (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -289,7 +301,8 @@ export function PreviewCanvas({
           onPointerUp={() => {
             dragRef.current = null;
           }}
-        />
+          />
+        </>
       )}
     </div>
   );

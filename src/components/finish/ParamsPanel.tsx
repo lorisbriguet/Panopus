@@ -72,6 +72,40 @@ const NAME = "w-20 shrink-0 text-[10px] tracking-[0.08em] uppercase text-muted";
 const READOUT =
   "w-10 shrink-0 text-right text-[10px] tabular-nums text-[var(--color-text-secondary)]";
 
+/** Typeable value for scrub rows (#408): the readout IS an input. */
+function ValueField({
+  name,
+  value,
+  min,
+  max,
+  int,
+  onChange,
+}: {
+  name: string;
+  value: number;
+  min: number;
+  max: number;
+  int?: boolean;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <input
+      type="number"
+      value={value}
+      min={min}
+      max={max}
+      aria-label={`${name} value`}
+      onChange={(e) => {
+        const n = Number(e.target.value);
+        if (!Number.isFinite(n)) return;
+        const c = Math.min(max, Math.max(min, n));
+        onChange(int ? Math.round(c) : c);
+      }}
+      className="w-14 shrink-0 bg-transparent text-right text-[10px] tabular-nums text-[var(--color-text-secondary)] outline-none border-b border-transparent focus:border-accent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+    />
+  );
+}
+
 /** Flat mono number field for the output settings. */
 function NumField({
   label,
@@ -178,7 +212,13 @@ function ScaleParams({
             value={factor}
             onChange={(v) => set({ factor: v })}
           />
-          <div className={READOUT}>{factor}</div>
+          <ValueField
+            name="factor"
+            value={factor}
+            min={0.05}
+            max={4}
+            onChange={(v) => set({ factor: v })}
+          />
         </div>
         <div className={ROW}>
           <label className={NAME}>width</label>
@@ -308,7 +348,13 @@ function TextParams({
                 value={value}
                 onChange={(v) => set({ [s.name]: v })}
               />
-              <div className={READOUT}>{value}</div>
+              <ValueField
+                name={s.name}
+                value={value}
+                min={s.min}
+                max={s.max}
+                onChange={(v) => set({ [s.name]: v })}
+              />
             </div>
           );
         })}
@@ -509,7 +555,6 @@ export function ParamsPanel({
 
   const row = ROW;
   const name = NAME;
-  const readout = READOUT;
 
   return (
     <div className="h-full border border-white/10 rounded-[3px] bg-[var(--color-surface)] overflow-y-auto font-mono">
@@ -539,7 +584,14 @@ export function ParamsPanel({
                   value={Number(value)}
                   onChange={(v) => handleParamChange(p.name, v)}
                 />
-                <div className={readout}>{value}</div>
+                <ValueField
+                  name={p.name}
+                  value={Number(value)}
+                  min={p.min ?? 0}
+                  max={p.max ?? 1}
+                  int={p.type === "int"}
+                  onChange={(v) => handleParamChange(p.name, v)}
+                />
               </div>
             );
           }

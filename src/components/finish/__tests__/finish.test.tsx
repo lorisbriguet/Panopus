@@ -7,6 +7,7 @@ import { FinishTab } from "../FinishTab";
 vi.mock("../../../hooks/useProjects", () => ({
   useSaveProjectGraph: () => ({ mutate: vi.fn(), isPending: false }),
   useProjectFontFamilies: () => ({ data: ["Alpha", "Beta"], isLoading: false }),
+  useProjectFontPaths: () => ({ data: {}, isLoading: false }),
 }));
 
 const recipeCreateMutate = vi.fn();

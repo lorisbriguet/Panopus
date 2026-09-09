@@ -175,3 +175,19 @@ export function useProjectFontFamilies(projectId: number) {
     },
   });
 }
+
+/** Font FILE path per family (first style wins) — FontFace loading for
+ *  the text rasterizer (#411). */
+export function useProjectFontPaths(projectId: number) {
+  return useQuery({
+    queryKey: ["projects", projectId, "font-paths"],
+    queryFn: async (): Promise<Record<string, string>> => {
+      const db = await getDb();
+      const rows = await db.select<{ family: string; path: string }[]>(
+        "SELECT f.family, MIN(f.path) AS path FROM fonts f JOIN project_fonts pf ON pf.font_id = f.id WHERE pf.project_id = $1 GROUP BY f.family",
+        [projectId]
+      );
+      return Object.fromEntries(rows.map((r) => [r.family, r.path]));
+    },
+  });
+}

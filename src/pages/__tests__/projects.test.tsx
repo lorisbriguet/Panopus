@@ -81,6 +81,7 @@ vi.mock("../../hooks/useProjects", () => ({
   useSetProjectArtwork: () => ({ mutate: setArtworkMutate, isPending: false }),
   useSaveProjectGraph: () => ({ mutate: saveGraphMutate, isPending: false }),
   useProjectFontFamilies: () => ({ data: [], isLoading: false }),
+  useProjectFontPaths: () => ({ data: {}, isLoading: false }),
   useAddFontsToProject: () => ({ mutate: addFontsMutate, isPending: false }),
 }));
 

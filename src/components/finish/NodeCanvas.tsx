@@ -148,12 +148,23 @@ function TextNode({ data, selected }: { data: OperatorData; selected: boolean })
   );
 }
 
+// Keys are PREFIXED: ReactFlow ships built-in styling for types named
+// "input"/"output"/"default"/"group" (white card, #393) — our "output"
+// collided with it.
 const nodeTypes = {
-  source: SourceNode,
-  effect: EffectNode,
-  output: OutputNode,
-  scale: ScaleNode,
-  text: TextNode,
+  opSource: SourceNode,
+  opEffect: EffectNode,
+  opOutput: OutputNode,
+  opScale: ScaleNode,
+  opText: TextNode,
+};
+
+const RF_TYPE: Record<string, string> = {
+  source: "opSource",
+  effect: "opEffect",
+  output: "opOutput",
+  scale: "opScale",
+  text: "opText",
 };
 
 /** Thin, light wires — TD network look. */
@@ -218,7 +229,7 @@ export function NodeCanvas({
         }
         return {
           id: n.id,
-          type: n.kind,
+          type: RF_TYPE[n.kind] ?? "opEffect",
           position: { x: n.x, y: n.y },
           data,
           selected: n.id === selectedNodeId,
