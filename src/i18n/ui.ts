@@ -256,6 +256,11 @@ const ui = {
     // Text operator (Finish 2 D3)
     font_inactive: "Font not active — activate it for a faithful raster",
 
+    // Operator context menu (#381/#382)
+    op_bypass: "Bypass",
+    op_unbypass: "Enable",
+    op_swap: "Swap to",
+
     // Recipes (Finish 2 D5)
     recipes: "Recipes",
     recipe_save: "Save as recipe...",
@@ -530,6 +535,11 @@ const ui = {
 
     // Text operator (Finish 2 D3)
     font_inactive: "Police non active — activez-la pour un rendu fidele",
+
+    // Operator context menu (#381/#382)
+    op_bypass: "Court-circuiter",
+    op_unbypass: "Activer",
+    op_swap: "Remplacer par",
 
     // Recipes (Finish 2 D5)
     recipes: "Recettes",

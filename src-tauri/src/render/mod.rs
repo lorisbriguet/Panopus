@@ -44,6 +44,9 @@ pub struct GraphNodeRs {
     /// Text nodes (D3): cached raster file the exporter composites.
     #[serde(rename = "rasterPath", default)]
     pub raster_path: Option<String>,
+    /// TD-style bypass (#382): pure passthrough of input 0.
+    #[serde(default)]
+    pub bypass: Option<bool>,
     #[serde(default)]
     pub x: f64,
     #[serde(default)]
@@ -89,7 +92,11 @@ pub fn node_resolutions(
                 .and_then(|w| res.get(&w.from).copied())
                 .unwrap_or((8, 8))
         };
-        let r = match node.kind.as_str() {
+        let bypassed = node.bypass.unwrap_or(false) && node.kind != "source";
+        let r = if bypassed {
+            input_res(&res)
+        } else {
+        match node.kind.as_str() {
             "source" => {
                 let (dw, dh) = source_dims.get(&id).copied().unwrap_or((8, 8));
                 let s = (f64::from(cap) / f64::from(dw.max(dh))).min(1.0);
@@ -117,6 +124,7 @@ pub fn node_resolutions(
                 }
             }
             _ => input_res(&res),
+        }
         };
         res.insert(id, r);
     }

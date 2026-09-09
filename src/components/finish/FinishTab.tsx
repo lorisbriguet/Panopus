@@ -66,6 +66,9 @@ export function FinishTab({
   const [compileErrors, setCompileErrors] = useState<Record<string, string | null>>({});
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [exportOpen, setExportOpen] = useState(false);
+  /** TD blue-dot active preview (#384): non-output ops show their raw
+   *  frame contain-fit; output ops show their page. */
+  const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
   const [recipeModalOpen, setRecipeModalOpen] = useState(false);
   const [recipeName, setRecipeName] = useState("");
   const t = useT();
@@ -282,7 +285,11 @@ export function FinishTab({
       ? selectedNodeForOutput.id
       : outputNodes(graph)[0]?.id ?? null;
   const settings = outputSettingsForNode(graph, previewOutputId ?? "");
-  const ratio = outputRatio(settings);
+  const previewNode = previewNodeId
+    ? graph.nodes.find((n) => n.id === previewNodeId) ?? null
+    : null;
+  const opPreview = previewNode !== null && previewNode.kind !== "output";
+  let ratio = outputRatio(settings);
   const artRatio = artworkFull ? artworkFull.width / artworkFull.height : undefined;
 
   // Per-node viewer aspects (scale nodes reshape mid-chain).
@@ -294,6 +301,9 @@ export function FinishTab({
     for (const [id, r] of nodeResolutions(graph, dims, 2048)) {
       nodeRatios[id] = r.w / r.h;
     }
+  }
+  if (opPreview && previewNode && nodeRatios[previewNode.id]) {
+    ratio = nodeRatios[previewNode.id];
   }
 
   // Debounced autosave (800ms)
@@ -360,8 +370,8 @@ export function FinishTab({
           rasterBitmaps={textBitmaps}
           artworkPath={artworkPath ?? ""}
           ratio={ratio}
-          previewOutputId={previewOutputId}
-          selectedNode={selectedNode}
+          previewOutputId={previewNodeId ?? previewOutputId}
+          selectedNode={opPreview ? null : selectedNode}
           onNodeParams={(nodeId, patch) => {
             commitGraph({
               ...graph,
@@ -386,6 +396,8 @@ export function FinishTab({
           ratio={ratio}
           sourceRatio={artRatio}
           nodeRatios={nodeRatios}
+          previewNodeId={previewNodeId}
+          onPreviewNode={setPreviewNodeId}
           recipes={recipes ?? []}
           onApplyRecipe={(json) => commitGraph(applyRecipe(graph, json))}
           onSaveRecipe={() => {

@@ -138,6 +138,9 @@ export function nodeResolutions(
       const d = sourceDims.get(id) ?? { w: 8, h: 8 };
       const s = Math.min(1, cap / Math.max(d.w, d.h));
       res.set(id, { w: clampAxis(d.w * s), h: clampAxis(d.h * s) });
+    } else if (node.bypass) {
+      // Bypassed nodes (incl. scale) are pure passthroughs (#382).
+      res.set(id, inputRes(id));
     } else if (node.kind === "scale") {
       const p = node.params ?? {};
       const abs = (v: unknown) =>
@@ -168,6 +171,8 @@ export type GraphNode = {
   /** Text nodes (D3): cached raster file + its content hash. */
   rasterPath?: string;
   rasterKey?: string;
+  /** TD-style bypass (#382): the node passes input 0 through untouched. */
+  bypass?: boolean;
   x: number;
   y: number;
 };

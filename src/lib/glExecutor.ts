@@ -387,9 +387,19 @@ export class GlExecutor {
     // place the image is fitted/resized to a page. The canvas is a
     // scaled view of the PREVIEW output's page.
     const outs = outputNodes(graph);
-    const previewId =
-      this.previewOutput && outs.some((n) => n.id === this.previewOutput)
-        ? this.previewOutput
+    // Active preview (#384): ANY operator can own the canvas. Output
+    // nodes show their placed page; other operators show their raw
+    // frame contain-fit (the "zoomed" viewer, #385).
+    const flagged = this.previewOutput;
+    const flaggedNode = flagged
+      ? graph.nodes.find((n) => n.id === flagged)
+      : undefined;
+    const opPreviewId =
+      flaggedNode && flaggedNode.kind !== "output" ? flaggedNode.id : null;
+    const previewId = opPreviewId
+      ? null
+      : flaggedNode?.kind === "output"
+        ? flaggedNode.id
         : outs[0]?.id ?? null;
     const settingsOf = (id: string) =>
       outputSettingsFrom(outs.find((n) => n.id === id)?.params);
@@ -432,6 +442,11 @@ export class GlExecutor {
     for (const id of executionOrder(graph)) {
       const node = byId.get(id);
       if (!node) continue;
+      // Bypass (#382): pure passthrough of input 0.
+      if (node.bypass && node.kind !== "source" && node.kind !== "output") {
+        outputs.set(id, inputTex(id, 0));
+        continue;
+      }
       if (node.kind === "source") {
         outputs.set(id, this.sourceTex.get(id)?.tex ?? black);
         continue;
@@ -546,6 +561,20 @@ export class GlExecutor {
       }
       this.nodeErrors.set(id, failed);
       outputs.set(id, failed ? inputTex(id, 0) : prev ?? black);
+    }
+
+    if (opPreviewId) {
+      const tex = outputs.get(opPreviewId) ?? black;
+      const r = resOf(opPreviewId);
+      this.blitToCanvasPlaced(
+        tex,
+        width,
+        height,
+        { ...outputSettingsFrom(undefined), fit: "fit" },
+        r.w,
+        r.h,
+        { w: r.w, h: r.h }
+      );
     }
 
     if (this.thumbSize > 0 && this.onThumbnails) {

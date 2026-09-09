@@ -420,3 +420,36 @@ describe("text nodes (D3)", () => {
     expect(executionOrder(back)).toEqual(["src", "t", "out"]);
   });
 });
+
+describe("bypass (#382)", () => {
+  test("bypassed scale inherits its input resolution (no resize)", () => {
+    const g: FinishGraph = {
+      v: 1,
+      nodes: [
+        { id: "src", kind: "source", x: 0, y: 0 },
+        { id: "sc", kind: "scale", params: { factor: 0.5 }, bypass: true, x: 0, y: 0 },
+        { id: "out", kind: "output", x: 0, y: 0 },
+      ],
+      wires: [
+        { from: "src", to: "sc", toIn: 0 },
+        { from: "sc", to: "out", toIn: 0 },
+      ],
+    };
+    const res = nodeResolutions(g, new Map([["src", { w: 1000, h: 2000 }]]), 16384);
+    expect(res.get("sc")).toEqual({ w: 1000, h: 2000 });
+  });
+
+  test("bypass survives the JSON round-trip", () => {
+    const g = emptyGraph();
+    g.nodes.push({
+      id: "e",
+      kind: "effect",
+      effectId: "dither",
+      bypass: true,
+      x: 0,
+      y: 0,
+    });
+    const back = parseGraph(serializeGraph(g));
+    expect(back.nodes.find((n) => n.id === "e")?.bypass).toBe(true);
+  });
+});

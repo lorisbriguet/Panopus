@@ -77,8 +77,11 @@ async function renderCase(
       EFFECTS[n.effectId ?? ""]?.passes.some((p) => (p.textures ?? []).length > 0)
   );
   if (hasAssets) {
+    // Timeout fallback: a BYPASSED asset-bearing effect never fetches
+    // its textures, so onAssetLoaded may legitimately never fire.
     const loaded = new Promise<void>((resolve) => {
       ex.onAssetLoaded = () => resolve();
+      setTimeout(resolve, 2000);
     });
     ex.render(graph, px.w, px.h);
     await loaded;

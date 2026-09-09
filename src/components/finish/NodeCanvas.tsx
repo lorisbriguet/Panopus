@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   applyNodeChanges,
@@ -43,9 +43,28 @@ interface NodeCanvasProps {
   recipes?: { id: number; name: string; nodes_json: string }[];
   onApplyRecipe?: (nodesJson: string) => void;
   onSaveRecipe?: () => void;
+  /** TD blue-dot active preview (#384): flagged node owns the canvas. */
+  previewNodeId?: string | null;
+  onPreviewNode?: (id: string | null) => void;
 }
 
-type OperatorData = { label: string; thumb?: string; ratio?: number };
+type OperatorData = {
+  label: string;
+  thumb?: string;
+  ratio?: number;
+  bypassed?: boolean;
+  previewActive?: boolean;
+  onPreviewToggle?: () => void;
+};
+
+/** Family color coding (#389), TD-style: one hue per operator family. */
+const TINTS: Record<string, string> = {
+  source: "bg-[#4fa3ff]",
+  effect: "bg-[#b98cff]",
+  scale: "bg-[#ffd166]",
+  text: "bg-[#ff6fb0]",
+  output: "bg-[#6fe3a5]",
+};
 
 /** Viewer frame: fixed 96px wide, height follows the output aspect but
  *  stays usable on extreme formats (thumbs letterbox via object-contain). */
@@ -97,12 +116,33 @@ function Operator({
             •
           </div>
         )}
+        {data.bypassed && (
+          <div className="absolute inset-0 grid place-items-center bg-black/50">
+            <span className="text-[9px] tracking-[0.2em] uppercase text-muted">
+              bypass
+            </span>
+          </div>
+        )}
         {hasInput && (
           <Handle type="target" position={Position.Left} className={HANDLE_CLASS} />
         )}
         {hasOutput && (
           <Handle type="source" position={Position.Right} className={HANDLE_CLASS} />
         )}
+        {/* TD blue dot: this operator owns the big preview (#384). */}
+        <button
+          type="button"
+          aria-label={`preview ${data.label}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            data.onPreviewToggle?.();
+          }}
+          className={`absolute bottom-1 right-1 w-2.5 h-2.5 rounded-full border ${
+            data.previewActive
+              ? "bg-[#4fa3ff] border-white/70"
+              : "bg-black/40 border-white/30 hover:border-white/60"
+          }`}
+        />
       </div>
       <div className="mt-1 flex items-center gap-1.5 px-0.5">
         <span className={`inline-block w-1.5 h-1.5 rounded-[1px] ${tint}`} />
@@ -120,31 +160,31 @@ function Operator({
 
 function SourceNode({ data }: { data: OperatorData }) {
   return (
-    <Operator data={data} tint="bg-white/35" hasInput={false} hasOutput />
+    <Operator data={data} tint={TINTS.source} hasInput={false} hasOutput />
   );
 }
 
 function EffectNode({ data, selected }: { data: OperatorData; selected: boolean }) {
   return (
-    <Operator data={data} selected={selected} tint="bg-accent" hasInput hasOutput />
+    <Operator data={data} selected={selected} tint={TINTS.effect} hasInput hasOutput />
   );
 }
 
 function OutputNode({ data }: { data: OperatorData }) {
   return (
-    <Operator data={data} tint="bg-white/70" hasInput hasOutput={false} />
+    <Operator data={data} tint={TINTS.output} hasInput hasOutput={false} />
   );
 }
 
 function ScaleNode({ data, selected }: { data: OperatorData; selected: boolean }) {
   return (
-    <Operator data={data} selected={selected} tint="bg-white/50" hasInput hasOutput />
+    <Operator data={data} selected={selected} tint={TINTS.scale} hasInput hasOutput />
   );
 }
 
 function TextNode({ data, selected }: { data: OperatorData; selected: boolean }) {
   return (
-    <Operator data={data} selected={selected} tint="bg-accent" hasInput hasOutput />
+    <Operator data={data} selected={selected} tint={TINTS.text} hasInput hasOutput />
   );
 }
 
@@ -189,9 +229,19 @@ export function NodeCanvas({
   recipes,
   onApplyRecipe,
   onSaveRecipe,
+  previewNodeId,
+  onPreviewNode,
 }: NodeCanvasProps) {
   const t = useT();
   const [showAddMenu, setShowAddMenu] = useState(false);
+  /** Right-click operator menu (#381/#382). */
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
+  /** Wire being hovered while dragging a connection (#383). */
+  const hoveredEdgeRef = useRef<string | null>(null);
+  /** Connection drag in flight (source node) — Tab inserts there (#413). */
+  const connectingFromRef = useRef<string | null>(null);
+  const pendingFromRef = useRef<string | null>(null);
+  const rfRef = useRef<{ fitView: (o?: { padding?: number }) => void } | null>(null);
 
   // ReactFlow owns the node objects (applyNodeChanges keeps its internal
   // measurements alive — rebuilding fresh objects per change left nodes
@@ -214,6 +264,10 @@ export function NodeCanvas({
                     ? "Text"
                     : EFFECTS[n.effectId ?? ""]?.label ?? "?",
           thumb: thumbnails?.[n.id],
+          bypassed: !!n.bypass,
+          previewActive: previewNodeId === n.id,
+          onPreviewToggle: () =>
+            onPreviewNode?.(previewNodeId === n.id ? null : n.id),
           // Output viewers are shaped by THEIR OWN page settings; chain
           // viewers by their node's render resolution (artwork fallback).
           ratio:
@@ -236,7 +290,7 @@ export function NodeCanvas({
         };
       });
     });
-  }, [graph.nodes, selectedNodeId, thumbnails, ratio, sourceRatio, nodeRatios]);
+  }, [graph.nodes, selectedNodeId, thumbnails, ratio, sourceRatio, nodeRatios, previewNodeId, onPreviewNode]);
 
   const edges: Edge[] = useMemo(
     () =>
@@ -317,6 +371,17 @@ export function NodeCanvas({
     [graph, onGraphChange, onNodeSelect]
   );
 
+  /** Wire a just-added node from the pending connection drag (#413). */
+  const wirePending = useCallback(
+    (g: FinishGraph, nodeId: string): FinishGraph => {
+      const from = pendingFromRef.current;
+      pendingFromRef.current = null;
+      if (!from || from === nodeId) return g;
+      return { ...g, wires: [...g.wires, { from, to: nodeId, toIn: 0 }] };
+    },
+    []
+  );
+
   const handleAddSource = useCallback(() => {
     const nodeId = `source_${Date.now()}`;
     onGraphChange({
@@ -331,39 +396,49 @@ export function NodeCanvas({
 
   const handleAddText = useCallback(() => {
     const nodeId = `text_${Date.now()}`;
-    onGraphChange({
-      ...graph,
-      nodes: [
-        ...graph.nodes,
+    onGraphChange(
+      wirePending(
         {
-          id: nodeId,
-          kind: "text",
-          params: { content: "Panopus", font: "", size: 0.15, fill: "#f2ede4" },
-          x: 380,
-          y: 300,
+          ...graph,
+          nodes: [
+            ...graph.nodes,
+            {
+              id: nodeId,
+              kind: "text",
+              params: { content: "Panopus", font: "", size: 0.15, fill: "#f2ede4" },
+              x: 380,
+              y: 300,
+            },
+          ],
         },
-      ],
-    });
+        nodeId
+      )
+    );
     setShowAddMenu(false);
-  }, [graph, onGraphChange]);
+  }, [graph, onGraphChange, wirePending]);
 
   const handleAddScale = useCallback(() => {
     const nodeId = `scale_${Date.now()}`;
-    onGraphChange({
-      ...graph,
-      nodes: [
-        ...graph.nodes,
+    onGraphChange(
+      wirePending(
         {
-          id: nodeId,
-          kind: "scale",
-          params: { factor: 0.5, filter: "smooth" },
-          x: 280,
-          y: 280,
+          ...graph,
+          nodes: [
+            ...graph.nodes,
+            {
+              id: nodeId,
+              kind: "scale",
+              params: { factor: 0.5, filter: "smooth" },
+              x: 280,
+              y: 280,
+            },
+          ],
         },
-      ],
-    });
+        nodeId
+      )
+    );
     setShowAddMenu(false);
-  }, [graph, onGraphChange]);
+  }, [graph, onGraphChange, wirePending]);
 
   const handleAddOutput = useCallback(() => {
     const nodeId = `output_${Date.now()}`;
@@ -401,17 +476,35 @@ export function NodeCanvas({
         y: 160,
       };
 
-      onGraphChange({
-        ...graph,
-        nodes: [...graph.nodes, newNode],
-      });
+      onGraphChange(
+        wirePending({ ...graph, nodes: [...graph.nodes, newNode] }, nodeId)
+      );
       setShowAddMenu(false);
     },
-    [graph, onGraphChange]
+    [graph, onGraphChange, wirePending]
   );
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (target?.isContentEditable) return;
+      if (e.key === "Tab") {
+        // Tab opens Add (#388); mid-connection-drag it inserts at the
+        // link's end (#413).
+        e.preventDefault();
+        if (connectingFromRef.current) {
+          pendingFromRef.current = connectingFromRef.current;
+        }
+        setShowAddMenu((v) => !v);
+        return;
+      }
+      if (e.key === "h" || e.key === "H") {
+        // Home: fit every node in view (#390).
+        rfRef.current?.fitView({ padding: 0.2 });
+        return;
+      }
       if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedNodeId) {
           const node = graph.nodes.find((n) => n.id === selectedNodeId);
@@ -445,6 +538,30 @@ export function NodeCanvas({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
+  /** #383: drop a dragged connection ONTO a wire — rewire that wire's
+   *  target input to the dragged source. */
+  const handleConnectEnd = useCallback(() => {
+    const from = connectingFromRef.current;
+    const edgeId = hoveredEdgeRef.current;
+    connectingFromRef.current = null;
+    if (!from || !edgeId) return;
+    const idx = Number(edgeId.slice(1)); // edges are built as `e${index}`
+    const wire = graph.wires[idx];
+    if (!wire || wire.from === from) return;
+    if (wouldCycle(graph, from, wire.to)) {
+      toast.error(t.cycle_rejected);
+      return;
+    }
+    onGraphChange({
+      ...graph,
+      wires: graph.wires.map((w, i) =>
+        i === idx ? { ...w, from } : w
+      ),
+    });
+  }, [graph, onGraphChange, t.cycle_rejected]);
+
+  const ctxNode = ctxMenu ? graph.nodes.find((n) => n.id === ctxMenu.nodeId) : null;
+
   return (
     <div className="h-full relative [background-image:radial-gradient(rgba(255,255,255,0.09)_1px,transparent_1px)] [background-size:18px_18px]">
       <ReactFlow
@@ -454,7 +571,37 @@ export function NodeCanvas({
         defaultEdgeOptions={EDGE_OPTIONS}
         onConnect={handleConnect}
         onNodesChange={handleNodesChange}
-        onPaneClick={() => onNodeSelect(null)}
+        onPaneClick={() => {
+          onNodeSelect(null);
+          setCtxMenu(null);
+        }}
+        onInit={(inst) => {
+          rfRef.current = inst as unknown as {
+            fitView: (o?: { padding?: number }) => void;
+          };
+        }}
+        onConnectStart={(_e, params) => {
+          connectingFromRef.current =
+            (params as { nodeId?: string | null }).nodeId ?? null;
+        }}
+        onConnectEnd={handleConnectEnd}
+        onEdgeMouseEnter={(_e, edge) => {
+          hoveredEdgeRef.current = edge.id;
+        }}
+        onEdgeMouseLeave={() => {
+          hoveredEdgeRef.current = null;
+        }}
+        onNodeContextMenu={(e, node) => {
+          e.preventDefault();
+          const rect = (e.currentTarget as HTMLElement)
+            .closest(".react-flow")
+            ?.getBoundingClientRect();
+          setCtxMenu({
+            x: e.clientX - (rect?.left ?? 0),
+            y: e.clientY - (rect?.top ?? 0),
+            nodeId: node.id,
+          });
+        }}
         fitView
       >
         <Panel position="top-left">
@@ -542,6 +689,66 @@ export function NodeCanvas({
           )}
         </Panel>
       </ReactFlow>
+      {/* Operator context menu (#381 swap / #382 bypass). */}
+      {ctxMenu && ctxNode && (
+        <div
+          className="absolute z-40 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[160px]"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+        >
+          {ctxNode.kind !== "source" && ctxNode.kind !== "output" && (
+            <button
+              type="button"
+              onClick={() => {
+                onGraphChange({
+                  ...graph,
+                  nodes: graph.nodes.map((n) =>
+                    n.id === ctxNode.id ? { ...n, bypass: !n.bypass } : n
+                  ),
+                });
+                setCtxMenu(null);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
+            >
+              {ctxNode.bypass ? t.op_unbypass : t.op_bypass}
+            </button>
+          )}
+          {ctxNode.kind === "effect" && (
+            <>
+              <p className="px-3 py-1 text-[10px] uppercase tracking-wide text-muted">
+                {t.op_swap}
+              </p>
+              {Object.values(EFFECTS)
+                .filter((sp) => sp.id !== "text" && sp.id !== ctxNode.effectId)
+                .map((sp) => (
+                  <button
+                    key={sp.id}
+                    type="button"
+                    onClick={() => {
+                      onGraphChange({
+                        ...graph,
+                        nodes: graph.nodes.map((n) =>
+                          n.id === ctxNode.id
+                            ? {
+                                ...n,
+                                effectId: sp.id,
+                                params: Object.fromEntries(
+                                  sp.params.map((sq) => [sq.name, sq.default])
+                                ),
+                              }
+                            : n
+                        ),
+                      });
+                      setCtxMenu(null);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
+                  >
+                    {sp.label}
+                  </button>
+                ))}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

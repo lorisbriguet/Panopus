@@ -918,6 +918,14 @@ impl RenderEngine {
             let node = by_id
                 .get(id.as_str())
                 .ok_or_else(|| format!("unknown node {id}"))?;
+            // Bypass (#382): pure passthrough of input 0.
+            if node.bypass.unwrap_or(false)
+                && node.kind != "source"
+                && node.kind != "output"
+            {
+                let t = input_tex(graph, &node_out, id, 0, &clear);
+                node_out.insert(id.clone(), t);
+            } else {
             match node.kind.as_str() {
                 "source" => {
                     let img = sources
@@ -1236,6 +1244,7 @@ impl RenderEngine {
                     node_pool.insert(id.clone(), ((nw, nh), final_idx));
                 }
                 other => return Err(format!("unknown node kind: {other}")),
+            }
             }
             // Release producers whose consumers have all run.
             for w in &graph.wires {
