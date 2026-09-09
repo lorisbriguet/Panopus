@@ -10,7 +10,7 @@ import {
   useProjectFontPaths,
   useSaveProjectGraph,
 } from "../../hooks/useProjects";
-import { ensureFontLoaded, rasterKey, rasterizeText } from "../../lib/textRaster";
+import { ensureFontLoaded, isFontLoaded, rasterKey, rasterizeText } from "../../lib/textRaster";
 import { useCreateRecipe, useRecipes } from "../../hooks/useRecipes";
 import { Modal } from "../ui/Modal";
 import { Input } from "../ui/Input";
@@ -219,14 +219,15 @@ export function FinishTab({
         // The canvas needs the FILE, not CoreText activation (#411).
         const fontPath = textFontPaths?.[font];
         await ensureFontLoaded(font, fontPath ? convertFileSrc(fontPath) : undefined);
-        // Only cache-commit when the requested font actually resolved:
-        // the first pass can run BEFORE the font-paths query lands, and
-        // a committed Times-fallback key would never retry (#411 race).
+        // Only cache-commit when the requested font actually resolved.
+        // NEVER via document.fonts.check() — it reports activated
+        // families as available while canvas still falls back (#411).
+        // Ready = our own FontFace registry has it, or the family has
+        // no file in this project (deliberate system-font pick).
         const fontReady =
           font === "" ||
-          (typeof document !== "undefined" &&
-            "fonts" in document &&
-            document.fonts.check(`16px "${font}"`));
+          isFontLoaded(font) ||
+          (textFontPaths !== undefined && !textFontPaths[font]);
         const raster = await rasterizeText(content === "" ? " " : content, font);
         if (!raster || cancelled) continue;
         if (!fontReady) {

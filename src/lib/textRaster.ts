@@ -98,7 +98,7 @@ export function layoutText(
 /** djb2 over the raster-relevant inputs — the node's rasterKey. The
  *  layout version participates so cached rasters refresh when the
  *  measurement rules change. */
-const LAYOUT_VERSION = "v4"; // v4: font-ready gating — invalidate Times-keyed rasters (#411)
+const LAYOUT_VERSION = "v5"; // v5: own-registry font gating (#411, check() lies)
 
 export function rasterKey(content: string, font: string): string {
   const s = `${content}|${font}|${LAYOUT_VERSION}`;
@@ -149,21 +149,31 @@ export async function rasterizeText(
 
 /**
  * Make a project font available to the 2D canvas (#411): CoreText
- * activation is not what the webview consults — load the actual font
- * FILE as a FontFace once, keyed by family.
+ * activation is not what the webview's canvas consults, and
+ * document.fonts.check() LIES about activated families in WKWebView's
+ * split-process world — so we keep OUR OWN registry of FontFaces
+ * loaded from the actual files and never trust check().
  */
+const loadedFaces = new Set<string>();
+
+export function isFontLoaded(family: string): boolean {
+  return loadedFaces.has(family);
+}
+
 export async function ensureFontLoaded(
   family: string,
   src: string | undefined
 ): Promise<void> {
-  if (!family || !src) return;
+  if (!family || !src || loadedFaces.has(family)) return;
+  if (typeof FontFace === "undefined") return;
   if (typeof document === "undefined" || !("fonts" in document)) return;
-  if (document.fonts.check(`16px "${family}"`)) return;
   try {
     const face = new FontFace(family, `url("${src}")`);
     await face.load();
     document.fonts.add(face);
+    loadedFaces.add(family);
+    console.warn("[finish] font loaded:", family);
   } catch (e) {
-    console.warn("[finish] font load failed:", family, e);
+    console.warn("[finish] font load failed:", family, src, e);
   }
 }
