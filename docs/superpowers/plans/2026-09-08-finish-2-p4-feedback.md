@@ -27,12 +27,13 @@
 - [ ] Tick #391 #392 #393 #394 #402 #403 #404 done in StudioManager.
 - [ ] Commit — `"fix: finish field-test round one"`
 
-### Task 2: TD interaction parity (#381 #382 #383 #384 #385 #388 #389 #390)
+### Task 2: TD interaction parity (#381 #382 #383 #384 #385 #388 #389 #390 #413)
 
 **Files:** NodeCanvas.tsx (context menu: swap op / bypass op; wire-drop insert; family colors; Tab→Add; `h`→fitView), model (bypass flag on nodes — engines pass through bypassed effect/scale/text nodes), PreviewCanvas/FinishTab (active-preview flag per operator: TD blue-dot → previewNode overrides what the CANVAS shows even mid-chain; zoom control #385).
 
 - Bypass semantics: `bypass: true` on a node → engines treat it as passthrough of input 0 (both engines + parity case).
 - Active preview: any operator can be flagged; the canvas shows ITS output placed on the preview page (mid-chain = raw frame contain-fit).
+- #413: while dragging a connection, Tab opens the Add menu and the chosen node is inserted at the link's end (wired from the dragged handle).
 - [ ] TDD the model/engine bits (bypass, active-preview routing); implement UI; gates; parity.
 - [ ] Tick the eight subtasks done. Commit — `"feat: touchdesigner interaction parity"`
 
@@ -44,7 +45,7 @@
 - **riso** (#386): up to 3 ink slots (color+threshold each, enable by threshold>0 convention or enable bools).
 - **gradientmap** (#387): 4-stop editor (color+position pairs) — UI is a custom param row; shader lerps the stops.
 - **dither** (#399/#400): remove halftone algo; split into `bayer` (levels, scale, matrix size) and `ascii` (cell, atlas params) nodes; keep `dither` manifest for old graphs (hidden from the Add menu).
-- **text** (#405): letterSpacing, lineHeight, align (raster-side), all re-keying the raster cache.
+- **text** (#405 #414 #415): letterSpacing, lineHeight, align (raster-side, re-keying the cache); non-uniform size (sizeX/sizeY with a uniform toggle, #414); selectable ANCHOR point for x/y — 9-point Figma-style grid instead of center-only — shared by text AND transform placement + the drag overlay (#415).
 - [ ] Per-node: failing parity case → frag/manifest → goldens → gates; UI where needed.
 - [ ] Tick the eight subtasks done. Commit per coherent chunk, final — `"feat: node redesign round"`
 
