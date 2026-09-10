@@ -5,6 +5,14 @@ import { EFFECTS } from "../../lib/effects";
 import type { ParamSpec } from "../../lib/effects";
 import { outputPx, outputSettingsFrom } from "../../lib/finishGraph";
 import type { GraphNode } from "../../lib/finishGraph";
+import {
+  addStop,
+  moveStop,
+  readStops,
+  removeStop,
+  writeStops,
+  type GradientStop,
+} from "../../lib/gradientStops";
 import { useT } from "../../i18n/useT";
 
 /**
@@ -431,9 +439,13 @@ function TextParams({
   );
 }
 
-/** Photoshop-style multi-stop editor for the gradient map (#387):
- *  draggable stops on a live gradient bar, 2-4 stops. */
-function GradientMapParams({
+/** Photoshop-grammar gradient editor for the gradient map (#387, node
+ *  review): click the bar to ADD a stop (it picks up the gradient's
+ *  color there), drag markers to move (stops may cross and reorder),
+ *  drag a marker off the bar to DELETE it, double-click for the color
+ *  picker. 2-8 stops, stored flat (gradientStops codec). Exported for
+ *  tests. */
+export function GradientMapParams({
   node,
   onParamsChange,
 }: {
@@ -441,34 +453,39 @@ function GradientMapParams({
   onParamsChange: ParamsPanelProps["onParamsChange"];
 }) {
   const p = node.params ?? {};
-  const num = (k: string, d: number) =>
-    typeof p[k] === "number" && Number.isFinite(p[k] as number) ? (p[k] as number) : d;
-  const col = (k: string, d: string) =>
-    typeof p[k] === "string" ? (p[k] as string) : d;
-  const stops = Math.min(4, Math.max(2, Math.round(num("stops", 2))));
-  const cs = [col("c1", "#101014"), col("c2", "#f2ede4"), col("c3", "#e05252"), col("c4", "#ffffff")];
-  const ps = [num("p1", 0), num("p2", 1), num("p3", 1), num("p4", 1)];
-  const mixV = num("mix", 1);
+  const stops = readStops(p);
+  const mixV =
+    typeof p.mix === "number" && Number.isFinite(p.mix) ? (p.mix as number) : 1;
   const [sel, setSel] = useState(0);
+  const [ghost, setGhost] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
-  const dragIdx = useRef<number | null>(null);
-  const set = (patch: Record<string, number | string | boolean>) =>
-    onParamsChange({
-      stops,
-      c1: cs[0], p1: ps[0], c2: cs[1], p2: ps[1],
-      c3: cs[2], p3: ps[2], c4: cs[3], p4: ps[3],
-      mix: mixV,
-      ...patch,
-    });
-  const moveStop = (i: number, v: number) => {
-    // keep stops ordered: clamp between neighbours
-    const lo = i === 0 ? 0 : ps[i - 1];
-    const hi = i >= stops - 1 ? 1 : ps[i + 1];
-    set({ [`p${i + 1}`]: Math.min(hi, Math.max(lo, v)) });
+  const dragging = useRef(false);
+  const colorRef = useRef<HTMLInputElement>(null);
+  const selStop = stops[Math.min(sel, stops.length - 1)];
+
+  const commit = (next: GradientStop[]) =>
+    onParamsChange({ ...writeStops(next), mix: mixV });
+  const barT = (clientX: number) => {
+    const r = barRef.current?.getBoundingClientRect();
+    if (!r) return 0;
+    return (clientX - r.left) / Math.max(1, r.width);
   };
-  const gradient = `linear-gradient(to right, ${cs
-    .slice(0, stops)
-    .map((c, i) => `${c} ${ps[i] * 100}%`)
+  /** Off-bar distance = Photoshop's delete gesture (only past 2 stops). */
+  const offBar = (clientY: number) => {
+    const r = barRef.current?.getBoundingClientRect();
+    if (!r) return false;
+    return clientY > r.bottom + 28 || clientY < r.top - 28;
+  };
+  const capture = (el: HTMLElement, pointerId: number) => {
+    try {
+      el.setPointerCapture(pointerId);
+    } catch {
+      // test DOMs without pointer capture
+    }
+  };
+
+  const gradient = `linear-gradient(to right, ${stops
+    .map((s) => `${s.color} ${s.pos * 100}%`)
     .join(", ")})`;
 
   return (
@@ -480,76 +497,114 @@ function GradientMapParams({
         </h3>
       </div>
       <div className="p-3 flex flex-col gap-2">
-        <div
-          ref={barRef}
-          className="relative h-6 rounded-[3px] border border-white/15"
-          style={{ background: gradient }}
-          onPointerMove={(e) => {
-            if (dragIdx.current === null || !barRef.current) return;
-            const r = barRef.current.getBoundingClientRect();
-            moveStop(dragIdx.current, (e.clientX - r.left) / Math.max(1, r.width));
-          }}
-          onPointerUp={() => {
-            dragIdx.current = null;
-          }}
-        >
-          {Array.from({ length: stops }).map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              aria-label={`stop ${i + 1}`}
-              onPointerDown={(e) => {
-                setSel(i);
-                dragIdx.current = i;
-                (e.currentTarget.parentElement as HTMLElement).setPointerCapture(
-                  e.pointerId
-                );
-              }}
-              className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 ${
-                sel === i ? "border-accent" : "border-white/70"
-              }`}
-              style={{ left: `${ps[i] * 100}%`, background: cs[i] }}
-            />
-          ))}
+        <div className="pb-4">
+          <div
+            ref={barRef}
+            data-testid="gradient-bar"
+            className="relative h-7 rounded-[3px] border border-white/15 cursor-copy"
+            style={{ background: gradient }}
+            onPointerDown={(e) => {
+              if (e.target !== e.currentTarget) return;
+              // Photoshop add: new stop at the click, sampled color,
+              // and it's immediately the dragged selection.
+              const t = barT(e.clientX);
+              const next = addStop(stops, t);
+              if (next === stops) return; // at MAX_STOPS
+              commit(next);
+              setSel(next.findIndex((s) => s.pos === Math.min(1, Math.max(0, t))));
+              dragging.current = true;
+              capture(e.currentTarget, e.pointerId);
+            }}
+            onPointerMove={(e) => {
+              if (!dragging.current) return;
+              if (offBar(e.clientY) && stops.length > 2) {
+                setGhost(true);
+                return;
+              }
+              setGhost(false);
+              const { stops: next, index } = moveStop(stops, sel, barT(e.clientX));
+              commit(next);
+              setSel(index);
+            }}
+            onPointerUp={() => {
+              if (dragging.current && ghost) {
+                commit(removeStop(stops, sel));
+                setSel(0);
+              }
+              dragging.current = false;
+              setGhost(false);
+            }}
+          >
+            {stops.map((s, i) => (
+              <button
+                key={i}
+                type="button"
+                aria-label={`stop ${i + 1}`}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  setSel(i);
+                  dragging.current = true;
+                  capture(e.currentTarget.parentElement as HTMLElement, e.pointerId);
+                }}
+                onDoubleClick={() => colorRef.current?.click()}
+                className={`absolute top-full -translate-x-1/2 flex flex-col items-center pt-[1px] ${
+                  ghost && sel === i ? "opacity-30" : ""
+                }`}
+                style={{ left: `${s.pos * 100}%` }}
+              >
+                <span
+                  className="block w-0 h-0 border-x-[5px] border-x-transparent border-b-[5px]"
+                  style={{
+                    borderBottomColor:
+                      sel === i ? "var(--color-accent)" : "rgba(255,255,255,0.75)",
+                  }}
+                />
+                <span
+                  className={`block w-3 h-3 border ${
+                    sel === i ? "border-accent" : "border-white/70"
+                  }`}
+                  style={{ background: s.color }}
+                />
+              </button>
+            ))}
+          </div>
         </div>
         <div className={ROW}>
-          <label className={NAME}>{`stop ${sel + 1}`}</label>
+          <label className={NAME}>{`stop ${Math.min(sel, stops.length - 1) + 1}`}</label>
           <input
+            ref={colorRef}
             type="color"
-            value={cs[sel]}
-            onChange={(e) => set({ [`c${sel + 1}`]: e.target.value })}
+            value={selStop?.color ?? "#ffffff"}
+            onChange={(e) => {
+              const next = stops.map((s, i) =>
+                i === sel ? { ...s, color: e.target.value } : s
+              );
+              commit(next);
+            }}
             className="flex-1 h-7 rounded-[3px] border border-white/15 bg-[var(--color-input-bg)]"
           />
           <ValueField
             name={`p${sel + 1}`}
-            value={ps[sel]}
+            value={selStop?.pos ?? 1}
             min={0}
             max={1}
-            onChange={(v) => moveStop(sel, v)}
+            onChange={(v) => {
+              const { stops: next, index } = moveStop(stops, sel, v);
+              commit(next);
+              setSel(index);
+            }}
           />
-        </div>
-        <div className={ROW}>
-          <label className={NAME}>stops</label>
           <Button
             variant="ghost"
             size="sm"
-            disabled={stops <= 2}
-            onClick={() => set({ stops: stops - 1 })}
+            disabled={stops.length <= 2}
+            aria-label="delete stop"
+            onClick={() => {
+              commit(removeStop(stops, sel));
+              setSel(0);
+            }}
           >
             −
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={stops >= 4}
-            onClick={() =>
-              set({
-                stops: stops + 1,
-                [`p${stops + 1}`]: Math.min(1, ps[stops - 1] + 0.15),
-              })
-            }
-          >
-            +
           </Button>
         </div>
         <div className={ROW}>
@@ -557,9 +612,15 @@ function GradientMapParams({
           <ScrubBar
             p={{ name: "mix", type: "float", min: 0, max: 1, step: 0.01, default: 1 }}
             value={mixV}
-            onChange={(v) => set({ mix: v })}
+            onChange={(v) => onParamsChange({ ...writeStops(stops), mix: v })}
           />
-          <ValueField name="mix" value={mixV} min={0} max={1} onChange={(v) => set({ mix: v })} />
+          <ValueField
+            name="mix"
+            value={mixV}
+            min={0}
+            max={1}
+            onChange={(v) => onParamsChange({ ...writeStops(stops), mix: v })}
+          />
         </div>
       </div>
     </div>

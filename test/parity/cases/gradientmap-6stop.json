@@ -1,0 +1,61 @@
+{
+  "name": "gradientmap-6stop",
+  "graph": {
+    "v": 1,
+    "nodes": [
+      {
+        "id": "src",
+        "kind": "source",
+        "x": 0,
+        "y": 0
+      },
+      {
+        "id": "e",
+        "kind": "effect",
+        "effectId": "gradientmap",
+        "params": {
+          "stops": 6,
+          "c1": "#0a0a1e",
+          "p1": 0,
+          "c2": "#3b28a0",
+          "p2": 0.25,
+          "c3": "#e05252",
+          "p3": 0.45,
+          "c4": "#ffd166",
+          "p4": 0.65,
+          "c5": "#6fe3a5",
+          "p5": 0.85,
+          "c6": "#ffffff",
+          "p6": 1,
+          "mix": 1
+        },
+        "x": 0,
+        "y": 0
+      },
+      {
+        "id": "out",
+        "kind": "output",
+        "params": {
+          "unit": "px",
+          "width": 512,
+          "height": 731,
+          "dpi": 300
+        },
+        "x": 0,
+        "y": 0
+      }
+    ],
+    "wires": [
+      {
+        "from": "src",
+        "to": "e",
+        "toIn": 0
+      },
+      {
+        "from": "e",
+        "to": "out",
+        "toIn": 0
+      }
+    ]
+  }
+}

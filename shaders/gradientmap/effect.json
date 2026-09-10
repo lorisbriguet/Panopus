@@ -12,7 +12,7 @@
       "name": "stops",
       "type": "int",
       "min": 2,
-      "max": 4,
+      "max": 8,
       "step": 1,
       "default": 2
     },
@@ -62,6 +62,58 @@
     },
     {
       "name": "p4",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.005,
+      "default": 1
+    },
+    {
+      "name": "c5",
+      "type": "color",
+      "default": "#ffffff"
+    },
+    {
+      "name": "p5",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.005,
+      "default": 1
+    },
+    {
+      "name": "c6",
+      "type": "color",
+      "default": "#ffffff"
+    },
+    {
+      "name": "p6",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.005,
+      "default": 1
+    },
+    {
+      "name": "c7",
+      "type": "color",
+      "default": "#ffffff"
+    },
+    {
+      "name": "p7",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.005,
+      "default": 1
+    },
+    {
+      "name": "c8",
+      "type": "color",
+      "default": "#ffffff"
+    },
+    {
+      "name": "p8",
       "type": "float",
       "min": 0,
       "max": 1,
