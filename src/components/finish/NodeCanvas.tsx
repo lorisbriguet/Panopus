@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   ReactFlow,
   applyNodeChanges,
@@ -621,79 +621,120 @@ export function NodeCanvas({
           >
             {t.finish_add_node}
           </Button>
+          {/* TD-style OP Create panel: one column per family, headers in
+              the family hue (same TINTS the card spines use), wide enough
+              to read the whole palette at once. */}
           {showAddMenu && (
-            <div className="absolute top-full left-0 mt-1 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[160px] z-10">
-              {Object.values(EFFECTS)
-                .filter((spec) => spec.id !== "text" && spec.id !== "dither") // text = own kind; dither = legacy (#399/#400)
-                .map((spec) => (
-                <button
-                  key={spec.id}
-                  type="button"
-                  onClick={() => handleAddEffect(spec.id)}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
+            <div className="absolute top-full left-0 mt-1 z-10 rounded-[3px] border border-white/10 bg-[#1e1e23]/[0.97] p-3.5 font-mono shadow-[0_16px_40px_rgba(0,0,0,0.6)]">
+              <div className="flex gap-5">
+                {[
+                  {
+                    key: "source",
+                    label: "Source",
+                    color: TINTS.source,
+                    items: [{ id: "source", label: "Source", pick: handleAddSource }],
+                  },
+                  {
+                    key: "effect",
+                    label: "Effect",
+                    color: TINTS.effect,
+                    // text = own kind; dither = legacy (#399/#400)
+                    items: Object.values(EFFECTS)
+                      .filter((spec) => spec.id !== "text" && spec.id !== "dither")
+                      .map((spec) => ({
+                        id: spec.id,
+                        label: spec.label,
+                        pick: () => handleAddEffect(spec.id),
+                      })),
+                  },
+                  {
+                    key: "scale",
+                    label: "Scale",
+                    color: TINTS.scale,
+                    items: [{ id: "scale", label: "Scale", pick: handleAddScale }],
+                  },
+                  {
+                    key: "text",
+                    label: "Text",
+                    color: TINTS.text,
+                    items: [{ id: "text", label: "Text", pick: handleAddText }],
+                  },
+                  {
+                    key: "output",
+                    label: "Output",
+                    color: TINTS.output,
+                    items: [{ id: "output", label: "Output", pick: handleAddOutput }],
+                  },
+                ].map((col) => (
+                  <div
+                    key={col.key}
+                    className="min-w-[104px]"
+                    style={{ "--fam": col.color } as CSSProperties}
+                  >
+                    <div
+                      data-family={col.key}
+                      className="text-[10px] tracking-[0.16em] uppercase"
+                      style={{ color: col.color }}
+                    >
+                      {col.label}
+                    </div>
+                    <div
+                      className="mt-1 mb-1.5 h-[2px] rounded-full"
+                      style={{ background: col.color, opacity: 0.75 }}
+                    />
+                    {col.items.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={item.pick}
+                        className="w-full whitespace-nowrap text-left px-1.5 py-1 text-[11px] uppercase tracking-[0.08em] text-white/85 border-l-2 border-transparent hover:border-[color:var(--fam)] hover:bg-[color-mix(in_srgb,var(--fam)_14%,transparent)]"
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+                {/* Recipes: saved subchains — user-named, so no uppercase. */}
+                <div
+                  className="min-w-[128px] pl-5 border-l border-white/10"
+                  style={{ "--fam": "#9b9ba6" } as CSSProperties}
                 >
-                  {spec.label}
-                </button>
-              ))}
-              <div className="my-1 border-t border-[var(--color-border-divider)]" />
-              <button
-                type="button"
-                onClick={handleAddSource}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
-              >
-                Source
-              </button>
-              <button
-                type="button"
-                onClick={handleAddText}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
-              >
-                Text
-              </button>
-              <button
-                type="button"
-                onClick={handleAddScale}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
-              >
-                Scale
-              </button>
-              <button
-                type="button"
-                onClick={handleAddOutput}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
-              >
-                Output
-              </button>
-              <div className="my-1 border-t border-[var(--color-border-divider)]" />
-              <p className="px-3 py-1 text-[10px] uppercase tracking-wide text-muted">
-                {t.recipes}
-              </p>
-              {(recipes ?? []).map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => {
-                    onApplyRecipe?.(r.nodes_json);
-                    setShowAddMenu(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
-                >
-                  {r.name}
-                </button>
-              ))}
-              {(recipes ?? []).length === 0 && (
-                <p className="px-3 py-1 text-xs text-muted">{t.recipe_empty}</p>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  onSaveRecipe?.();
-                  setShowAddMenu(false);
-                }}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
-              >
-                {t.recipe_save}
-              </button>
+                  <div
+                    data-family="recipes"
+                    className="text-[10px] tracking-[0.16em] uppercase"
+                    style={{ color: "#9b9ba6" }}
+                  >
+                    {t.recipes}
+                  </div>
+                  <div className="mt-1 mb-1.5 h-[2px] rounded-full bg-[#9b9ba6] opacity-75" />
+                  {(recipes ?? []).map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => {
+                        onApplyRecipe?.(r.nodes_json);
+                        setShowAddMenu(false);
+                      }}
+                      className="w-full text-left px-1.5 py-1 text-[11px] text-white/85 border-l-2 border-transparent hover:border-[color:var(--fam)] hover:bg-[color-mix(in_srgb,var(--fam)_14%,transparent)]"
+                    >
+                      {r.name}
+                    </button>
+                  ))}
+                  {(recipes ?? []).length === 0 && (
+                    <p className="px-1.5 py-1 text-[10px] text-muted">{t.recipe_empty}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSaveRecipe?.();
+                      setShowAddMenu(false);
+                    }}
+                    className="mt-1.5 w-full text-left px-1.5 py-1 text-[10px] text-muted hover:text-white/85"
+                  >
+                    {t.recipe_save}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </Panel>

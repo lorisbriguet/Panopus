@@ -203,6 +203,38 @@ describe("NodeCanvas", () => {
     expect(props.snapGrid).toEqual([16, 16]);
   });
 
+  it("add menu groups operators under family-colored TD columns", () => {
+    render(
+      <NodeCanvas
+        graph={emptyGraph()}
+        onGraphChange={vi.fn()}
+        selectedNodeId={null}
+        onNodeSelect={vi.fn()}
+        recipes={[]}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /add/i }));
+    const hexToRgb = (h: string) =>
+      `rgb(${parseInt(h.slice(1, 3), 16)}, ${parseInt(h.slice(3, 5), 16)}, ${parseInt(h.slice(5, 7), 16)})`;
+    const families: Array<[string, string]> = [
+      ["source", "#4fa3ff"],
+      ["effect", "#b98cff"],
+      ["scale", "#ffd166"],
+      ["text", "#ff6fb0"],
+      ["output", "#6fe3a5"],
+    ];
+    for (const [key, hex] of families) {
+      const header = document.querySelector(
+        `[data-family="${key}"]`
+      ) as HTMLElement | null;
+      expect(header, `header for ${key}`).toBeTruthy();
+      expect([hex, hexToRgb(hex)]).toContain(header!.style.color);
+    }
+    // effects listed under their column, other kinds still addable
+    expect(screen.getByText("Mix")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Scale" })).toBeInTheDocument();
+  });
+
   it("deleting a mid-chain node bridges its upstream to its downstream", () => {
     const graph: FinishGraph = {
       v: 1,
