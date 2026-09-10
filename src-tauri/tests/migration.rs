@@ -4,13 +4,21 @@ use rusqlite::Connection;
 fn migration_v1_creates_schema() {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch(panopus_lib::MIGRATION_V1).unwrap();
-    let n: i64 = conn.query_row(
-        "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN \
+    let n: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN \
          ('fonts','tags','font_tags','sources','designers','designer_sources','settings')",
-        [], |r| r.get(0)).unwrap();
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
     assert_eq!(n, 7);
-    conn.execute("INSERT INTO fonts (path,family,style,ps_name,source,format,glyph_count,hash,is_system) \
-                  VALUES ('/x.ttf','X','Regular','X-Reg','opti','otf',220,'abc',0)", []).unwrap();
+    conn.execute(
+        "INSERT INTO fonts (path,family,style,ps_name,source,format,glyph_count,hash,is_system) \
+                  VALUES ('/x.ttf','X','Regular','X-Reg','opti','otf',220,'abc',0)",
+        [],
+    )
+    .unwrap();
 }
 
 #[test]
@@ -19,15 +27,27 @@ fn migration_v3_seeds_velvetyne_as_free_and_is_idempotent() {
     conn.execute_batch(panopus_lib::MIGRATION_V1).unwrap();
     conn.execute_batch(panopus_lib::MIGRATION_V3).unwrap();
     let status: String = conn
-        .query_row("SELECT licence_status FROM sources WHERE name='velvetyne'", [], |r| r.get(0))
+        .query_row(
+            "SELECT licence_status FROM sources WHERE name='velvetyne'",
+            [],
+            |r| r.get(0),
+        )
         .unwrap();
     assert_eq!(status, "free");
 
     // Repairs an indexer-created 'rights unclear' row without erroring.
-    conn.execute("UPDATE sources SET licence_status='rights unclear' WHERE name='velvetyne'", []).unwrap();
+    conn.execute(
+        "UPDATE sources SET licence_status='rights unclear' WHERE name='velvetyne'",
+        [],
+    )
+    .unwrap();
     conn.execute_batch(panopus_lib::MIGRATION_V3).unwrap();
     let status: String = conn
-        .query_row("SELECT licence_status FROM sources WHERE name='velvetyne'", [], |r| r.get(0))
+        .query_row(
+            "SELECT licence_status FROM sources WHERE name='velvetyne'",
+            [],
+            |r| r.get(0),
+        )
         .unwrap();
     assert_eq!(status, "free");
 }
@@ -37,10 +57,21 @@ fn migration_v6_creates_project_tables() {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch(panopus_lib::MIGRATION_V1).unwrap();
     conn.execute_batch(panopus_lib::MIGRATION_V6).unwrap();
-    conn.execute("INSERT INTO projects (name) VALUES ('Fumetto 26')", []).unwrap();
-    conn.execute("INSERT INTO fonts (path,family,source,format,hash) VALUES ('/a.ttf','A','opti','ttf','h')", []).unwrap();
-    conn.execute("INSERT INTO project_fonts (project_id, font_id) VALUES (1, 1)", []).unwrap();
+    conn.execute("INSERT INTO projects (name) VALUES ('Fumetto 26')", [])
+        .unwrap();
+    conn.execute(
+        "INSERT INTO fonts (path,family,source,format,hash) VALUES ('/a.ttf','A','opti','ttf','h')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO project_fonts (project_id, font_id) VALUES (1, 1)",
+        [],
+    )
+    .unwrap();
     conn.execute("DELETE FROM projects", []).unwrap();
-    let n: i64 = conn.query_row("SELECT count(*) FROM project_fonts", [], |r| r.get(0)).unwrap();
+    let n: i64 = conn
+        .query_row("SELECT count(*) FROM project_fonts", [], |r| r.get(0))
+        .unwrap();
     assert_eq!(n, 0, "cascade");
 }

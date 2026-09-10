@@ -1,5 +1,5 @@
-use std::path::Path;
 use panopus_lib::indexer::{parse_font, scan_dir};
+use std::path::Path;
 
 #[test]
 fn parses_valid_ttf() {
@@ -57,7 +57,11 @@ fn upsert_preserves_flags_and_is_incremental() {
     conn.execute("UPDATE fonts SET favorite=1", []).unwrap();
     let r2 = panopus_lib::indexer::index_all(&conn, Path::new("tests/fixtures"), &[]).unwrap();
     assert_eq!(r2.indexed, 0);
-    let fav: i64 = conn.query_row("SELECT count(*) FROM fonts WHERE favorite=1", [], |r| r.get(0)).unwrap();
+    let fav: i64 = conn
+        .query_row("SELECT count(*) FROM fonts WHERE favorite=1", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
     assert!(fav >= 1);
 }
 
@@ -68,13 +72,18 @@ fn missing_library_root_errors_without_wiping_rows() {
     conn.execute_batch(panopus_lib::MIGRATION_V4).unwrap();
     panopus_lib::indexer::index_all(&conn, Path::new("tests/fixtures"), &[]).unwrap();
     let before: i64 = conn
-        .query_row("SELECT count(*) FROM fonts WHERE is_system=0", [], |r| r.get(0))
+        .query_row("SELECT count(*) FROM fonts WHERE is_system=0", [], |r| {
+            r.get(0)
+        })
         .unwrap();
     assert!(before >= 1);
-    let res = panopus_lib::indexer::index_all(&conn, Path::new("tests/fixtures/does-not-exist"), &[]);
+    let res =
+        panopus_lib::indexer::index_all(&conn, Path::new("tests/fixtures/does-not-exist"), &[]);
     assert!(res.is_err());
     let after: i64 = conn
-        .query_row("SELECT count(*) FROM fonts WHERE is_system=0", [], |r| r.get(0))
+        .query_row("SELECT count(*) FROM fonts WHERE is_system=0", [], |r| {
+            r.get(0)
+        })
         .unwrap();
     assert_eq!(before, after);
 }
@@ -104,7 +113,9 @@ fn corrupt_in_place_font_becomes_quarantined() {
     let r2 = panopus_lib::indexer::index_all(&conn, &dir, &[]).unwrap();
     assert_eq!(r2.quarantined, 1);
     let (q, a): (i64, i64) = conn
-        .query_row("SELECT quarantined, active FROM fonts", [], |r| Ok((r.get(0)?, r.get(1)?)))
+        .query_row("SELECT quarantined, active FROM fonts", [], |r| {
+            Ok((r.get(0)?, r.get(1)?))
+        })
         .unwrap();
     assert_eq!((q, a), (1, 0));
 

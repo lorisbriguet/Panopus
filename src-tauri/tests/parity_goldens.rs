@@ -120,8 +120,7 @@ fn write_goldens() {
     assert!(!case_files.is_empty(), "no parity cases found");
 
     for file in case_files {
-        let case: Case =
-            serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        let case: Case = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
         // Convention: a case source node's `sourcePath` (and a text
         // node's `rasterPath`) names a file in the parity dir (harness
         // mirrors it); source default = source.png.

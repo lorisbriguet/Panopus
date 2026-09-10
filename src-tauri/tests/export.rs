@@ -157,8 +157,8 @@ fn assemble_sources_errors_on_extra_without_path() {
         "wires":[{"from":"srcA","to":"out","toIn":0}]}"#,
     )
     .unwrap();
-    let err = panopus_lib::render::export::assemble_source_paths(&graph, "/art/main.png")
-        .unwrap_err();
+    let err =
+        panopus_lib::render::export::assemble_source_paths(&graph, "/art/main.png").unwrap_err();
     assert!(err.contains("srcB"), "{err}");
 }
 
@@ -190,10 +190,12 @@ fn font_coverage_reports_missing_chars() {
         eprintln!("skipping: no AMDAL sample");
         return;
     }
-    let missing =
-        panopus_lib::render::export::font_missing_chars(&lib, "TEST ⴰⵎⴷⴰⵍ").unwrap();
+    let missing = panopus_lib::render::export::font_missing_chars(&lib, "TEST ⴰⵎⴷⴰⵍ").unwrap();
     assert!(missing.contains(&'T'), "{missing:?}");
     assert!(missing.contains(&'E'), "{missing:?}");
     assert!(!missing.contains(&'ⴰ'), "{missing:?}");
-    assert!(!missing.contains(&' '), "space should not be reported: {missing:?}");
+    assert!(
+        !missing.contains(&' '),
+        "space should not be reported: {missing:?}"
+    );
 }

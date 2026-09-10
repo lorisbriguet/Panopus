@@ -1,0 +1,99 @@
+/* Dev-only variant overrides for the NodeCanvas legibility review.
+   Gated behind body[data-variant]; the plain harness stays current-state. */
+
+/* Family hue per op type (ReactFlow adds .react-flow__node-<type>). */
+.react-flow__node-opSource { --fam: #4fa3ff; }
+.react-flow__node-opEffect { --fam: #b98cff; }
+.react-flow__node-opScale  { --fam: #ffd166; }
+.react-flow__node-opText   { --fam: #ff6fb0; }
+.react-flow__node-opOutput { --fam: #6fe3a5; }
+
+/* Shared across all variants: readable wires, hittable handles, ringed dot */
+body[data-variant] .react-flow__edge-path {
+  stroke: rgba(255, 255, 255, 0.85) !important;
+  stroke-width: 1.5px !important;
+  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.95))
+    drop-shadow(0 0 3px rgba(0, 0, 0, 0.6));
+}
+body[data-variant] .react-flow__handle {
+  width: 9px !important;
+  height: 9px !important;
+  border-radius: 2px !important;
+  background: #e2e2e6 !important;
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.85);
+}
+body[data-variant] .react-flow__node button[aria-label^="preview"] {
+  width: 12px;
+  height: 12px;
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.7);
+}
+
+/* ---------- A · Plated: floating labels get a dark plate + family spine */
+body[data-variant="a"] .react-flow__node .mt-1 {
+  margin-top: 4px;
+  width: max-content;
+  max-width: 132px;
+  padding: 2px 7px 2px 6px;
+  background: rgba(10, 10, 13, 0.82);
+  border-left: 3px solid var(--fam, #888);
+  border-radius: 2px;
+  gap: 0;
+}
+body[data-variant="a"] .react-flow__node .mt-1 > span:first-child {
+  display: none;
+}
+body[data-variant="a"] .react-flow__node .mt-1 > span:last-child {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.92);
+}
+body[data-variant="a"] .react-flow__node.selected .mt-1 {
+  border-left-color: var(--color-accent, #4fa3ff);
+  background: rgba(10, 10, 13, 0.95);
+}
+
+/* ---------- B · Card ops: the whole operator is one solid dark card */
+body[data-variant="b"] .react-flow__node > div {
+  background: rgba(17, 17, 20, 0.94);
+  padding: 4px 4px 3px;
+  border-radius: 3px;
+  border-left: 3px solid var(--fam, #888);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+}
+body[data-variant="b"] .react-flow__node.selected > div {
+  outline: 1.5px solid var(--color-accent, #4fa3ff);
+  outline-offset: 0;
+}
+body[data-variant="b"] .react-flow__node .mt-1 {
+  padding: 0 2px;
+}
+body[data-variant="b"] .react-flow__node .mt-1 > span:first-child {
+  display: none;
+}
+body[data-variant="b"] .react-flow__node .mt-1 > span:last-child {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+/* ---------- C · Chromatic frame: the family color IS the node frame */
+body[data-variant="c"] .react-flow__node > div > div:first-child {
+  border: 1.5px solid
+    color-mix(in srgb, var(--fam, #999) 85%, transparent) !important;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+}
+body[data-variant="c"] .react-flow__node.selected > div > div:first-child {
+  border-color: var(--color-accent, #4fa3ff) !important;
+  box-shadow:
+    0 0 0 1px var(--color-accent, #4fa3ff),
+    0 1px 10px rgba(0, 0, 0, 0.5);
+}
+body[data-variant="c"] .react-flow__node .mt-1 > span:first-child {
+  display: none;
+}
+body[data-variant="c"] .react-flow__node .mt-1 > span:last-child {
+  font-size: 11px;
+  color: #fff;
+  text-shadow:
+    0 0 2px #000,
+    0 0 4px #000,
+    0 1px 3px rgba(0, 0, 0, 0.9);
+}

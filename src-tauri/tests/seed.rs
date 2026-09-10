@@ -75,7 +75,9 @@ fn migration_v2_bios_are_valid_tiptap_docs() {
             urls.len()
         );
         for url in urls {
-            let u = url.as_str().unwrap_or_else(|| panic!("{slug}: non-string link"));
+            let u = url
+                .as_str()
+                .unwrap_or_else(|| panic!("{slug}: non-string link"));
             assert!(
                 u.starts_with("http://") || u.starts_with("https://"),
                 "{slug}: link is not a URL: {u}"

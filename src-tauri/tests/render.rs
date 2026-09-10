@@ -13,7 +13,11 @@ fn shaders_dir() -> PathBuf {
 #[test]
 fn load_effects_finds_core_effects() {
     let effects = panopus_lib::render::manifest::load_effects(&shaders_dir()).unwrap();
-    assert!(effects.len() >= 4, "expected >=4 effects, got {}", effects.len());
+    assert!(
+        effects.len() >= 4,
+        "expected >=4 effects, got {}",
+        effects.len()
+    );
     for id in ["dither", "vhs", "jpeg", "mix"] {
         assert!(effects.contains_key(id), "missing effect {id}");
     }
@@ -117,7 +121,9 @@ fn render_chain_returns_a_tail_per_output() {
     let red = image::RgbaImage::from_pixel(8, 8, image::Rgba([255, 0, 0, 255]));
     let mut sources = HashMap::new();
     sources.insert("src".to_string(), red);
-    let tails = engine.render_chain(&graph, &sources, &HashMap::new(), &effects).unwrap();
+    let tails = engine
+        .render_chain(&graph, &sources, &HashMap::new(), &effects)
+        .unwrap();
     assert_eq!(tails.len(), 2);
     for id in ["a", "b"] {
         let img = &tails[id];
@@ -178,7 +184,9 @@ fn scale_sandwich_renders_at_propagated_resolutions() {
     let red = image::RgbaImage::from_pixel(8, 8, image::Rgba([255, 0, 0, 255]));
     let mut sources = HashMap::new();
     sources.insert("src".to_string(), red);
-    let tails = engine.render_chain(&graph, &sources, &HashMap::new(), &effects).unwrap();
+    let tails = engine
+        .render_chain(&graph, &sources, &HashMap::new(), &effects)
+        .unwrap();
     let tail = &tails["out"];
     assert_eq!(tail.dimensions(), (32, 32));
     for (x, y) in [(0u32, 0u32), (16, 16), (31, 31)] {
@@ -202,7 +210,9 @@ fn scale_sandwich_renders_at_propagated_resolutions() {
     let red = image::RgbaImage::from_pixel(64, 64, image::Rgba([255, 0, 0, 255]));
     let mut sources2 = HashMap::new();
     sources2.insert("src".to_string(), red);
-    let tails2 = engine.render_chain(&graph2, &sources2, &HashMap::new(), &effects).unwrap();
+    let tails2 = engine
+        .render_chain(&graph2, &sources2, &HashMap::new(), &effects)
+        .unwrap();
     assert_eq!(tails2["out"].dimensions(), (64, 64));
 }
 

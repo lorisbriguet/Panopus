@@ -33,7 +33,6 @@ fn rejects_non_image_extensions() {
 
 #[test]
 fn missing_file_with_allowed_extension_errors() {
-    let err =
-        panopus_lib::read_artwork_file("/nonexistent/panopus_missing.png").unwrap_err();
+    let err = panopus_lib::read_artwork_file("/nonexistent/panopus_missing.png").unwrap_err();
     assert!(err.contains("read"), "unexpected error: {err}");
 }
