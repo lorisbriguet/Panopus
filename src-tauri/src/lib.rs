@@ -608,13 +608,14 @@ pub fn run() {
             render::export::check_font_coverage,
         ])
         .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
+            // Registered in release too: per-font CoreText failures reach
+            // the UI only as a count, the real reason lives in this log —
+            // debug-gating it made field failures undiagnosable (#409).
+            app.handle().plugin(
+                tauri_plugin_log::Builder::default()
+                    .level(log::LevelFilter::Info)
+                    .build(),
+            )?;
             // Launch order: DB bootstrap (migrations) → CoreText
             // reactivation → library watcher. The SQL plugin only applies
             // migrations lazily on the frontend's first Database.load, so
