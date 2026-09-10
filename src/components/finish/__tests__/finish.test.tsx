@@ -203,6 +203,35 @@ describe("NodeCanvas", () => {
     expect(props.snapGrid).toEqual([16, 16]);
   });
 
+  it("deleting a mid-chain node bridges its upstream to its downstream", () => {
+    const graph: FinishGraph = {
+      v: 1,
+      nodes: [
+        { id: "src", kind: "source", x: 0, y: 0 },
+        { id: "effect1", kind: "effect", effectId: "dither", params: {}, x: 200, y: 0 },
+        { id: "out", kind: "output", x: 400, y: 0 },
+      ],
+      wires: [
+        { from: "src", to: "effect1", toIn: 0 },
+        { from: "effect1", to: "out", toIn: 0 },
+      ],
+    };
+    const onGraphChange = vi.fn();
+    render(
+      <NodeCanvas
+        graph={graph}
+        onGraphChange={onGraphChange}
+        selectedNodeId={"effect1"}
+        onNodeSelect={vi.fn()}
+      />
+    );
+    fireEvent.keyDown(window, { key: "Delete" });
+    expect(onGraphChange).toHaveBeenCalledTimes(1);
+    const healed = onGraphChange.mock.calls[0][0] as FinishGraph;
+    expect(healed.nodes.map((n: GraphNode) => n.id)).toEqual(["src", "out"]);
+    expect(healed.wires).toEqual([{ from: "src", to: "out", toIn: 0 }]);
+  });
+
   it("selection outlines the whole card in accent", () => {
     const graph: FinishGraph = {
       v: 1,

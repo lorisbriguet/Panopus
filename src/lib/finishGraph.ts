@@ -54,6 +54,31 @@ export function sourceNodes(g: FinishGraph): GraphNode[] {
   return g.nodes.filter((n) => n.kind === "source");
 }
 
+/**
+ * Remove a node and HEAL the chain, TD-style: every wire the node fed
+ * downstream is re-driven by the node's own primary upstream (its input-0
+ * wire, falling back to any incoming wire), preserving each downstream
+ * input slot. A node with no upstream just takes its wires with it. No
+ * cycle can result: the bridged source already reached each target
+ * through the removed node.
+ */
+export function removeNodeBridging(g: FinishGraph, id: string): FinishGraph {
+  const incoming = g.wires.filter((w) => w.to === id);
+  const outgoing = g.wires.filter((w) => w.from === id);
+  const primary = incoming.find((w) => w.toIn === 0) ?? incoming[0];
+  const bridged = primary
+    ? outgoing.map((w) => ({ from: primary.from, to: w.to, toIn: w.toIn }))
+    : [];
+  return {
+    ...g,
+    nodes: g.nodes.filter((n) => n.id !== id),
+    wires: [
+      ...g.wires.filter((w) => w.from !== id && w.to !== id),
+      ...bridged,
+    ],
+  };
+}
+
 /** First output's settings (single-deliverable callers). */
 export function outputSettings(g: FinishGraph): OutputSettings {
   return outputSettingsFrom(g.nodes.find((n) => n.kind === "output")?.params);

@@ -16,6 +16,7 @@ import { Button } from "../ui";
 import { EFFECTS } from "../../lib/effects";
 import {
   outputNodes,
+  removeNodeBridging,
   sourceNodes,
   wouldCycle,
 } from "../../lib/finishGraph";
@@ -526,13 +527,8 @@ export function NodeCanvas({
               (node.kind === "output" && outputNodes(graph).length > 1) ||
               (node.kind === "source" && sourceNodes(graph).length > 1));
           if (deletable) {
-            onGraphChange({
-              ...graph,
-              nodes: graph.nodes.filter((n) => n.id !== selectedNodeId),
-              wires: graph.wires.filter(
-                (w) => w.from !== selectedNodeId && w.to !== selectedNodeId
-              ),
-            });
+            // Heal the chain: upstream re-drives what this node fed (#426).
+            onGraphChange(removeNodeBridging(graph, selectedNodeId));
             onNodeSelect(null);
           }
         }

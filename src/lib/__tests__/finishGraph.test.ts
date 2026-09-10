@@ -14,6 +14,7 @@ import {
   outputNodes,
   outputPx,
   outputMm,
+  removeNodeBridging,
 } from "../finishGraph";
 
 /** src -> A -> mix, src -> B -> mix, mix -> out. */
@@ -463,5 +464,70 @@ describe("executionOrder extra sinks (#420)", () => {
     const withSink = executionOrder(g, ["orphan"]);
     expect(withSink).toContain("orphan");
     expect(withSink.indexOf("src")).toBeLessThan(withSink.indexOf("orphan"));
+  });
+});
+
+describe("removeNodeBridging", () => {
+  test("removing a mid-chain node bridges upstream to downstream", () => {
+    const g: FinishGraph = {
+      v: 1,
+      nodes: [
+        { id: "src", kind: "source", x: 0, y: 0 },
+        { id: "A", kind: "effect", effectId: "dither", x: 100, y: 0 },
+        { id: "out", kind: "output", x: 200, y: 0 },
+      ],
+      wires: [
+        { from: "src", to: "A", toIn: 0 },
+        { from: "A", to: "out", toIn: 0 },
+      ],
+    };
+    const healed = removeNodeBridging(g, "A");
+    expect(healed.nodes.map((n) => n.id)).toEqual(["src", "out"]);
+    expect(healed.wires).toEqual([{ from: "src", to: "out", toIn: 0 }]);
+  });
+
+  test("bridged wires keep the downstream input slot", () => {
+    const healed = removeNodeBridging(diamond(), "B");
+    // B fed mix's input 1 — src must now feed input 1, not input 0.
+    expect(healed.wires).toContainEqual({ from: "src", to: "mix", toIn: 1 });
+    expect(healed.wires).toContainEqual({ from: "A", to: "mix", toIn: 0 });
+    expect(healed.wires).toContainEqual({ from: "mix", to: "out", toIn: 0 });
+    expect(healed.wires).toHaveLength(4); // src->A survives too
+  });
+
+  test("a multi-input node bridges from its input 0 upstream", () => {
+    const healed = removeNodeBridging(diamond(), "mix");
+    // mix's primary (input 0) was A -> A drives out; B's branch dangles.
+    expect(healed.wires).toContainEqual({ from: "A", to: "out", toIn: 0 });
+    expect(healed.wires.some((w) => w.to === "mix" || w.from === "mix")).toBe(false);
+  });
+
+  test("fan-out bridges every downstream wire", () => {
+    const g: FinishGraph = {
+      v: 1,
+      nodes: [
+        { id: "src", kind: "source", x: 0, y: 0 },
+        { id: "A", kind: "effect", effectId: "dither", x: 100, y: 0 },
+        { id: "o1", kind: "output", x: 200, y: 0 },
+        { id: "o2", kind: "output", x: 200, y: 100 },
+      ],
+      wires: [
+        { from: "src", to: "A", toIn: 0 },
+        { from: "A", to: "o1", toIn: 0 },
+        { from: "A", to: "o2", toIn: 0 },
+      ],
+    };
+    const healed = removeNodeBridging(g, "A");
+    expect(healed.wires).toContainEqual({ from: "src", to: "o1", toIn: 0 });
+    expect(healed.wires).toContainEqual({ from: "src", to: "o2", toIn: 0 });
+  });
+
+  test("a node with no upstream just drops its wires", () => {
+    const healed = removeNodeBridging(diamond(), "src");
+    expect(healed.wires).toEqual([
+      { from: "A", to: "mix", toIn: 0 },
+      { from: "B", to: "mix", toIn: 1 },
+      { from: "mix", to: "out", toIn: 0 },
+    ]);
   });
 });
