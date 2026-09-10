@@ -152,6 +152,57 @@ describe("NodeCanvas", () => {
     expect(source?.getAttribute("style") ?? "").toMatch(/4fa3ff/i); // source family
   });
 
+  // Standard card format: every operator viewer shares one fixed frame;
+  // the render letterboxes inside at its own ratio (object-contain).
+  it("all operator viewers share the standard frame height", () => {
+    const graph: FinishGraph = {
+      v: 1,
+      nodes: [
+        { id: "src", kind: "source", x: 0, y: 0 },
+        { id: "effect1", kind: "effect", effectId: "dither", params: {}, x: 200, y: 0 },
+        { id: "out", kind: "output", x: 400, y: 0 },
+      ],
+      wires: [],
+    };
+    render(
+      <NodeCanvas
+        graph={graph}
+        onGraphChange={vi.fn()}
+        selectedNodeId={null}
+        onNodeSelect={vi.fn()}
+        // wildly different per-node ratios must NOT change the frame
+        nodeRatios={{ effect1: 2.4 }}
+        sourceRatio={0.2}
+      />
+    );
+    const heights = ["Source", "Dither", "Output"].map((label) => {
+      const viewer = screen
+        .getByText(label)
+        .closest(".font-mono")
+        ?.querySelector("[style*='height']") as HTMLElement | null;
+      return viewer?.style.height;
+    });
+    expect(heights[0]).toBeTruthy();
+    expect(new Set(heights).size).toBe(1);
+  });
+
+  it("enables grid snapping on the canvas", () => {
+    render(
+      <NodeCanvas
+        graph={emptyGraph()}
+        onGraphChange={vi.fn()}
+        selectedNodeId={null}
+        onNodeSelect={vi.fn()}
+      />
+    );
+    const props = (globalThis as Record<string, unknown>).__xyflowProps as {
+      snapToGrid?: boolean;
+      snapGrid?: [number, number];
+    };
+    expect(props.snapToGrid).toBe(true);
+    expect(props.snapGrid).toEqual([16, 16]);
+  });
+
   it("selection outlines the whole card in accent", () => {
     const graph: FinishGraph = {
       v: 1,

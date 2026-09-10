@@ -16,8 +16,6 @@ import { Button } from "../ui";
 import { EFFECTS } from "../../lib/effects";
 import {
   outputNodes,
-  outputRatio,
-  outputSettingsFrom,
   sourceNodes,
   wouldCycle,
 } from "../../lib/finishGraph";
@@ -32,12 +30,11 @@ interface NodeCanvasProps {
   onNodeSelect: (nodeId: string | null) => void;
   /** nodeId -> PNG data URL of the node's live output (operator viewers). */
   thumbnails?: Record<string, string>;
-  /** Page aspect (w/h): shapes the OUTPUT operator's viewer frame. */
+  /** Accepted for API stability but unused since the standard-frame
+   *  card round: every viewer shares VIEWER_HEIGHT and the render
+   *  letterboxes inside at its own aspect (object-contain). */
   ratio?: number;
-  /** Artwork aspect (w/h): fallback for chain viewer frames. */
   sourceRatio?: number;
-  /** Per-node render aspect (w/h) from nodeResolutions — scale nodes
-   *  can change it mid-chain. */
   nodeRatios?: Record<string, number>;
   /** Saved subchains (D5): listed in the add menu. */
   recipes?: { id: number; name: string; nodes_json: string }[];
@@ -51,7 +48,6 @@ interface NodeCanvasProps {
 type OperatorData = {
   label: string;
   thumb?: string;
-  ratio?: number;
   bypassed?: boolean;
   previewActive?: boolean;
   onPreviewToggle?: () => void;
@@ -68,12 +64,11 @@ const TINTS: Record<string, string> = {
   output: "#6fe3a5",
 };
 
-/** Viewer frame: fixed 96px wide, height follows the output aspect but
- *  stays usable on extreme formats (thumbs letterbox via object-contain). */
-function viewerHeight(ratio: number | undefined): number {
-  const r = ratio && ratio > 0 ? ratio : 10571 / 15118;
-  return Math.round(Math.min(137, Math.max(28, 96 / r)));
-}
+/** Standard operator frame: every card shares one footprint (viewer
+ *  ≈4:5 portrait, suiting a poster tool) and the render letterboxes
+ *  inside at its own aspect via object-contain — a uniform network
+ *  reads better than content-shaped nodes. */
+const VIEWER_HEIGHT = 120;
 
 const HANDLE_CLASS =
   "!w-[9px] !h-[9px] !rounded-[2px] !border-0 !bg-[#e2e2e6] !shadow-[0_0_0_1.5px_rgba(0,0,0,0.85)]";
@@ -109,7 +104,7 @@ function Operator({
         className={`relative overflow-hidden rounded-[2px] border bg-black/70 ${
           selected ? "border-accent" : "border-white/10"
         }`}
-        style={{ height: viewerHeight(data.ratio) }}
+        style={{ height: VIEWER_HEIGHT }}
       >
         {data.thumb ? (
           <img
@@ -235,9 +230,6 @@ export function NodeCanvas({
   selectedNodeId,
   onNodeSelect,
   thumbnails,
-  ratio,
-  sourceRatio,
-  nodeRatios,
   recipes,
   onApplyRecipe,
   onSaveRecipe,
@@ -284,12 +276,6 @@ export function NodeCanvas({
           previewActive: previewNodeId === n.id,
           onPreviewToggle: () =>
             onPreviewNode?.(previewNodeId === n.id ? null : n.id),
-          // Output viewers are shaped by THEIR OWN page settings; chain
-          // viewers by their node's render resolution (artwork fallback).
-          ratio:
-            n.kind === "output"
-              ? outputRatio(outputSettingsFrom(n.params))
-              : nodeRatios?.[n.id] ?? sourceRatio ?? ratio,
         };
         const existing = byId.get(n.id);
         // Keep the live object (position + measured dims) while dragging;
@@ -306,7 +292,7 @@ export function NodeCanvas({
         };
       });
     });
-  }, [graph.nodes, selectedNodeId, thumbnails, ratio, sourceRatio, nodeRatios, previewNodeId, onPreviewNode]);
+  }, [graph.nodes, selectedNodeId, thumbnails, previewNodeId, onPreviewNode]);
 
   const edges: Edge[] = useMemo(
     () =>
@@ -592,6 +578,8 @@ export function NodeCanvas({
         edges={edges}
         nodeTypes={nodeTypes}
         defaultEdgeOptions={EDGE_OPTIONS}
+        snapToGrid
+        snapGrid={[16, 16]}
         onConnect={handleConnect}
         onNodesChange={handleNodesChange}
         onPaneClick={() => {
