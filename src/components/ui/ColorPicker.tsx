@@ -20,19 +20,25 @@ import {
  * HSV internally so the hue stays put at s=0 / v=0 extremes.
  */
 
-export type ColorPickerHandle = { open: () => void };
+export type ColorPickerHandle = {
+  /** Open the popover; `at` anchors it to a caller-chosen point (e.g. a
+   *  gradient-stop marker) instead of the trigger button. */
+  open: (at?: { left: number; top: number }) => void;
+};
 
 type Props = {
   value: string;
   onChange: (hex: string) => void;
   ariaLabel?: string;
+  /** false = popover only (opened imperatively via the handle). */
+  trigger?: boolean;
 };
 
 const HUE_STRIP =
   "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)";
 
 export const ColorPicker = forwardRef<ColorPickerHandle, Props>(
-  function ColorPicker({ value, onChange, ariaLabel }, ref) {
+  function ColorPicker({ value, onChange, ariaLabel, trigger = true }, ref) {
     const [open, setOpen] = useState(false);
     const [anchor, setAnchor] = useState({ left: 0, top: 0 });
     const [hsv, setHsv] = useState<[number, number, number]>([0, 0, 1]);
@@ -46,14 +52,16 @@ export const ColorPicker = forwardRef<ColorPickerHandle, Props>(
     const hex = normalizeHex(value) ?? "#000000";
     const rgb = hexToRgb(hex) ?? [0, 0, 0];
 
-    const openAt = () => {
-      const r = triggerRef.current?.getBoundingClientRect();
+    const openAt = (at?: { left: number; top: number }) => {
       const width = 216;
       const height = 214;
-      const left = Math.min(Math.max(8, r?.left ?? 0), window.innerWidth - width - 8);
-      const below = (r?.bottom ?? 0) + 6;
-      const top =
-        below + height > window.innerHeight ? Math.max(8, (r?.top ?? 0) - height - 6) : below;
+      const r = at ?? (() => {
+        const t = triggerRef.current?.getBoundingClientRect();
+        return { left: t?.left ?? 0, top: (t?.bottom ?? 0) + 6, flipTop: (t?.top ?? 0) - height - 6 };
+      })();
+      const left = Math.min(Math.max(8, r.left), window.innerWidth - width - 8);
+      const flip = "flipTop" in r ? (r as { flipTop: number }).flipTop : r.top - height - 12;
+      const top = r.top + height > window.innerHeight ? Math.max(8, flip) : r.top;
       setAnchor({ left, top });
       setHsv(rgbToHsv(...(hexToRgb(normalizeHex(value) ?? "#000000") ?? [0, 0, 0])));
       setHexDraft(null);
@@ -130,19 +138,21 @@ export const ColorPicker = forwardRef<ColorPickerHandle, Props>(
 
     return (
       <>
-        <button
-          ref={triggerRef}
-          type="button"
-          aria-label={ariaLabel ?? "pick color"}
-          onClick={() => (open ? setOpen(false) : openAt())}
-          className="flex-1 h-7 rounded-[3px] border border-white/15 bg-[var(--color-input-bg)] flex items-center gap-2 px-1.5 font-mono"
-        >
-          <span
-            className="w-4 h-4 rounded-[2px] border border-black/40"
-            style={{ background: hex }}
-          />
-          <span className="text-[10px] text-white/80">{hex}</span>
-        </button>
+        {trigger && (
+          <button
+            ref={triggerRef}
+            type="button"
+            aria-label={ariaLabel ?? "pick color"}
+            onClick={() => (open ? setOpen(false) : openAt())}
+            className="flex-1 h-7 rounded-[3px] border border-white/15 bg-[var(--color-input-bg)] flex items-center gap-2 px-1.5 font-mono"
+          >
+            <span
+              className="w-4 h-4 rounded-[2px] border border-black/40"
+              style={{ background: hex }}
+            />
+            <span className="text-[10px] text-white/80">{hex}</span>
+          </button>
+        )}
         {open && (
           <div
             ref={popRef}

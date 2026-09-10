@@ -542,7 +542,13 @@ export function GradientMapParams({
                   dragging.current = true;
                   capture(e.currentTarget.parentElement as HTMLElement, e.pointerId);
                 }}
-                onDoubleClick={() => colorRef.current?.open()}
+                onDoubleClick={(e) => {
+                  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  colorRef.current?.open({
+                    left: r.left + r.width / 2 - 108,
+                    top: r.bottom + 6,
+                  });
+                }}
                 className={`absolute top-full -translate-x-1/2 flex flex-col items-center pt-[1px] ${
                   ghost && sel === i ? "opacity-30" : ""
                 }`}
@@ -565,43 +571,20 @@ export function GradientMapParams({
             ))}
           </div>
         </div>
-        <div className={ROW}>
-          <label className={NAME}>{`stop ${Math.min(sel, stops.length - 1) + 1}`}</label>
-          <ColorPicker
-            ref={colorRef}
-            value={selStop?.color ?? "#ffffff"}
-            onChange={(v) => {
-              const next = stops.map((s, i) =>
-                i === sel ? { ...s, color: v } : s
-              );
-              commit(next);
-            }}
-            ariaLabel="stop color"
-          />
-          <ValueField
-            name={`p${sel + 1}`}
-            value={selStop?.pos ?? 1}
-            min={0}
-            max={1}
-            onChange={(v) => {
-              const { stops: next, index } = moveStop(stops, sel, v);
-              commit(next);
-              setSel(index);
-            }}
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={stops.length <= 2}
-            aria-label="delete stop"
-            onClick={() => {
-              commit(removeStop(stops, sel));
-              setSel(0);
-            }}
-          >
-            −
-          </Button>
-        </div>
+        {/* No stop row: the markers ARE the UI — double-click opens the
+            picker at the marker, drag off the bar deletes. */}
+        <ColorPicker
+          ref={colorRef}
+          trigger={false}
+          value={selStop?.color ?? "#ffffff"}
+          onChange={(v) => {
+            const next = stops.map((s, i) =>
+              i === sel ? { ...s, color: v } : s
+            );
+            commit(next);
+          }}
+          ariaLabel="stop color"
+        />
         <div className={ROW}>
           <label className={NAME}>mix</label>
           <ScrubBar

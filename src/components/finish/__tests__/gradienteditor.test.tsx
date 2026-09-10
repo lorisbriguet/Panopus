@@ -70,7 +70,20 @@ test("stops can cross while dragging (list reorders)", () => {
   expect(patch.p3).toBe(1); // clamped
 });
 
-test("the minimum of two stops cannot be deleted", () => {
+test("double-clicking a marker opens the color picker at the marker", () => {
   renderEditor({ stops: 2, c1: "#000000", p1: 0, c2: "#ffffff", p2: 1 });
-  expect(screen.getByRole("button", { name: "delete stop" })).toBeDisabled();
+  expect(screen.queryByRole("dialog", { name: "color picker" })).toBeNull();
+  fireEvent.doubleClick(screen.getByRole("button", { name: "stop 1" }));
+  expect(screen.getByRole("dialog", { name: "color picker" })).toBeInTheDocument();
+});
+
+test("dragging off the bar never deletes below two stops", () => {
+  const { bar } = renderEditor({ stops: 2, c1: "#000000", p1: 0, c2: "#ffffff", p2: 1 });
+  fireEvent.pointerDown(screen.getByRole("button", { name: "stop 1" }), {
+    clientX: 0, clientY: 14,
+  });
+  fireEvent.pointerMove(bar, { clientX: 0, clientY: 120 });
+  fireEvent.pointerUp(bar);
+  const patch = onParamsChange.mock.calls[onParamsChange.mock.calls.length - 1][0];
+  expect(patch.stops).toBe(2);
 });
