@@ -6,7 +6,7 @@ import { Toggle } from "../ui/Toggle";
 import { useSetActive } from "../../hooks/useActivation";
 import { useT } from "../../i18n/useT";
 import { DEFAULT_PROOF_TEXT } from "../../stores/app-store";
-import type { FontRow } from "../../lib/fontFilters";
+import { isFontActive, type FontRow } from "../../lib/fontFilters";
 import { ensureFontFace } from "./FontFaceLoader";
 
 interface SortableRowProps {
@@ -93,7 +93,7 @@ export const SortableRow = memo(function SortableRow({
       <td className="px-3 py-3 text-center">
         <span title={isSystem ? t.system_font_locked : undefined}>
           <Toggle
-            checked={font.active === 1}
+            checked={isFontActive(font)}
             disabled={isSystem}
             onChange={(checked) =>
               setActive.mutate({ ids: [fontId], active: checked })

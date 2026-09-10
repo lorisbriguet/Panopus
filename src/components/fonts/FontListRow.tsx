@@ -14,7 +14,7 @@ import { useToggleFavorite } from "../../hooks/useFonts";
 import { useSetActive } from "../../hooks/useActivation";
 import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
-import type { FontRow } from "../../lib/fontFilters";
+import { isFontActive, type FontRow } from "../../lib/fontFilters";
 import { LICENCE_VARIANTS } from "./FontCard";
 import { ensureFontFace } from "./FontFaceLoader";
 
@@ -240,7 +240,7 @@ export const FontListRow = memo(function FontListRow({
         </button>
         <span title={isSystem ? t.system_font_locked : undefined}>
           <Toggle
-            checked={font.active === 1}
+            checked={isFontActive(font)}
             disabled={isSystem}
             onChange={(checked) => setActive.mutate({ ids: [font.id], active: checked })}
             ariaLabel={t.font_active}

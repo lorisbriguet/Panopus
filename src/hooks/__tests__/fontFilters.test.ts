@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { filterFonts, type FontRow } from "../../lib/fontFilters";
+import { filterFonts, isFontActive, type FontRow } from "../../lib/fontFilters";
 
 const row = (o: Partial<FontRow>): FontRow => ({
   id: 1,
@@ -123,5 +123,26 @@ describe("filterFonts", () => {
     const out = filterFonts(rows, query({ onlyActive: true, onlyFavorites: true }));
     expect(out).toHaveLength(1);
     expect(out[0].id).toBe(3);
+  });
+
+  test("onlyActive includes system fonts (macOS registered them)", () => {
+    const rows = [
+      row({ id: 1, active: 0, is_system: 1 }),
+      row({ id: 2, active: 0 }),
+      row({ id: 3, active: 1 }),
+    ];
+    const out = filterFonts(rows, query({ onlyActive: true }));
+    expect(out.map((r) => r.id)).toEqual([1, 3]);
+  });
+});
+
+describe("isFontActive", () => {
+  test("derives active from the DB flag for library fonts", () => {
+    expect(isFontActive(row({ active: 1 }))).toBe(true);
+    expect(isFontActive(row({ active: 0 }))).toBe(false);
+  });
+
+  test("treats system fonts as always active", () => {
+    expect(isFontActive(row({ active: 0, is_system: 1 }))).toBe(true);
   });
 });

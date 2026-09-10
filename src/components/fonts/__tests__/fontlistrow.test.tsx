@@ -109,10 +109,12 @@ describe("FontListRow", () => {
     expect(openDetail).not.toHaveBeenCalled();
   });
 
-  it("disables the checkbox and activation toggle for system fonts", () => {
+  it("system fonts: checkbox and toggle disabled, but toggle reads ON", () => {
     renderRow({ is_system: 1 });
     expect(screen.getByRole("checkbox", { name: "Select font" })).toBeDisabled();
-    expect(screen.getByRole("switch", { name: "Font active" })).toBeDisabled();
+    const sw = screen.getByRole("switch", { name: "Font active" });
+    expect(sw).toBeDisabled();
+    expect(sw).toHaveAttribute("aria-checked", "true");
   });
 });
 

@@ -28,6 +28,16 @@ export type FontRow = {
   tag_ids: string; // comma-separated tag ids, "" when untagged
 };
 
+/**
+ * A font is "active" when it is usable in other apps right now: either
+ * Panopus registered it (fonts.active) or macOS did (is_system — the OS
+ * registers system/user-installed fonts itself; our DB flag stays 0 for
+ * those by construction, see activation.rs reactivate_all).
+ */
+export function isFontActive(row: Pick<FontRow, "active" | "is_system">): boolean {
+  return row.active === 1 || row.is_system === 1;
+}
+
 export type FontQuery = {
   search: string;
   source: string | null;
@@ -50,7 +60,7 @@ export function filterFonts(rows: FontRow[], q: FontQuery): FontRow[] {
     if (q.source !== null && r.source !== q.source) return false;
     if (q.tagId !== null && !r.tag_ids.split(",").includes(String(q.tagId))) return false;
     if (q.licence !== null && r.licence_status !== q.licence) return false;
-    if (q.onlyActive && r.active !== 1) return false;
+    if (q.onlyActive && !isFontActive(r)) return false;
     if (q.onlyFavorites && r.favorite !== 1) return false;
     return true;
   });

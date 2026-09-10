@@ -17,7 +17,7 @@ import { useAssignTag, useCreateTag, useTags, useUnassignTag } from "../../hooks
 import { useT } from "../../i18n/useT";
 import { notifyError } from "../../lib/notifyError";
 import { getStoredTagColor, TAG_COLOR_NAMES } from "../../lib/tagColors";
-import type { FontRow } from "../../lib/fontFilters";
+import { isFontActive, type FontRow } from "../../lib/fontFilters";
 import { useAppStore } from "../../stores/app-store";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -397,7 +397,7 @@ export function FontDetail({ fontId, onClose, onSelectFont }: FontDetailProps) {
             </button>
             <span title={isSystem ? t.system_font_locked : undefined}>
               <Toggle
-                checked={font.active === 1}
+                checked={isFontActive(font)}
                 disabled={isSystem}
                 onChange={(checked) => setActive.mutate({ ids: [font.id], active: checked })}
                 ariaLabel={t.font_active}

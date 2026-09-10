@@ -7,7 +7,7 @@ import { ProofToolbar } from "../components/fonts/ProofToolbar";
 import { useFonts } from "../hooks/useFonts";
 import { useTags } from "../hooks/useTags";
 import { groupByFamily, isFamilyGroup } from "../lib/familyGroups";
-import { filterFonts } from "../lib/fontFilters";
+import { filterFonts, isFontActive } from "../lib/fontFilters";
 import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
 
@@ -53,7 +53,7 @@ export function LibraryPage() {
   const grouped = useMemo(() => groupByFamily(filtered), [filtered]);
 
   const activeCount = useMemo(
-    () => (rows ?? []).filter((r) => r.active === 1).length,
+    () => (rows ?? []).filter(isFontActive).length,
     [rows]
   );
 
