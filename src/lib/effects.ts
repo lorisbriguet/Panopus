@@ -65,3 +65,11 @@ export function defaultParams(
   for (const p of spec.params) out[p.name] = p.default;
   return out;
 }
+
+// Dev only: manifests/frag sources are captured by long-lived executor
+// instances (FinishTab holds one in a ref across React fast-refresh), so
+// a partial hot update leaves the UI on the new registry while renders
+// run the old one — the "new param does nothing" trap. Reload cleanly.
+if (import.meta.hot) {
+  import.meta.hot.accept(() => window.location.reload());
+}
