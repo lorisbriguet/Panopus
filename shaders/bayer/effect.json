@@ -36,11 +36,6 @@
       "default": "16"
     },
     {
-      "name": "invert",
-      "type": "bool",
-      "default": false
-    },
-    {
       "name": "dark",
       "type": "color",
       "default": "#000000"
@@ -49,14 +44,6 @@
       "name": "light",
       "type": "color",
       "default": "#ffffff"
-    },
-    {
-      "name": "edge",
-      "type": "float",
-      "min": 0,
-      "max": 1,
-      "step": 0.01,
-      "default": 0
     }
   ]
 }
