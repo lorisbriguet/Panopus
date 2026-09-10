@@ -20,7 +20,7 @@ const COALESCE_MS = 400;
 export function createHistory(limit = 100): GraphHistory {
   // past[past.length - 1] is ALWAYS the current state; index 0 is the
   // oldest reachable state (initially the seed).
-  let past: string[] = [];
+  const past: string[] = [];
   let future: string[] = [];
   let lastPush = Number.NEGATIVE_INFINITY;
 
