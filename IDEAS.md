@@ -18,10 +18,13 @@ history at 33ed5aa2. Panopus ideas start here.)
   change).
 
 ### Modulation node
-- TD-style modulate: a second input drives a signal over the first —
-  e.g. input B's luma modulates displacement / threshold / param
-  amplitude of input A (noted 2026-09-10 during the node review).
-- Could start as a 2-input effect with a target enum (displace,
-  threshold-bias, ink-mix) + amount, rather than generic param
-  modulation plumbing (which would touch the executor's uniform
-  contract).
+- Inspired by aescripts "Modulation" (https://aescripts.com/modulation/):
+  an analog signal-processing effect — the image is treated as a
+  transmission signal and run through modulation/demodulation (AM/FM
+  radio style: luma drives the carrier frequency), yielding a retro
+  transmission-waveform / glitch distortion. Params in the original:
+  omega (carrier), phase, distortion — all scrub/keyframe friendly.
+- Fits the effect family as a single-input frag (per-scanline signal
+  math, VHS-adjacent) — no graph-model changes needed. Carrier +
+  phase + distortion params, maybe a horizontal/vertical scan enum.
+  (Noted 2026-09-10 during the node review.)
