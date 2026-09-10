@@ -1,5 +1,5 @@
 {
-  "name": "dither-noise",
+  "name": "dither-floydsteinberg",
   "graph": {
     "v": 1,
     "nodes": [
@@ -14,7 +14,7 @@
         "kind": "effect",
         "effectId": "bayer",
         "params": {
-          "algo": "noise",
+          "algo": "floydsteinberg",
           "scale": 12
         },
         "x": 0,

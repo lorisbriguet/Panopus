@@ -132,16 +132,31 @@ mod tests {
     fn bootstraps_fresh_db_with_schema_seed_and_ledger() {
         let conn = mem();
         ensure_schema(&conn).unwrap();
-        for table in ["fonts", "tags", "font_tags", "sources", "designers", "designer_sources", "settings"] {
+        for table in [
+            "fonts",
+            "tags",
+            "font_tags",
+            "sources",
+            "designers",
+            "designer_sources",
+            "settings",
+        ] {
             assert!(table_exists(&conn, table).unwrap(), "missing table {table}");
         }
         assert_eq!(count(&conn, "SELECT count(*) FROM designers"), 10);
         let library_path: String = conn
-            .query_row("SELECT value FROM settings WHERE key = 'library_path'", [], |r| r.get(0))
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'library_path'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(library_path, "~/Documents/GitHub/panopus-library");
         assert_eq!(
-            count(&conn, "SELECT count(*) FROM _sqlx_migrations WHERE success = 1"),
+            count(
+                &conn,
+                "SELECT count(*) FROM _sqlx_migrations WHERE success = 1"
+            ),
             crate::MIGRATIONS.len() as i64
         );
     }
@@ -196,10 +211,22 @@ mod tests {
         ensure_schema(&conn).unwrap();
 
         let v1_checksum: Vec<u8> = conn
-            .query_row("SELECT checksum FROM _sqlx_migrations WHERE version = 1", [], |r| r.get(0))
+            .query_row(
+                "SELECT checksum FROM _sqlx_migrations WHERE version = 1",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
-        assert_eq!(v1_checksum, vec![0xabu8], "pre-existing ledger row rewritten");
-        assert_eq!(count(&conn, "SELECT count(*) FROM designers"), 10, "v2 not applied");
+        assert_eq!(
+            v1_checksum,
+            vec![0xabu8],
+            "pre-existing ledger row rewritten"
+        );
+        assert_eq!(
+            count(&conn, "SELECT count(*) FROM designers"),
+            10,
+            "v2 not applied"
+        );
         assert_eq!(
             count(&conn, "SELECT count(*) FROM _sqlx_migrations"),
             crate::MIGRATIONS.len() as i64
@@ -214,9 +241,21 @@ mod tests {
         let conn = mem();
         conn.execute_batch(crate::MIGRATION_V1).unwrap();
         ensure_schema(&conn).unwrap();
-        assert_eq!(count(&conn, "SELECT count(*) FROM _sqlx_migrations WHERE version = 1"), 0);
+        assert_eq!(
+            count(
+                &conn,
+                "SELECT count(*) FROM _sqlx_migrations WHERE version = 1"
+            ),
+            0
+        );
         // v2's content was absent, so it applied normally.
         assert_eq!(count(&conn, "SELECT count(*) FROM designers"), 10);
-        assert_eq!(count(&conn, "SELECT count(*) FROM _sqlx_migrations WHERE version = 2"), 1);
+        assert_eq!(
+            count(
+                &conn,
+                "SELECT count(*) FROM _sqlx_migrations WHERE version = 2"
+            ),
+            1
+        );
     }
 }

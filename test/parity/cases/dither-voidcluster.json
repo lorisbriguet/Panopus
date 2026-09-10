@@ -1,0 +1,49 @@
+{
+  "name": "dither-voidcluster",
+  "graph": {
+    "v": 1,
+    "nodes": [
+      {
+        "id": "src",
+        "kind": "source",
+        "x": 0,
+        "y": 0
+      },
+      {
+        "id": "e",
+        "kind": "effect",
+        "effectId": "bayer",
+        "params": {
+          "algo": "voidcluster",
+          "scale": 12
+        },
+        "x": 0,
+        "y": 0
+      },
+      {
+        "id": "out",
+        "kind": "output",
+        "params": {
+          "unit": "px",
+          "width": 512,
+          "height": 731,
+          "dpi": 300
+        },
+        "x": 0,
+        "y": 0
+      }
+    ],
+    "wires": [
+      {
+        "from": "src",
+        "to": "e",
+        "toIn": 0
+      },
+      {
+        "from": "e",
+        "to": "out",
+        "toIn": 0
+      }
+    ]
+  }
+}

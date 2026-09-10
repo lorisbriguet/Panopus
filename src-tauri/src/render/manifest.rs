@@ -37,6 +37,10 @@ pub struct EffectSpec {
     pub inputs: u32,
     pub passes: Vec<PassSpec>,
     pub params: Vec<ParamSpec>,
+    /// Algo enum values the host runs on the CPU (error diffusion is
+    /// sequential); mirrors effects.ts. Absent for pure-GPU effects.
+    #[serde(rename = "cpuAlgos", default)]
+    pub cpu_algos: Option<Vec<String>>,
 }
 
 /// Load every shaders/<id>/effect.json under `dir`, keyed by effect id.

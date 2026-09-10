@@ -5,10 +5,10 @@ pub mod indexer;
 pub mod render;
 pub mod watcher;
 
-use tauri::Manager;
-use tauri_plugin_sql::Migration;
 use serde_json::Value as JsonValue;
 use std::sync::Mutex;
+use tauri::Manager;
+use tauri_plugin_sql::Migration;
 
 /// Panopus v1 initial schema migration
 pub const MIGRATION_V1: &str = r#"
@@ -207,8 +207,7 @@ pub(crate) fn open_app_db(app: &tauri::AppHandle) -> Result<rusqlite::Connection
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    std::fs::create_dir_all(&app_dir)
-        .map_err(|e| format!("Failed to create app data dir: {e}"))?;
+    std::fs::create_dir_all(&app_dir).map_err(|e| format!("Failed to create app data dir: {e}"))?;
     let db_name = app
         .state::<ActiveDb>()
         .0
@@ -261,14 +260,13 @@ fn execute_batch(
         // Check if this statement references the parent insert ID
         let uses_parent_id = stmt.sql.contains("$LAST_INSERT_ID");
         // Allow referencing the last insert ID in subsequent statements
-        let sql = stmt.sql.replace("$LAST_INSERT_ID", &last_insert_id.to_string());
+        let sql = stmt
+            .sql
+            .replace("$LAST_INSERT_ID", &last_insert_id.to_string());
         // Convert $1, $2, ... placeholders to ?1, ?2, ... for rusqlite
         let sql = convert_placeholders(&sql);
-        let params: Vec<Box<dyn rusqlite::types::ToSql>> = stmt
-            .params
-            .iter()
-            .map(|v| json_to_sql(v))
-            .collect();
+        let params: Vec<Box<dyn rusqlite::types::ToSql>> =
+            stmt.params.iter().map(|v| json_to_sql(v)).collect();
         let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|b| &**b).collect();
 
         match conn.execute(&sql, refs.as_slice()) {
@@ -419,7 +417,8 @@ fn enter_presentation_mode(app: tauri::AppHandle) -> Result<String, String> {
 
     // Switch active DB to presentation
     let active_db = app.state::<ActiveDb>();
-    *active_db.0.lock().map_err(|e| format!("Lock error: {e}"))? = "panopus_presentation.db".to_string();
+    *active_db.0.lock().map_err(|e| format!("Lock error: {e}"))? =
+        "panopus_presentation.db".to_string();
 
     Ok(pres_db.to_string_lossy().to_string())
 }
@@ -495,7 +494,11 @@ fn has_snapshot(app: tauri::AppHandle) -> Result<bool, String> {
 #[tauri::command]
 fn get_active_db(app: tauri::AppHandle) -> Result<String, String> {
     let active_db = app.state::<ActiveDb>();
-    let name = active_db.0.lock().map_err(|e| format!("Lock error: {e}"))?.clone();
+    let name = active_db
+        .0
+        .lock()
+        .map_err(|e| format!("Lock error: {e}"))?
+        .clone();
     Ok(name)
 }
 
@@ -689,7 +692,8 @@ mod tests {
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         let q = |v: &JsonValue| -> rusqlite::types::Value {
             let boxed = json_to_sql(v);
-            conn.query_row("SELECT ?1", [&*boxed], |r| r.get(0)).unwrap()
+            conn.query_row("SELECT ?1", [&*boxed], |r| r.get(0))
+                .unwrap()
         };
         use rusqlite::types::Value;
         assert_eq!(q(&serde_json::json!("x")), Value::Text("x".into()));

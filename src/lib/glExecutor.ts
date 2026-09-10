@@ -13,6 +13,7 @@
 
 import { EFFECTS, FRAG_SOURCES } from "./effects";
 import type { EffectSpec, ParamSpec } from "./effects";
+import { ditherRgba, type EdAlgo } from "./errorDiffusion";
 import {
   executionOrder,
   nodeResolutions,
@@ -211,6 +212,11 @@ export class GlExecutor {
   private sourceTex = new Map<string, { tex: WebGLTexture; w: number; h: number }>();
   /** text nodeId -> uploaded raster texture (bound as that node's uTex1). */
   private rasterTex = new Map<string, WebGLTexture>();
+  /** nodeId -> RGBA8 texture holding a CPU-dithered result (cpuAlgos). */
+  private cpuTex = new Map<string, WebGLTexture>();
+  /** RGBA8 scratch target for CPU readbacks (the pass pool may be F16). */
+  private readTarget: { tex: WebGLTexture; fbo: WebGLFramebuffer; w: number; h: number } | null =
+    null;
   /** `${effectId}/${file}` -> effect texture asset (async-loaded). */
   private assetTex = new Map<string, WebGLTexture>();
 
@@ -506,6 +512,44 @@ export class GlExecutor {
         continue;
       }
       const { w: nw, h: nh } = resOf(id);
+      // CPU algos (manifest cpuAlgos): error diffusion is sequential, so
+      // the node renders on the host — input blitted to an RGBA8 target,
+      // read back, diffused, re-uploaded. Mirrored in engine.rs.
+      const algoSpec = spec.params.find((p) => p.name === "algo");
+      const algoVal = String(node.params?.algo ?? algoSpec?.default ?? "");
+      if (spec.cpuAlgos?.includes(algoVal)) {
+        const pick = (name: string, fallback: number) => {
+          const p = spec.params.find((q) => q.name === name);
+          return p ? paramValue(p, node.params?.[name] ?? p.default) : fallback;
+        };
+        const ink = (name: string): [number, number, number] => {
+          const p = spec.params.find((q) => q.name === name);
+          const [r, g, b] = colorVec3(node.params?.[name] ?? p?.default);
+          return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+        };
+        const rgba = this.readbackRgba8(inputTex(id, 0), nw, nh);
+        const texel = Math.max(1, Math.floor(pick("scale", 8) * 0.25 + 0.5));
+        const pix = ditherRgba(rgba, nw, nh, {
+          algo: algoVal as EdAlgo,
+          levels: pick("levels", 4),
+          texel,
+          dark: ink("dark"),
+          light: ink("light"),
+        });
+        let tex = this.cpuTex.get(id) ?? null;
+        if (!tex) {
+          tex = this.makeTex(nw, nh)!;
+          this.cpuTex.set(id, tex);
+        }
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texImage2D(
+          gl.TEXTURE_2D, 0, gl.RGBA8, nw, nh, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+          new Uint8Array(pix.buffer)
+        );
+        this.nodeErrors.set(id, null);
+        outputs.set(id, tex);
+        continue;
+      }
       let prev: WebGLTexture | null = null;
       let failed: string | null = null;
       for (let pi = 0; pi < spec.passes.length; pi++) {
@@ -735,6 +779,13 @@ export class GlExecutor {
     this.sourceTex.clear();
     for (const t of this.rasterTex.values()) gl.deleteTexture(t);
     this.rasterTex.clear();
+    for (const t of this.cpuTex.values()) gl.deleteTexture(t);
+    this.cpuTex.clear();
+    if (this.readTarget) {
+      gl.deleteTexture(this.readTarget.tex);
+      gl.deleteFramebuffer(this.readTarget.fbo);
+      this.readTarget = null;
+    }
     for (const t of this.assetTex.values()) gl.deleteTexture(t);
     this.assetTex.clear();
     for (const pool of this.pools.values()) {
@@ -851,6 +902,37 @@ export class GlExecutor {
         : this.compile(composeFrag(spec, passIndex, src));
     this.programs.set(key, entry);
     return entry;
+  }
+
+  /** Blit `input` into an RGBA8 scratch target and read it back — the
+   *  pass pool may be RGBA16F, which readPixels won't serve as bytes. */
+  private readbackRgba8(input: WebGLTexture, w: number, h: number): Uint8Array {
+    const gl = this.gl!;
+    let rt = this.readTarget;
+    if (!rt || rt.w !== w || rt.h !== h) {
+      if (rt) {
+        gl.deleteTexture(rt.tex);
+        gl.deleteFramebuffer(rt.fbo);
+      }
+      const tex = this.makeTex(w, h)!;
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      const fbo = gl.createFramebuffer()!;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      rt = this.readTarget = { tex, fbo, w, h };
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, rt.fbo);
+    gl.viewport(0, 0, w, h);
+    if (!this.copyProg) this.copyProg = this.compile(COPY_FRAG);
+    if (this.copyProg.prog) {
+      gl.useProgram(this.copyProg.prog);
+      this.bindTex(this.copyProg.prog, "uTex0", input, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    const out = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, out);
+    return out;
   }
 
   private getAsset(effectId: string, file: string): WebGLTexture {

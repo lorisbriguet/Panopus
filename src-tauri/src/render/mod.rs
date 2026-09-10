@@ -3,6 +3,7 @@
 //! harness (Task 15) pins both to the same pixels.
 
 pub mod engine;
+pub mod error_diffusion;
 pub mod export;
 pub mod manifest;
 
@@ -96,35 +97,35 @@ pub fn node_resolutions(
         let r = if bypassed {
             input_res(&res)
         } else {
-        match node.kind.as_str() {
-            "source" => {
-                let (dw, dh) = source_dims.get(&id).copied().unwrap_or((8, 8));
-                let s = (f64::from(cap) / f64::from(dw.max(dh))).min(1.0);
-                (clamp_axis(f64::from(dw) * s), clamp_axis(f64::from(dh) * s))
-            }
-            "scale" => {
-                let p = node.params.as_ref();
-                let abs = |k: &str| -> Option<f64> {
-                    p.and_then(|m| m.get(k))
-                        .and_then(|v| v.as_f64())
-                        .filter(|n| n.is_finite() && *n > 0.0)
-                };
-                match (abs("width"), abs("height")) {
-                    (Some(aw), Some(ah)) => (clamp_axis(aw), clamp_axis(ah)),
-                    _ => {
-                        let raw = p
-                            .and_then(|m| m.get("factor"))
+            match node.kind.as_str() {
+                "source" => {
+                    let (dw, dh) = source_dims.get(&id).copied().unwrap_or((8, 8));
+                    let s = (f64::from(cap) / f64::from(dw.max(dh))).min(1.0);
+                    (clamp_axis(f64::from(dw) * s), clamp_axis(f64::from(dh) * s))
+                }
+                "scale" => {
+                    let p = node.params.as_ref();
+                    let abs = |k: &str| -> Option<f64> {
+                        p.and_then(|m| m.get(k))
                             .and_then(|v| v.as_f64())
-                            .filter(|n| n.is_finite())
-                            .unwrap_or(0.5);
-                        let f = raw.clamp(0.05, 4.0);
-                        let (iw, ih) = input_res(&res);
-                        (clamp_axis(f64::from(iw) * f), clamp_axis(f64::from(ih) * f))
+                            .filter(|n| n.is_finite() && *n > 0.0)
+                    };
+                    match (abs("width"), abs("height")) {
+                        (Some(aw), Some(ah)) => (clamp_axis(aw), clamp_axis(ah)),
+                        _ => {
+                            let raw = p
+                                .and_then(|m| m.get("factor"))
+                                .and_then(|v| v.as_f64())
+                                .filter(|n| n.is_finite())
+                                .unwrap_or(0.5);
+                            let f = raw.clamp(0.05, 4.0);
+                            let (iw, ih) = input_res(&res);
+                            (clamp_axis(f64::from(iw) * f), clamp_axis(f64::from(ih) * f))
+                        }
                     }
                 }
+                _ => input_res(&res),
             }
-            _ => input_res(&res),
-        }
         };
         res.insert(id, r);
     }

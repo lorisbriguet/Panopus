@@ -4,22 +4,37 @@
   "inputs": 1,
   "passes": [
     {
-      "frag": "bayer.frag"
+      "frag": "bayer.frag",
+      "textures": [
+        "bluenoise-64.png"
+      ]
     }
+  ],
+  "cpuAlgos": [
+    "floydsteinberg",
+    "jjn",
+    "stucki",
+    "burkes",
+    "sierra",
+    "atkinson"
   ],
   "params": [
     {
       "name": "algo",
       "type": "enum",
       "options": [
-        "bayer",
-        "cluster",
-        "lines",
-        "dots",
-        "noise",
-        "ign"
+        "bayer2",
+        "bayer4",
+        "bayer8",
+        "voidcluster",
+        "floydsteinberg",
+        "jjn",
+        "stucki",
+        "burkes",
+        "sierra",
+        "atkinson"
       ],
-      "default": "bayer"
+      "default": "bayer8"
     },
     {
       "name": "scale",
@@ -36,17 +51,6 @@
       "max": 16,
       "step": 1,
       "default": 4
-    },
-    {
-      "name": "matrix",
-      "type": "enum",
-      "options": [
-        "2",
-        "4",
-        "8",
-        "16"
-      ],
-      "default": "16"
     },
     {
       "name": "dark",

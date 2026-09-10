@@ -26,8 +26,8 @@ pub(crate) fn remove_db_files(db: &Path) {
 pub(crate) fn snapshot_db_file(src: &Path, dest: &Path) -> Result<(), String> {
     // VACUUM INTO refuses to overwrite; clear any previous snapshot first.
     remove_db_files(dest);
-    let conn = rusqlite::Connection::open(src)
-        .map_err(|e| format!("failed to open source DB: {e}"))?;
+    let conn =
+        rusqlite::Connection::open(src).map_err(|e| format!("failed to open source DB: {e}"))?;
     conn.execute("VACUUM INTO ?1", [dest.to_string_lossy().as_ref()])
         .map_err(|e| format!("snapshot (VACUUM INTO) failed: {e}"))?;
     Ok(())
@@ -37,10 +37,10 @@ pub(crate) fn snapshot_db_file(src: &Path, dest: &Path) -> Result<(), String> {
 /// takes proper locks — safe even while the app holds `dest` open (open
 /// connections see the restored content afterwards).
 pub(crate) fn restore_db_file(src: &Path, dest: &Path) -> Result<(), String> {
-    let src_conn = rusqlite::Connection::open(src)
-        .map_err(|e| format!("failed to open snapshot: {e}"))?;
-    let mut dst_conn = rusqlite::Connection::open(dest)
-        .map_err(|e| format!("failed to open target DB: {e}"))?;
+    let src_conn =
+        rusqlite::Connection::open(src).map_err(|e| format!("failed to open snapshot: {e}"))?;
+    let mut dst_conn =
+        rusqlite::Connection::open(dest).map_err(|e| format!("failed to open target DB: {e}"))?;
     let backup = rusqlite::backup::Backup::new(&src_conn, &mut dst_conn)
         .map_err(|e| format!("failed to start restore: {e}"))?;
     backup
@@ -80,7 +80,8 @@ mod tests {
 
     fn count_rows(path: &PathBuf) -> i64 {
         let conn = Connection::open(path).unwrap();
-        conn.query_row("SELECT COUNT(*) FROM t", [], |r| r.get(0)).unwrap()
+        conn.query_row("SELECT COUNT(*) FROM t", [], |r| r.get(0))
+            .unwrap()
     }
 
     #[test]
@@ -89,7 +90,9 @@ mod tests {
         let dest = temp_path("snap.db");
         let _writer = make_wal_db(&src, 25); // stays open: rows live in -wal
         assert!(
-            std::fs::metadata(format!("{}-wal", src.display())).map(|m| m.len() > 0).unwrap_or(false),
+            std::fs::metadata(format!("{}-wal", src.display()))
+                .map(|m| m.len() > 0)
+                .unwrap_or(false),
             "precondition: -wal must hold data"
         );
 
@@ -106,7 +109,9 @@ mod tests {
         let dest = temp_path("snap2.db");
         let writer = make_wal_db(&src, 3);
         snapshot_db_file(&src, &dest).unwrap();
-        writer.execute("INSERT INTO t (v) VALUES ('later')", []).unwrap();
+        writer
+            .execute("INSERT INTO t (v) VALUES ('later')", [])
+            .unwrap();
         snapshot_db_file(&src, &dest).unwrap();
         assert_eq!(count_rows(&dest), 4);
         remove_db_files(&src);

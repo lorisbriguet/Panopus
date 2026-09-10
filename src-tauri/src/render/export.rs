@@ -86,9 +86,7 @@ fn output_settings_from(
         let px = if unit_px { v } else { (v / 25.4 * dpi).round() };
         px.min(16384.0) as u32
     };
-    let to_mm = |v: f64| -> f32 {
-        (if unit_px { v / dpi * 25.4 } else { v }) as f32
-    };
+    let to_mm = |v: f64| -> f32 { (if unit_px { v / dpi * 25.4 } else { v }) as f32 };
     OutputSettingsRs {
         px: (to_px(w), to_px(h)),
         mm: (to_mm(w), to_mm(h)),
@@ -139,8 +137,8 @@ pub fn encode_png(img: &RgbaImage, path: &Path) -> Result<(), String> {
 pub fn encode_tiff(img: &RgbaImage, path: &Path, cmyk: bool) -> Result<(), String> {
     let err = |e: &dyn std::fmt::Display| format!("tiff {}: {e}", path.display());
     let file = std::fs::File::create(path).map_err(|e| err(&e))?;
-    let mut enc = tiff::encoder::TiffEncoder::new(std::io::BufWriter::new(file))
-        .map_err(|e| err(&e))?;
+    let mut enc =
+        tiff::encoder::TiffEncoder::new(std::io::BufWriter::new(file)).map_err(|e| err(&e))?;
     if cmyk {
         enc.write_image_with_compression::<tiff::encoder::colortype::CMYK8, _>(
             img.width(),
@@ -223,7 +221,13 @@ fn scrub(name: &str) -> String {
     let safe: String = name
         .trim()
         .chars()
-        .map(|c| if matches!(c, '/' | '\\' | ':') { '-' } else { c })
+        .map(|c| {
+            if matches!(c, '/' | '\\' | ':') {
+                '-'
+            } else {
+                c
+            }
+        })
         .collect();
     if safe.is_empty() {
         "untitled".into()
@@ -363,7 +367,13 @@ pub fn save_raster_in(
 ) -> Result<PathBuf, String> {
     let safe: String = node_id
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let path = dir.join(format!("{project_id}-{safe}.png"));

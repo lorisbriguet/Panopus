@@ -98,7 +98,11 @@ pub fn params_layout(spec: &EffectSpec) -> (Vec<FieldOffset>, usize) {
 /// the pass's own texture assets.
 fn pass_texture_names(spec: &EffectSpec, pass_index: usize) -> Vec<String> {
     let mut names = Vec::new();
-    let input_count = if pass_index == 0 { spec.inputs.max(1) } else { 1 };
+    let input_count = if pass_index == 0 {
+        spec.inputs.max(1)
+    } else {
+        1
+    };
     for k in 0..input_count {
         names.push(format!("uTex{k}"));
     }
@@ -510,11 +514,7 @@ impl RenderEngine {
     /// Compile one effect pass: GLSL -> naga -> WGSL -> pipeline, with
     /// reflected binding slots. Cached per effect/pass; call before
     /// borrowing the entry from `pipelines`.
-    fn ensure_pass_pipeline(
-        &mut self,
-        spec: &EffectSpec,
-        pass_index: usize,
-    ) -> Result<(), String> {
+    fn ensure_pass_pipeline(&mut self, spec: &EffectSpec, pass_index: usize) -> Result<(), String> {
         let key = format!("{}/{}", spec.id, pass_index);
         if !self.pipelines.contains_key(&key) {
             let frag_path = self
@@ -856,14 +856,24 @@ impl RenderEngine {
             .nodes
             .iter()
             .filter(|n| n.kind == "source")
-            .filter_map(|n| sources.get(&n.id).map(|img| (n.id.clone(), img.dimensions())))
+            .filter_map(|n| {
+                sources
+                    .get(&n.id)
+                    .map(|img| (n.id.clone(), img.dimensions()))
+            })
             .collect();
         let resolutions = super::node_resolutions(graph, &source_dims, CAP as u32);
         let res_of = |id: &str| resolutions.get(id).copied().unwrap_or((8, 8));
-        let black = self.upload_rgba(&RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 255])), "black");
+        let black = self.upload_rgba(
+            &RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 255])),
+            "black",
+        );
         // Unwired effect inputs bind TRANSPARENT black so composite-over
         // of an absent layer is a no-op (mirrors glExecutor's `clear`).
-        let clear = self.upload_rgba(&RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 0])), "clear");
+        let clear = self.upload_rgba(
+            &RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 0])),
+            "clear",
+        );
         // Text-node rasters, bound as that node's uTex1 (D3).
         let raster_tex: HashMap<String, wgpu::Texture> = rasters
             .iter()
@@ -876,8 +886,7 @@ impl RenderEngine {
         // Node output textures (kept alive until their consumers ran).
         let mut node_out: HashMap<String, wgpu::Texture> = HashMap::new();
         // Remaining consumer count per producer, over the reachable set.
-        let in_order: std::collections::HashSet<&str> =
-            order.iter().map(|s| s.as_str()).collect();
+        let in_order: std::collections::HashSet<&str> = order.iter().map(|s| s.as_str()).collect();
         let mut consumers: HashMap<&str, usize> = HashMap::new();
         for w in &graph.wires {
             if in_order.contains(w.from.as_str()) && in_order.contains(w.to.as_str()) {
@@ -919,300 +928,74 @@ impl RenderEngine {
                 .get(id.as_str())
                 .ok_or_else(|| format!("unknown node {id}"))?;
             // Bypass (#382): pure passthrough of input 0.
-            if node.bypass.unwrap_or(false)
-                && node.kind != "source"
-                && node.kind != "output"
-            {
+            if node.bypass.unwrap_or(false) && node.kind != "source" && node.kind != "output" {
                 let t = input_tex(graph, &node_out, id, 0, &clear);
                 node_out.insert(id.clone(), t);
             } else {
-            match node.kind.as_str() {
-                "source" => {
-                    let img = sources
-                        .get(id)
-                        .ok_or_else(|| format!("no source image for node {id}"))?;
-                    // Uploaded unmodified — placement is the output stage.
-                    // (Only exception: shrink to the device texture cap.)
-                    let (iw, ih) = img.dimensions();
-                    let flipped = if iw.max(ih) as f64 > CAP {
-                        let s = CAP / f64::from(iw.max(ih));
-                        let rw = ((f64::from(iw) * s).round() as u32).max(1);
-                        let rh = ((f64::from(ih) * s).round() as u32).max(1);
-                        let small = image::imageops::resize(
-                            img,
-                            rw,
-                            rh,
-                            image::imageops::FilterType::CatmullRom,
-                        );
-                        image::imageops::flip_vertical(&small)
-                    } else {
-                        image::imageops::flip_vertical(img)
-                    };
-                    node_out.insert(id.clone(), self.upload_rgba(&flipped, id));
-                }
-                "output" => {
-                    let (ow, oh) = res_of(id);
-                    let input = input_tex(graph, &node_out, id, 0, &black);
-                    let tex = self.device.create_texture(&wgpu::TextureDescriptor {
-                        label: Some("finish-out"),
-                        size: wgpu::Extent3d {
-                            width: ow,
-                            height: oh,
-                            depth_or_array_layers: 1,
-                        },
-                        mip_level_count: 1,
-                        sample_count: 1,
-                        dimension: wgpu::TextureDimension::D2,
-                        format: IO_FORMAT,
-                        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                            | wgpu::TextureUsages::COPY_SRC,
-                        view_formats: &[],
-                    });
-                    {
-                        self.ensure_blit_pipeline();
-                        let (pipeline, bgl) = self.blit.as_ref().unwrap();
-                        let bind = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                            label: Some("finish-blit"),
-                            layout: bgl,
-                            entries: &[
-                                wgpu::BindGroupEntry {
-                                    binding: 0,
-                                    resource: wgpu::BindingResource::TextureView(
-                                        &input.create_view(&Default::default()),
-                                    ),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 1,
-                                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                                },
-                            ],
-                        });
-                        let view = tex.create_view(&Default::default());
-                        let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("finish-blit"),
-                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: &view,
-                                resolve_target: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                                    store: wgpu::StoreOp::Store,
-                                },
-                                depth_slice: None,
-                            })],
-                            depth_stencil_attachment: None,
-                            timestamp_writes: None,
-                            occlusion_query_set: None,
-                            multiview_mask: None,
-                        });
-                        rp.set_pipeline(pipeline);
-                        rp.set_bind_group(0, &bind, &[]);
-                        rp.draw(0..3, 0..1);
+                match node.kind.as_str() {
+                    "source" => {
+                        let img = sources
+                            .get(id)
+                            .ok_or_else(|| format!("no source image for node {id}"))?;
+                        // Uploaded unmodified — placement is the output stage.
+                        // (Only exception: shrink to the device texture cap.)
+                        let (iw, ih) = img.dimensions();
+                        let flipped = if iw.max(ih) as f64 > CAP {
+                            let s = CAP / f64::from(iw.max(ih));
+                            let rw = ((f64::from(iw) * s).round() as u32).max(1);
+                            let rh = ((f64::from(ih) * s).round() as u32).max(1);
+                            let small = image::imageops::resize(
+                                img,
+                                rw,
+                                rh,
+                                image::imageops::FilterType::CatmullRom,
+                            );
+                            image::imageops::flip_vertical(&small)
+                        } else {
+                            image::imageops::flip_vertical(img)
+                        };
+                        node_out.insert(id.clone(), self.upload_rgba(&flipped, id));
                     }
-                    // Queue this output's readback (one buffer per output;
-                    // all copies ride the same encoder/submit).
-                    let bpr = (ow * 4 + 255) & !255;
-                    let buf = self.device.create_buffer(&wgpu::BufferDescriptor {
-                        label: Some("finish-readback"),
-                        size: bpr as u64 * oh as u64,
-                        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                        mapped_at_creation: false,
-                    });
-                    encoder.copy_texture_to_buffer(
-                        wgpu::TexelCopyTextureInfo {
-                            texture: &tex,
-                            mip_level: 0,
-                            origin: wgpu::Origin3d::ZERO,
-                            aspect: wgpu::TextureAspect::All,
-                        },
-                        wgpu::TexelCopyBufferInfo {
-                            buffer: &buf,
-                            layout: wgpu::TexelCopyBufferLayout {
-                                offset: 0,
-                                bytes_per_row: Some(bpr),
-                                rows_per_image: Some(oh),
+                    "output" => {
+                        let (ow, oh) = res_of(id);
+                        let input = input_tex(graph, &node_out, id, 0, &black);
+                        let tex = self.device.create_texture(&wgpu::TextureDescriptor {
+                            label: Some("finish-out"),
+                            size: wgpu::Extent3d {
+                                width: ow,
+                                height: oh,
+                                depth_or_array_layers: 1,
                             },
-                        },
-                        wgpu::Extent3d {
-                            width: ow,
-                            height: oh,
-                            depth_or_array_layers: 1,
-                        },
-                    );
-                    tail_bufs.push((id.clone(), buf, (ow, oh)));
-                }
-                "scale" => {
-                    // Resampling blit: input -> a pool target at this
-                    // node's resolution, linear or nearest per filter.
-                    let (nw, nh) = res_of(id);
-                    let input = input_tex(graph, &node_out, id, 0, &clear);
-                    let nearest = node
-                        .params
-                        .as_ref()
-                        .and_then(|p| p.get("filter"))
-                        .and_then(|v| v.as_str())
-                        == Some("pixel");
-                    self.ensure_blit_pool_pipeline();
-                    let target_idx =
-                        Self::acquire_pool(&self.device, &mut pools, (nw, nh));
-                    {
-                        let (pipeline, bgl) = self.blit_pool.as_ref().unwrap();
-                        let bind = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                            label: Some("finish-scale"),
-                            layout: bgl,
-                            entries: &[
-                                wgpu::BindGroupEntry {
-                                    binding: 0,
-                                    resource: wgpu::BindingResource::TextureView(
-                                        &input.create_view(&Default::default()),
-                                    ),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 1,
-                                    resource: wgpu::BindingResource::Sampler(if nearest {
-                                        &self.sampler_nearest
-                                    } else {
-                                        &self.sampler
-                                    }),
-                                },
-                            ],
+                            mip_level_count: 1,
+                            sample_count: 1,
+                            dimension: wgpu::TextureDimension::D2,
+                            format: IO_FORMAT,
+                            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                                | wgpu::TextureUsages::COPY_SRC,
+                            view_formats: &[],
                         });
-                        let view = pools[&(nw, nh)][target_idx]
-                            .tex
-                            .create_view(&Default::default());
-                        let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("finish-scale"),
-                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: &view,
-                                resolve_target: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                                    store: wgpu::StoreOp::Store,
-                                },
-                                depth_slice: None,
-                            })],
-                            depth_stencil_attachment: None,
-                            timestamp_writes: None,
-                            occlusion_query_set: None,
-                            multiview_mask: None,
-                        });
-                        rp.set_pipeline(pipeline);
-                        rp.set_bind_group(0, &bind, &[]);
-                        rp.draw(0..3, 0..1);
-                    }
-                    node_out.insert(id.clone(), pools[&(nw, nh)][target_idx].tex.clone());
-                    node_pool.insert(id.clone(), ((nw, nh), target_idx));
-                }
-                "effect" | "text" => {
-                    let (nw, nh) = res_of(id);
-                    // Text nodes run the built-in "text" effect with the
-                    // node's raster bound as uTex1 below.
-                    let effect_id = if node.kind == "text" {
-                        "text"
-                    } else {
-                        node.effect_id
-                            .as_deref()
-                            .ok_or_else(|| format!("effect node {id} without effectId"))?
-                    };
-                    let spec = effects
-                        .get(effect_id)
-                        .ok_or_else(|| format!("unknown effect: {effect_id}"))?
-                        .clone();
-                    let mut prev: Option<usize> = None;
-                    for pi in 0..spec.passes.len() {
-                        // Resolve the pass's textures before mutably
-                        // borrowing self for the pipeline.
-                        let mut asset_bindings: HashMap<String, wgpu::Texture> = HashMap::new();
-                        if let Some(files) = spec.passes[pi].textures.as_ref() {
-                            for f in files {
-                                asset_bindings
-                                    .insert(uniform_name(f), self.asset_texture(&spec.id, f)?);
-                            }
-                        }
-                        self.ensure_pass_pipeline(&spec, pi)?;
-                        let pass_key = format!("{}/{}", spec.id, pi);
-                        let pp = &self.pipelines[&pass_key];
-                        let params = write_params(
-                            &spec,
-                            node.params.as_ref(),
-                            &pp.fields,
-                            pp.buf_size,
-                            nw,
-                            nh,
-                        );
-                        let ubuf =
-                            self.device
-                                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                    label: Some("finish-params"),
-                                    contents: &params,
-                                    usage: wgpu::BufferUsages::UNIFORM,
-                                });
-                        // Bind group entries per reflected slot.
-                        let mut views: Vec<(u32, wgpu::TextureView)> = Vec::new();
-                        for (binding, slot) in &pp.slots {
-                            if let Slot::Texture(name) = slot {
-                                // Image globals are the split-pair `<uniform>_t`
-                                // declarations from compose_glsl.
-                                let name = name.strip_suffix("_t").unwrap_or(name);
-                                let tex: wgpu::Texture = if let Some(k) = name
-                                    .strip_prefix("uTex")
-                                    .and_then(|s| s.parse::<u32>().ok())
-                                {
-                                    if node.kind == "text" && k == 1 {
-                                        raster_tex.get(id.as_str()).unwrap_or(&clear).clone()
-                                    } else if pi == 0 {
-                                        input_tex(graph, &node_out, id, k, &clear)
-                                    } else if k == 0 {
-                                        prev.map(|i| pools[&(nw, nh)][i].tex.clone())
-                                            .unwrap_or_else(|| black.clone())
-                                    } else {
-                                        black.clone()
-                                    }
-                                } else if let Some(t) = asset_bindings.get(name) {
-                                    t.clone()
-                                } else {
-                                    black.clone()
-                                };
-                                views.push((*binding, tex.create_view(&Default::default())));
-                            }
-                        }
-                        let mut entries: Vec<wgpu::BindGroupEntry> = Vec::new();
-                        let mut vi = 0usize;
-                        for (binding, slot) in &pp.slots {
-                            match slot {
-                                Slot::Uniform => entries.push(wgpu::BindGroupEntry {
-                                    binding: *binding,
-                                    resource: ubuf.as_entire_binding(),
-                                }),
-                                Slot::Texture(_) => {
-                                    entries.push(wgpu::BindGroupEntry {
-                                        binding: *binding,
-                                        resource: wgpu::BindingResource::TextureView(
-                                            &views[vi].1,
-                                        ),
-                                    });
-                                    vi += 1;
-                                }
-                                Slot::Sampler => entries.push(wgpu::BindGroupEntry {
-                                    binding: *binding,
-                                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                                }),
-                            }
-                        }
-                        let bind = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                            label: Some("finish-pass"),
-                            layout: &pp.bgl,
-                            entries: &entries,
-                        });
-
-                        // Acquire a pool target (reuse a free one).
-                        let target_idx =
-                            Self::acquire_pool(&self.device, &mut pools, (nw, nh));
                         {
-                            let view = pools[&(nw, nh)][target_idx]
-                                .tex
-                                .create_view(&Default::default());
+                            self.ensure_blit_pipeline();
+                            let (pipeline, bgl) = self.blit.as_ref().unwrap();
+                            let bind = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                label: Some("finish-blit"),
+                                layout: bgl,
+                                entries: &[
+                                    wgpu::BindGroupEntry {
+                                        binding: 0,
+                                        resource: wgpu::BindingResource::TextureView(
+                                            &input.create_view(&Default::default()),
+                                        ),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 1,
+                                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                                    },
+                                ],
+                            });
+                            let view = tex.create_view(&Default::default());
                             let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                label: Some("finish-pass"),
+                                label: Some("finish-blit"),
                                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                     view: &view,
                                     resolve_target: None,
@@ -1227,24 +1010,450 @@ impl RenderEngine {
                                 occlusion_query_set: None,
                                 multiview_mask: None,
                             });
-                            rp.set_pipeline(&self.pipelines[&format!("{}/{}", spec.id, pi)].pipeline);
+                            rp.set_pipeline(pipeline);
                             rp.set_bind_group(0, &bind, &[]);
                             rp.draw(0..3, 0..1);
                         }
-                        // Intra-effect ping-pong: the previous pass target
-                        // is free once this pass consumed it.
-                        if let Some(p) = prev {
-                            pools.get_mut(&(nw, nh)).unwrap()[p].free = true;
-                        }
-                        prev = Some(target_idx);
+                        // Queue this output's readback (one buffer per output;
+                        // all copies ride the same encoder/submit).
+                        let bpr = (ow * 4 + 255) & !255;
+                        let buf = self.device.create_buffer(&wgpu::BufferDescriptor {
+                            label: Some("finish-readback"),
+                            size: bpr as u64 * oh as u64,
+                            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                            mapped_at_creation: false,
+                        });
+                        encoder.copy_texture_to_buffer(
+                            wgpu::TexelCopyTextureInfo {
+                                texture: &tex,
+                                mip_level: 0,
+                                origin: wgpu::Origin3d::ZERO,
+                                aspect: wgpu::TextureAspect::All,
+                            },
+                            wgpu::TexelCopyBufferInfo {
+                                buffer: &buf,
+                                layout: wgpu::TexelCopyBufferLayout {
+                                    offset: 0,
+                                    bytes_per_row: Some(bpr),
+                                    rows_per_image: Some(oh),
+                                },
+                            },
+                            wgpu::Extent3d {
+                                width: ow,
+                                height: oh,
+                                depth_or_array_layers: 1,
+                            },
+                        );
+                        tail_bufs.push((id.clone(), buf, (ow, oh)));
                     }
-                    let final_idx =
-                        prev.ok_or_else(|| format!("effect {effect_id} has no passes"))?;
-                    node_out.insert(id.clone(), pools[&(nw, nh)][final_idx].tex.clone());
-                    node_pool.insert(id.clone(), ((nw, nh), final_idx));
+                    "scale" => {
+                        // Resampling blit: input -> a pool target at this
+                        // node's resolution, linear or nearest per filter.
+                        let (nw, nh) = res_of(id);
+                        let input = input_tex(graph, &node_out, id, 0, &clear);
+                        let nearest = node
+                            .params
+                            .as_ref()
+                            .and_then(|p| p.get("filter"))
+                            .and_then(|v| v.as_str())
+                            == Some("pixel");
+                        self.ensure_blit_pool_pipeline();
+                        let target_idx = Self::acquire_pool(&self.device, &mut pools, (nw, nh));
+                        {
+                            let (pipeline, bgl) = self.blit_pool.as_ref().unwrap();
+                            let bind = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                label: Some("finish-scale"),
+                                layout: bgl,
+                                entries: &[
+                                    wgpu::BindGroupEntry {
+                                        binding: 0,
+                                        resource: wgpu::BindingResource::TextureView(
+                                            &input.create_view(&Default::default()),
+                                        ),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 1,
+                                        resource: wgpu::BindingResource::Sampler(if nearest {
+                                            &self.sampler_nearest
+                                        } else {
+                                            &self.sampler
+                                        }),
+                                    },
+                                ],
+                            });
+                            let view = pools[&(nw, nh)][target_idx]
+                                .tex
+                                .create_view(&Default::default());
+                            let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                label: Some("finish-scale"),
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                    view: &view,
+                                    resolve_target: None,
+                                    ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                                        store: wgpu::StoreOp::Store,
+                                    },
+                                    depth_slice: None,
+                                })],
+                                depth_stencil_attachment: None,
+                                timestamp_writes: None,
+                                occlusion_query_set: None,
+                                multiview_mask: None,
+                            });
+                            rp.set_pipeline(pipeline);
+                            rp.set_bind_group(0, &bind, &[]);
+                            rp.draw(0..3, 0..1);
+                        }
+                        node_out.insert(id.clone(), pools[&(nw, nh)][target_idx].tex.clone());
+                        node_pool.insert(id.clone(), ((nw, nh), target_idx));
+                    }
+                    "effect" | "text" => {
+                        let (nw, nh) = res_of(id);
+                        // Text nodes run the built-in "text" effect with the
+                        // node's raster bound as uTex1 below.
+                        let effect_id = if node.kind == "text" {
+                            "text"
+                        } else {
+                            node.effect_id
+                                .as_deref()
+                                .ok_or_else(|| format!("effect node {id} without effectId"))?
+                        };
+                        let spec = effects
+                            .get(effect_id)
+                            .ok_or_else(|| format!("unknown effect: {effect_id}"))?
+                            .clone();
+                        // CPU algos (manifest cpuAlgos): error diffusion is
+                        // sequential — blit the input to an RGBA8 readable
+                        // texture, flush the encoder, read back, diffuse on
+                        // the CPU, upload. Mirrors glExecutor.ts.
+                        let algo_val = node
+                            .params
+                            .as_ref()
+                            .and_then(|m| m.get("algo"))
+                            .and_then(|v| v.as_str())
+                            .map(str::to_string)
+                            .or_else(|| {
+                                spec.params
+                                    .iter()
+                                    .find(|p| p.name == "algo")
+                                    .and_then(|p| p.default.as_str().map(str::to_string))
+                            })
+                            .unwrap_or_default();
+                        if spec
+                            .cpu_algos
+                            .as_ref()
+                            .is_some_and(|a| a.iter().any(|x| x == &algo_val))
+                        {
+                            let input = input_tex(graph, &node_out, id, 0, &clear);
+                            self.ensure_blit_pipeline();
+                            let read_tex = self.device.create_texture(&wgpu::TextureDescriptor {
+                                label: Some("cpu-dither-read"),
+                                size: wgpu::Extent3d {
+                                    width: nw,
+                                    height: nh,
+                                    depth_or_array_layers: 1,
+                                },
+                                mip_level_count: 1,
+                                sample_count: 1,
+                                dimension: wgpu::TextureDimension::D2,
+                                format: IO_FORMAT,
+                                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                                    | wgpu::TextureUsages::COPY_SRC,
+                                view_formats: &[],
+                            });
+                            {
+                                let (pipeline, bgl) = self.blit.as_ref().unwrap();
+                                let bind =
+                                    self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                        label: Some("cpu-dither-blit"),
+                                        layout: bgl,
+                                        entries: &[
+                                            wgpu::BindGroupEntry {
+                                                binding: 0,
+                                                resource: wgpu::BindingResource::TextureView(
+                                                    &input.create_view(&Default::default()),
+                                                ),
+                                            },
+                                            wgpu::BindGroupEntry {
+                                                binding: 1,
+                                                resource: wgpu::BindingResource::Sampler(
+                                                    &self.sampler,
+                                                ),
+                                            },
+                                        ],
+                                    });
+                                let view = read_tex.create_view(&Default::default());
+                                let mut rp =
+                                    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                        label: Some("cpu-dither-blit"),
+                                        color_attachments: &[Some(
+                                            wgpu::RenderPassColorAttachment {
+                                                view: &view,
+                                                resolve_target: None,
+                                                ops: wgpu::Operations {
+                                                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                                                    store: wgpu::StoreOp::Store,
+                                                },
+                                                depth_slice: None,
+                                            },
+                                        )],
+                                        depth_stencil_attachment: None,
+                                        timestamp_writes: None,
+                                        occlusion_query_set: None,
+                                        multiview_mask: None,
+                                    });
+                                rp.set_pipeline(pipeline);
+                                rp.set_bind_group(0, &bind, &[]);
+                                rp.draw(0..3, 0..1);
+                            }
+                            let bpr = (nw * 4 + 255) & !255;
+                            let buf = self.device.create_buffer(&wgpu::BufferDescriptor {
+                                label: Some("cpu-dither-read"),
+                                size: u64::from(bpr) * u64::from(nh),
+                                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                                mapped_at_creation: false,
+                            });
+                            encoder.copy_texture_to_buffer(
+                                wgpu::TexelCopyTextureInfo {
+                                    texture: &read_tex,
+                                    mip_level: 0,
+                                    origin: wgpu::Origin3d::ZERO,
+                                    aspect: wgpu::TextureAspect::All,
+                                },
+                                wgpu::TexelCopyBufferInfo {
+                                    buffer: &buf,
+                                    layout: wgpu::TexelCopyBufferLayout {
+                                        offset: 0,
+                                        bytes_per_row: Some(bpr),
+                                        rows_per_image: Some(nh),
+                                    },
+                                },
+                                wgpu::Extent3d {
+                                    width: nw,
+                                    height: nh,
+                                    depth_or_array_layers: 1,
+                                },
+                            );
+                            let finished = std::mem::replace(
+                                &mut encoder,
+                                self.device.create_command_encoder(
+                                    &wgpu::CommandEncoderDescriptor {
+                                        label: Some("finish-graph-cont"),
+                                    },
+                                ),
+                            );
+                            self.queue.submit([finished.finish()]);
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            buf.slice(..).map_async(wgpu::MapMode::Read, move |r| {
+                                let _ = tx.send(r);
+                            });
+                            self.device
+                                .poll(wgpu::PollType::Wait {
+                                    submission_index: None,
+                                    timeout: None,
+                                })
+                                .map_err(|e| format!("device poll: {e}"))?;
+                            rx.recv()
+                                .map_err(|e| format!("map channel: {e}"))?
+                                .map_err(|e| format!("map buffer: {e}"))?;
+                            let mut rgba = Vec::with_capacity((nw * nh * 4) as usize);
+                            {
+                                let data = buf
+                                    .slice(..)
+                                    .get_mapped_range()
+                                    .map_err(|e| format!("mapped range: {e}"))?;
+                                for row in 0..nh {
+                                    let s = (row * bpr) as usize;
+                                    rgba.extend_from_slice(&data[s..s + (nw * 4) as usize]);
+                                }
+                            }
+                            buf.unmap();
+                            let pick = |name: &str, fb: f64| {
+                                spec.params
+                                    .iter()
+                                    .find(|p| p.name == name)
+                                    .map(|p| {
+                                        scalar_param_value(
+                                            p,
+                                            node.params.as_ref().and_then(|m| m.get(name)),
+                                        )
+                                    })
+                                    .unwrap_or(fb)
+                            };
+                            let ink = |name: &str| -> [u8; 3] {
+                                let v =
+                                    node.params.as_ref().and_then(|m| m.get(name)).or_else(|| {
+                                        spec.params
+                                            .iter()
+                                            .find(|p| p.name == name)
+                                            .map(|p| &p.default)
+                                    });
+                                let c = color_vec3(v);
+                                [
+                                    (f64::from(c[0]) * 255.0).round() as u8,
+                                    (f64::from(c[1]) * 255.0).round() as u8,
+                                    (f64::from(c[2]) * 255.0).round() as u8,
+                                ]
+                            };
+                            let texel = ((pick("scale", 8.0) * 0.25 + 0.5).floor().max(1.0)) as u32;
+                            let out = super::error_diffusion::dither_rgba(
+                                &rgba,
+                                nw,
+                                nh,
+                                &algo_val,
+                                pick("levels", 4.0) as i32,
+                                texel,
+                                ink("dark"),
+                                ink("light"),
+                            );
+                            let img = RgbaImage::from_raw(nw, nh, out)
+                                .ok_or("cpu dither size mismatch")?;
+                            node_out.insert(id.clone(), self.upload_rgba(&img, "cpu-dither"));
+                        } else {
+                            let mut prev: Option<usize> = None;
+                            for pi in 0..spec.passes.len() {
+                                // Resolve the pass's textures before mutably
+                                // borrowing self for the pipeline.
+                                let mut asset_bindings: HashMap<String, wgpu::Texture> =
+                                    HashMap::new();
+                                if let Some(files) = spec.passes[pi].textures.as_ref() {
+                                    for f in files {
+                                        asset_bindings.insert(
+                                            uniform_name(f),
+                                            self.asset_texture(&spec.id, f)?,
+                                        );
+                                    }
+                                }
+                                self.ensure_pass_pipeline(&spec, pi)?;
+                                let pass_key = format!("{}/{}", spec.id, pi);
+                                let pp = &self.pipelines[&pass_key];
+                                let params = write_params(
+                                    &spec,
+                                    node.params.as_ref(),
+                                    &pp.fields,
+                                    pp.buf_size,
+                                    nw,
+                                    nh,
+                                );
+                                let ubuf = self.device.create_buffer_init(
+                                    &wgpu::util::BufferInitDescriptor {
+                                        label: Some("finish-params"),
+                                        contents: &params,
+                                        usage: wgpu::BufferUsages::UNIFORM,
+                                    },
+                                );
+                                // Bind group entries per reflected slot.
+                                let mut views: Vec<(u32, wgpu::TextureView)> = Vec::new();
+                                for (binding, slot) in &pp.slots {
+                                    if let Slot::Texture(name) = slot {
+                                        // Image globals are the split-pair `<uniform>_t`
+                                        // declarations from compose_glsl.
+                                        let name = name.strip_suffix("_t").unwrap_or(name);
+                                        let tex: wgpu::Texture = if let Some(k) = name
+                                            .strip_prefix("uTex")
+                                            .and_then(|s| s.parse::<u32>().ok())
+                                        {
+                                            if node.kind == "text" && k == 1 {
+                                                raster_tex
+                                                    .get(id.as_str())
+                                                    .unwrap_or(&clear)
+                                                    .clone()
+                                            } else if pi == 0 {
+                                                input_tex(graph, &node_out, id, k, &clear)
+                                            } else if k == 0 {
+                                                prev.map(|i| pools[&(nw, nh)][i].tex.clone())
+                                                    .unwrap_or_else(|| black.clone())
+                                            } else {
+                                                black.clone()
+                                            }
+                                        } else if let Some(t) = asset_bindings.get(name) {
+                                            t.clone()
+                                        } else {
+                                            black.clone()
+                                        };
+                                        views
+                                            .push((*binding, tex.create_view(&Default::default())));
+                                    }
+                                }
+                                let mut entries: Vec<wgpu::BindGroupEntry> = Vec::new();
+                                let mut vi = 0usize;
+                                for (binding, slot) in &pp.slots {
+                                    match slot {
+                                        Slot::Uniform => entries.push(wgpu::BindGroupEntry {
+                                            binding: *binding,
+                                            resource: ubuf.as_entire_binding(),
+                                        }),
+                                        Slot::Texture(_) => {
+                                            entries.push(wgpu::BindGroupEntry {
+                                                binding: *binding,
+                                                resource: wgpu::BindingResource::TextureView(
+                                                    &views[vi].1,
+                                                ),
+                                            });
+                                            vi += 1;
+                                        }
+                                        Slot::Sampler => entries.push(wgpu::BindGroupEntry {
+                                            binding: *binding,
+                                            resource: wgpu::BindingResource::Sampler(&self.sampler),
+                                        }),
+                                    }
+                                }
+                                let bind =
+                                    self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                        label: Some("finish-pass"),
+                                        layout: &pp.bgl,
+                                        entries: &entries,
+                                    });
+
+                                // Acquire a pool target (reuse a free one).
+                                let target_idx =
+                                    Self::acquire_pool(&self.device, &mut pools, (nw, nh));
+                                {
+                                    let view = pools[&(nw, nh)][target_idx]
+                                        .tex
+                                        .create_view(&Default::default());
+                                    let mut rp =
+                                        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                            label: Some("finish-pass"),
+                                            color_attachments: &[Some(
+                                                wgpu::RenderPassColorAttachment {
+                                                    view: &view,
+                                                    resolve_target: None,
+                                                    ops: wgpu::Operations {
+                                                        load: wgpu::LoadOp::Clear(
+                                                            wgpu::Color::BLACK,
+                                                        ),
+                                                        store: wgpu::StoreOp::Store,
+                                                    },
+                                                    depth_slice: None,
+                                                },
+                                            )],
+                                            depth_stencil_attachment: None,
+                                            timestamp_writes: None,
+                                            occlusion_query_set: None,
+                                            multiview_mask: None,
+                                        });
+                                    rp.set_pipeline(
+                                        &self.pipelines[&format!("{}/{}", spec.id, pi)].pipeline,
+                                    );
+                                    rp.set_bind_group(0, &bind, &[]);
+                                    rp.draw(0..3, 0..1);
+                                }
+                                // Intra-effect ping-pong: the previous pass target
+                                // is free once this pass consumed it.
+                                if let Some(p) = prev {
+                                    pools.get_mut(&(nw, nh)).unwrap()[p].free = true;
+                                }
+                                prev = Some(target_idx);
+                            }
+                            let final_idx =
+                                prev.ok_or_else(|| format!("effect {effect_id} has no passes"))?;
+                            node_out.insert(id.clone(), pools[&(nw, nh)][final_idx].tex.clone());
+                            node_pool.insert(id.clone(), ((nw, nh), final_idx));
+                        }
+                    }
+                    other => return Err(format!("unknown node kind: {other}")),
                 }
-                other => return Err(format!("unknown node kind: {other}")),
-            }
             }
             // Release producers whose consumers have all run.
             for w in &graph.wires {
@@ -1299,8 +1508,7 @@ impl RenderEngine {
             }
             drop(data);
             buf.unmap();
-            let img = RgbaImage::from_raw(ow, oh, pixels)
-                .ok_or("readback size mismatch")?;
+            let img = RgbaImage::from_raw(ow, oh, pixels).ok_or("readback size mismatch")?;
             tails.insert(id, image::imageops::flip_vertical(&img));
         }
         Ok(tails)

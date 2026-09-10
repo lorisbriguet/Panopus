@@ -1,5 +1,5 @@
 {
-  "name": "dither-ign",
+  "name": "dither-atkinson",
   "graph": {
     "v": 1,
     "nodes": [
@@ -14,7 +14,7 @@
         "kind": "effect",
         "effectId": "bayer",
         "params": {
-          "algo": "ign",
+          "algo": "atkinson",
           "scale": 12
         },
         "x": 0,

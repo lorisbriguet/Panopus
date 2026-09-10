@@ -25,6 +25,10 @@ export type EffectSpec = {
   inputs: number;
   passes: PassSpec[];
   params: ParamSpec[];
+  /** Algo enum values the host must run on the CPU (error diffusion is
+   *  sequential — no fragment-shader formulation). When params.algo is
+   *  one of these, both engines bypass the frag for the CPU dither. */
+  cpuAlgos?: string[];
 };
 
 // JSON modules arrive as namespace objects carrying the parsed value on

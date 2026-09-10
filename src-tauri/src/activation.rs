@@ -36,8 +36,8 @@ pub fn register_paths(paths: &[PathBuf], register: bool) -> Vec<Result<(), Strin
     paths
         .iter()
         .map(|p| {
-            let url = CFURL::from_path(p, false)
-                .ok_or_else(|| format!("bad path: {}", p.display()))?;
+            let url =
+                CFURL::from_path(p, false).ok_or_else(|| format!("bad path: {}", p.display()))?;
             let mut err: CFErrorRef = std::ptr::null_mut();
             let ok = unsafe {
                 if register {
@@ -119,9 +119,7 @@ pub fn reactivate_all(conn: &rusqlite::Connection) {
                 "reactivate_all: font {id} ({}) failed, deactivating: {e}",
                 path.display()
             );
-            if let Err(db_err) =
-                conn.execute("UPDATE fonts SET active = 0 WHERE id = ?1", [id])
-            {
+            if let Err(db_err) = conn.execute("UPDATE fonts SET active = 0 WHERE id = ?1", [id]) {
                 eprintln!("reactivate_all: failed to deactivate font {id}: {db_err}");
             }
         }
@@ -156,11 +154,8 @@ pub async fn set_fonts_active(
 
     let paths: Vec<PathBuf> = found.iter().map(|(_, p)| p.clone()).collect();
     let ct_results = register_paths(&paths, active);
-    let results: Vec<(i64, Result<(), String>)> = found
-        .iter()
-        .map(|(id, _)| *id)
-        .zip(ct_results)
-        .collect();
+    let results: Vec<(i64, Result<(), String>)> =
+        found.iter().map(|(id, _)| *id).zip(ct_results).collect();
 
     set_active_in_db(&conn, &results, active).map_err(|e| e.to_string())?;
 

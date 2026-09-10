@@ -74,7 +74,9 @@ fn collect_specimen(
         if seen.len() >= CANDIDATE_LEN {
             return;
         }
-        let Some(ch) = sampleable_char(cp) else { return };
+        let Some(ch) = sampleable_char(cp) else {
+            return;
+        };
         if subtable.glyph_index(cp).is_none() {
             return;
         }
@@ -159,7 +161,11 @@ pub fn parse_font(path: &Path) -> Result<FontMeta, String> {
         style,
         ps_name: name(&face, name_id::POST_SCRIPT_NAME),
         glyph_count: face.number_of_glyphs(),
-        format: if ext == "otf" { "otf".into() } else { "ttf".into() },
+        format: if ext == "otf" {
+            "otf".into()
+        } else {
+            "ttf".into()
+        },
         hash: format!("{:x}", md5::compute(&data)),
         sample_text: latin_sample(&face),
     })
@@ -312,7 +318,10 @@ pub fn index_all(
     // and the stale-row DELETE below would then wipe every library row,
     // cascading font_tags and losing favorites. Refuse before any DB write.
     if !library_root.is_dir() {
-        return Err(format!("library root not found: {}", library_root.display()));
+        return Err(format!(
+            "library root not found: {}",
+            library_root.display()
+        ));
     }
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     let mut report = IndexReport::default();
