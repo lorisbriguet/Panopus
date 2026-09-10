@@ -95,7 +95,7 @@ function Operator({
 }) {
   return (
     <div
-      className="w-24 font-mono rounded-[3px] bg-[#111114]/95 p-1 pb-[3px] shadow-[0_2px_12px_rgba(0,0,0,0.55)]"
+      className="w-24 font-mono rounded-[3px] bg-[#1e1e23]/95 p-1 pb-[3px] shadow-[0_2px_12px_rgba(0,0,0,0.55)]"
       style={{
         borderLeft: `3px solid ${tint}`,
         outline: selected ? "1.5px solid var(--color-accent)" : undefined,
