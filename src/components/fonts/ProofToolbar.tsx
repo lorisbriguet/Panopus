@@ -6,7 +6,7 @@ import { SearchBar } from "../ui/SearchBar";
 import { Select } from "../ui/Select";
 import { Toggle } from "../ui/Toggle";
 import { TagManager } from "./TagManager";
-import { useAppStore, DEFAULT_PROOF_TEXT } from "../../stores/app-store";
+import { useAppStore } from "../../stores/app-store";
 import type { LibrarySortOption, LibraryColumnsOption } from "../../stores/app-store";
 import type { TagRow } from "../../hooks/useTags";
 import { useT } from "../../i18n/useT";
@@ -49,6 +49,7 @@ export function ProofToolbar({
   const t = useT();
   const proofText = useAppStore((s) => s.proofText);
   const proofSize = useAppStore((s) => s.proofSize);
+  const customPangram = useAppStore((s) => s.customPangram);
   const libraryQuery = useAppStore((s) => s.libraryQuery);
   const librarySort = useAppStore((s) => s.librarySort);
   const libraryColumns = useAppStore((s) => s.libraryColumns);
@@ -73,7 +74,7 @@ export function ProofToolbar({
           placeholder={t.proof_text}
           aria-label={t.proof_text}
         />
-        <Button variant="ghost" size="sm" onClick={() => setProofText(DEFAULT_PROOF_TEXT)}>
+        <Button variant="ghost" size="sm" onClick={() => setProofText(customPangram)}>
           {t.preset_pangram}
         </Button>
         <Button variant="ghost" size="sm" onClick={() => setProofText(ALPHABET)}>

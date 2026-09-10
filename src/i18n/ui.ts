@@ -82,6 +82,12 @@ const ui = {
     forward: "Forward",
     operation_failed: "Operation failed",
 
+    // Settings → Proofing
+    proofing_category: "Proofing",
+    custom_pangram_label: "Custom pangram",
+    custom_pangram_hint: "Used by the Pangram preset above the library grid.",
+    custom_pangram_reset: "Reset to default",
+
     // Update Checker
     updates_category: "Updates",
     checking_for_updates: "Checking for updates...",
@@ -361,6 +367,12 @@ const ui = {
     retry: "Reessayer",
     forward: "Suivant",
     operation_failed: "Operation echouee",
+
+    // Settings → Proofing
+    proofing_category: "Epreuves",
+    custom_pangram_label: "Pangramme personnalise",
+    custom_pangram_hint: "Utilise par le prereglage Pangramme au-dessus de la grille.",
+    custom_pangram_reset: "Retablir la valeur par defaut",
 
     // Update Checker
     updates_category: "Mises a jour",

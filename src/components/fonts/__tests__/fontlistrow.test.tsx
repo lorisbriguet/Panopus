@@ -35,11 +35,11 @@ const font: FontRow = {
 const openDetail = vi.fn();
 const chipToggle = vi.fn();
 
-function renderRow(overrides: Partial<FontRow> = {}) {
+function renderRow(overrides: Partial<FontRow> = {}, proofText = "Proof") {
   return render(
     <FontListRow
       font={{ ...font, ...overrides }}
-      proofText="Proof"
+      proofText={proofText}
       proofSize={20}
       onOpenDetail={openDetail}
     />
@@ -107,6 +107,11 @@ describe("FontListRow", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Select font" }));
     expect(useAppStore.getState().selectedIds).toEqual(new Set([7]));
     expect(openDetail).not.toHaveBeenCalled();
+  });
+
+  it("renders the default proof line when proof text is blank", () => {
+    renderRow({}, "");
+    expect(screen.getByText("Grand Hôtel du Chien Savant")).toBeInTheDocument();
   });
 
   it("system fonts: checkbox and toggle disabled, but toggle reads ON", () => {

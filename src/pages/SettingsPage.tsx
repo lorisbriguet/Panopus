@@ -3,19 +3,20 @@ import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderOpen, Palette, RefreshCw } from "lucide-react";
+import { FolderOpen, Palette, RefreshCw, Type } from "lucide-react";
 import { getDb } from "../db";
 import { UpdateChecker } from "../components/UpdateChecker";
-import { useAppStore, ACCENT_PRESETS, type AccentPreset } from "../stores/app-store";
+import { useAppStore, ACCENT_PRESETS, DEFAULT_PROOF_TEXT, type AccentPreset } from "../stores/app-store";
 import { THEMES } from "../lib/themes";
 import { useT } from "../i18n/useT";
 import type { AppLanguage } from "../i18n/ui";
 import { Select, Button } from "../components/ui";
+import { Input } from "../components/ui/Input";
 import { Toggle } from "../components/ui/Toggle";
 import { logError } from "../lib/log";
 import { notifyError } from "../lib/notifyError";
 
-type SettingsCategory = "library" | "appearance" | "updates";
+type SettingsCategory = "library" | "appearance" | "proofing" | "updates";
 
 /** Shape returned by the Rust `index_library` command. */
 interface IndexReport {
@@ -67,6 +68,8 @@ export function SettingsPage() {
   const setReduceMotion = useAppStore((s) => s.setReduceMotion);
   const language = useAppStore((s) => s.language);
   const setLanguage = useAppStore((s) => s.setLanguage);
+  const customPangram = useAppStore((s) => s.customPangram);
+  const setCustomPangram = useAppStore((s) => s.setCustomPangram);
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>("library");
   const [appVersion, setAppVersion] = useState("");
   const t = useT();
@@ -249,6 +252,32 @@ export function SettingsPage() {
     </div>
   );
 
+  const renderProofing = () => (
+    <div className="space-y-6">
+      <div>
+        <label className="block mb-1.5 text-sm font-medium text-fg-base">
+          {t.custom_pangram_label}
+        </label>
+        <p className="text-xs text-muted mb-2">{t.custom_pangram_hint}</p>
+        <div className="flex items-center gap-3">
+          <Input
+            value={customPangram}
+            onChange={(e) => setCustomPangram(e.target.value)}
+            aria-label={t.custom_pangram_label}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={customPangram === DEFAULT_PROOF_TEXT}
+            onClick={() => setCustomPangram(DEFAULT_PROOF_TEXT)}
+          >
+            {t.custom_pangram_reset}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex-1 overflow-auto">
       <div className="max-w-4xl mx-auto p-6">
@@ -274,6 +303,14 @@ export function SettingsPage() {
                 {t.appearance}
               </Button>
               <Button
+                variant={activeCategory === "proofing" ? "secondary" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setActiveCategory("proofing")}
+              >
+                <Type className="mr-2 h-4 w-4" />
+                {t.proofing_category}
+              </Button>
+              <Button
                 variant={activeCategory === "updates" ? "secondary" : "ghost"}
                 className="w-full justify-start"
                 onClick={() => setActiveCategory("updates")}
@@ -288,6 +325,7 @@ export function SettingsPage() {
             <div className="bg-bg-elevated rounded-lg p-6 border border-border">
               {activeCategory === "library" && renderLibrary()}
               {activeCategory === "appearance" && renderAppearance()}
+              {activeCategory === "proofing" && renderProofing()}
               {activeCategory === "updates" && <UpdateChecker />}
             </div>
           </div>

@@ -12,7 +12,7 @@ import { Badge } from "../ui/Badge";
 import { Toggle } from "../ui/Toggle";
 import { useToggleFavorite } from "../../hooks/useFonts";
 import { useSetActive } from "../../hooks/useActivation";
-import { useAppStore } from "../../stores/app-store";
+import { useAppStore, DEFAULT_PROOF_TEXT } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
 import { isFontActive, type FontRow } from "../../lib/fontFilters";
 import { LICENCE_VARIANTS } from "./FontCard";
@@ -190,8 +190,10 @@ export const FontListRow = memo(function FontListRow({
           }}
         >
           {/* Specimen fallback: fonts mapping no Latin letters would render
-              the proof text as a blank line — show their indexed specimen. */}
-          {font.sample_text ?? proofText}
+              the proof text as a blank line — show their indexed specimen.
+              Blank proof text falls back to the default line (same rule as
+              SortableRow/Waterfall). */}
+          {font.sample_text ?? (proofText || DEFAULT_PROOF_TEXT)}
         </div>
         {/* Flag the substitution (FontCard's specimen_label precedent) —
             sits OUTSIDE the masked preview so the fade never eats it. */}

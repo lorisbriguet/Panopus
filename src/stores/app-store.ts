@@ -215,6 +215,8 @@ export interface AppState {
   proofText: string;
   /** Library proofing: preview size in px (12–96). */
   proofSize: number;
+  /** User-defined pangram applied by the toolbar's Pangram preset (Settings → Proofing). */
+  customPangram: string;
   /** Library grid filters (ephemeral — resets on relaunch). */
   libraryQuery: FontQuery;
   /** Library grid sort — remembered across launches like clientsSortKey. */
@@ -254,6 +256,7 @@ export interface AppState {
   setClientsSortDir: (dir: "asc" | "desc") => void;
   setProofText: (text: string) => void;
   setProofSize: (size: number) => void;
+  setCustomPangram: (text: string) => void;
   /** Merge a partial patch into libraryQuery (spread-merge, like setContext). */
   setLibraryQuery: (patch: Partial<FontQuery>) => void;
   setLibrarySort: (sort: LibrarySortOption) => void;
@@ -371,6 +374,7 @@ export const useAppStore = create<AppState>((set) => ({
   calendarView: (localStorage.getItem("calendarView") as CalendarViewOption) ?? "timeGridWeek",
   proofText: localStorage.getItem("proofText") ?? DEFAULT_PROOF_TEXT,
   proofSize: Number(localStorage.getItem("proofSize")) || 34,
+  customPangram: localStorage.getItem("customPangram") ?? DEFAULT_PROOF_TEXT,
   libraryQuery: EMPTY_FONT_QUERY,
   librarySort: (localStorage.getItem("librarySort") as LibrarySortOption) ?? "family_asc",
   libraryColumns: loadLibraryColumns(),
@@ -415,6 +419,10 @@ export const useAppStore = create<AppState>((set) => ({
   setProofSize: (size) => {
     localStorage.setItem("proofSize", String(size));
     set({ proofSize: size });
+  },
+  setCustomPangram: (text) => {
+    localStorage.setItem("customPangram", text);
+    set({ customPangram: text });
   },
   setLibraryQuery: (patch) =>
     set((s) => ({ libraryQuery: { ...s.libraryQuery, ...patch } })),
