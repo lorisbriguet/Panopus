@@ -147,9 +147,9 @@ function Operator({
           }`}
         />
       </div>
-      <div className="mt-1 px-0.5">
+      <div className="mt-1 px-0.5 overflow-hidden">
         <span
-          className={`text-[11px] tracking-[0.08em] uppercase ${
+          className={`block whitespace-nowrap text-[9px] leading-[13px] tracking-[0.06em] uppercase ${
             selected ? "text-accent" : "text-white/90"
           }`}
         >
