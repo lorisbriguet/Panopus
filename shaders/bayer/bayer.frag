@@ -6,6 +6,8 @@
 //   0 bayer2 / 1 bayer4 / 2 bayer8 - Bayer matrices
 //   3 voidcluster - 64x64 void-and-cluster blue-noise threshold texture
 //     (bluenoise-64.png, baked by scripts/build_bluenoise.mjs)
+//   10 diffusion - interleaved gradient noise threshold (DitherLab's
+//      "Diffusion": the error-diffusion LOOK, temporally stable)
 // Pattern texels snap to whole pixels (portability rule).
 // No version/precision directives - the host prepends them.
 
@@ -51,6 +53,10 @@ float thresholdAt(vec2 px, float texel) {
         vec2 cell = mod(floor(px / texel), BN_SIDE);
         // Texel centers; the texture is NEAREST-sampled by size anyway.
         return texture(uBluenoise64, (cell + 0.5) / BN_SIDE).r;
+    }
+    if (uAlgo == 10) { // diffusion: interleaved gradient noise (Jimenez)
+        vec2 cell = floor(px / texel);
+        return fract(52.9829189 * fract(0.06711056 * cell.x + 0.00583715 * cell.y));
     }
     return bayer(px / texel, 8.0); // 2 (and CPU-algo fallback): bayer8
 }

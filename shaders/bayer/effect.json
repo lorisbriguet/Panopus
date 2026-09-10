@@ -32,7 +32,8 @@
         "stucki",
         "burkes",
         "sierra",
-        "atkinson"
+        "atkinson",
+        "diffusion"
       ],
       "default": "bayer8"
     },
