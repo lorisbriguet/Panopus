@@ -1,15 +1,16 @@
 // ASCII (#400): the glyph half of the retired DitherLab port with the
 // charset and coloring promoted to params. Atlas layout unchanged
-// (69 cols x 20 rows: 4 font styles x 5 charsets, font style baked to
-// jgs7 = row offset 5).
+// (69 cols x 20 rows: 4 font styles x 5 charsets); the font style is a
+// param now (node review) — the atlas's braille rows (offset 4 in each
+// style block) are retired along with the invert toggle.
 // No version/precision directives - the host prepends them.
 
 uniform sampler2D uTex0;
 uniform sampler2D uGlyphAtlas;
 uniform vec2 uRes;
 uniform float uScale;
-uniform int uCharset;  // 0..4 -> detailed/simple/minimal/blocks/braille
-uniform int uInvert;
+uniform int uCharset;  // 0..3 -> detailed/simple/minimal/blocks
+uniform int uFont;     // 0..3 -> jgs5/jgs7/jgs9/jgsfont (atlas row blocks of 5)
 uniform int uTinted;
 uniform vec3 uDark;
 uniform vec3 uLight;
@@ -20,12 +21,11 @@ out vec4 fragColor;
 const float ATLAS_COLS = 69.0;
 const float CHAR_ASPECT = 0.5;
 const float ATLAS_ROWS = 20.0;
-const float GLYPH_VPADS[5] = float[5](0.06, 0.06, 0.06, 0.0, 0.18);
+const float GLYPH_VPADS[4] = float[4](0.06, 0.06, 0.06, 0.0);
 
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
 vec3 prep(vec3 c) {
-    if (uInvert == 1) c = 1.0 - c;
     return clamp(c, 0.0, 1.0);
 }
 
@@ -43,7 +43,8 @@ float bayer(vec2 cell, float size) {
 }
 
 float glyphMask(float b, vec2 inCell) {
-    float charsetRow = 5.0 + float(uCharset); // font style jgs7 baked
+    // Each font style owns a block of 5 charset rows in the atlas.
+    float charsetRow = float(uFont) * 5.0 + float(uCharset);
     float charset = float(uCharset);
     if (abs(charset - 3.0) < 0.5) {           // blocks: procedural
         float s = floor(clamp(b, 0.0, 1.0) * 4.999) / 4.0;

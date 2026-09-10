@@ -26,15 +26,20 @@
         "detailed",
         "simple",
         "minimal",
-        "blocks",
-        "braille"
+        "blocks"
       ],
       "default": "detailed"
     },
     {
-      "name": "invert",
-      "type": "bool",
-      "default": false
+      "name": "font",
+      "type": "enum",
+      "options": [
+        "jgs5",
+        "jgs7",
+        "jgs9",
+        "jgsfont"
+      ],
+      "default": "jgs7"
     },
     {
       "name": "tinted",
