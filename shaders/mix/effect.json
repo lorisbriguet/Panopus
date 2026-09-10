@@ -1,8 +1,12 @@
 {
   "id": "mix",
   "label": "Mix",
-  "inputs": 2,
-  "passes": [{ "frag": "mix.frag" }],
+  "inputs": 4,
+  "passes": [
+    {
+      "frag": "mix.frag"
+    }
+  ],
   "params": [
     {
       "name": "mode",
@@ -13,12 +17,20 @@
         "screen",
         "overlay",
         "add",
+        "subtract",
         "difference",
         "darken",
-        "lighten"
+        "lighten",
+        "softlight",
+        "hardlight",
+        "exclusion"
       ],
       "default": "normal"
     },
-    { "name": "amount", "type": "float", "min": 0, "max": 1, "step": 0.01, "default": 1 }
+    {
+      "name": "swapAB",
+      "type": "bool",
+      "default": false
+    }
   ]
 }

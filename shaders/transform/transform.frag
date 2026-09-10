@@ -17,6 +17,7 @@ uniform float uY;      // translate, fraction of frame height (up)
 uniform float uScale;  // 1 = 100%
 uniform float uRotate; // degrees, counter-clockwise
 uniform int uPixel;    // 1 = nearest sampling (in-shader emulation)
+uniform float uOpacity; // layer opacity (#397 - blend lives here, not in mix)
 
 in vec2 vUv;
 out vec4 fragColor;
@@ -40,5 +41,6 @@ void main() {
         // Nearest: snap to the source texel center.
         uv = (floor(p * uRes) + 0.5) / uRes;
     }
-    fragColor = texture(uTex0, uv);
+    vec4 src = texture(uTex0, uv);
+    fragColor = vec4(src.rgb, src.a * clamp(uOpacity, 0.0, 1.0));
 }

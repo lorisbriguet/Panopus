@@ -318,7 +318,7 @@ describe("ParamsPanel", () => {
 
     // Check options exist
     expect(screen.getByRole("option", { name: "bayer" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "halftone" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "ascii" })).toBeInTheDocument(); // #399: halftone algo removed
     expect(screen.getByRole("option", { name: "ascii" })).toBeInTheDocument();
   });
 
@@ -377,23 +377,23 @@ describe("FinishTab graph undo (Finish 2 T1)", () => {
       />
     );
 
-  const addDither = () => {
+  const addBayer = () => {
     fireEvent.click(screen.getByRole("button", { name: /add/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Dither" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bayer" }));
   };
 
   it("cmd+z undoes an added effect, cmd+shift+z redoes it", async () => {
     renderTab();
-    addDither();
-    expect(screen.getByText("Dither")).toBeInTheDocument();
+    addBayer();
+    expect(screen.getByText("Bayer")).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: "z", metaKey: true });
     await waitFor(() =>
-      expect(screen.queryByText("Dither")).not.toBeInTheDocument()
+      expect(screen.queryByText("Bayer")).not.toBeInTheDocument()
     );
 
     fireEvent.keyDown(document, { key: "Z", metaKey: true, shiftKey: true });
-    await waitFor(() => expect(screen.getByText("Dither")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Bayer")).toBeInTheDocument());
   });
 
   it("adds an extra source whose params show its own picker (D7)", async () => {
@@ -435,7 +435,7 @@ describe("FinishTab graph undo (Finish 2 T1)", () => {
 
   it("save-as-recipe captures the intermediates through the modal", async () => {
     renderTab();
-    addDither();
+    addBayer();
     fireEvent.click(screen.getByRole("button", { name: /add/i }));
     fireEvent.click(
       screen.getByRole("button", { name: "Save as recipe..." })
@@ -452,12 +452,12 @@ describe("FinishTab graph undo (Finish 2 T1)", () => {
     expect(arg.name).toBe("My look");
     const captured = JSON.parse(arg.nodesJson);
     expect(captured.nodes.length).toBe(1);
-    expect(captured.nodes[0].effectId).toBe("dither");
+    expect(captured.nodes[0].effectId).toBe("bayer");
   });
 
   it("leaves cmd+z alone while typing in an input", async () => {
     renderTab();
-    addDither();
+    addBayer();
     // Select the output node so its width NumField is in the DOM.
     const props = (globalThis as Record<string, unknown>).__xyflowProps as {
       onNodesChange: (changes: unknown[]) => void;
@@ -467,6 +467,6 @@ describe("FinishTab graph undo (Finish 2 T1)", () => {
     });
     const width = await screen.findByLabelText("width");
     fireEvent.keyDown(width, { key: "z", metaKey: true });
-    expect(screen.getByText("Dither")).toBeInTheDocument();
+    expect(screen.getByText("Bayer")).toBeInTheDocument();
   });
 });

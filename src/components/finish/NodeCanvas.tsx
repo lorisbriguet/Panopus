@@ -628,7 +628,7 @@ export function NodeCanvas({
           {showAddMenu && (
             <div className="absolute top-full left-0 mt-1 bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 min-w-[160px] z-10">
               {Object.values(EFFECTS)
-                .filter((spec) => spec.id !== "text") // text = its own kind
+                .filter((spec) => spec.id !== "text" && spec.id !== "dither") // text = own kind; dither = legacy (#399/#400)
                 .map((spec) => (
                 <button
                   key={spec.id}
@@ -734,7 +734,7 @@ export function NodeCanvas({
               {/* Submenu on hover (#418) */}
               <div className="hidden group-hover:block absolute left-full top-0 min-w-[140px] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1">
                 {Object.values(EFFECTS)
-                  .filter((sp) => sp.id !== "text" && sp.id !== ctxNode.effectId)
+                  .filter((sp) => sp.id !== "text" && sp.id !== "dither" && sp.id !== ctxNode.effectId)
                   .map((sp) => (
                     <button
                       key={sp.id}

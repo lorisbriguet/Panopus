@@ -2,10 +2,79 @@
   "id": "gradientmap",
   "label": "Gradient Map",
   "inputs": 1,
-  "passes": [{ "frag": "gradientmap.frag" }],
+  "passes": [
+    {
+      "frag": "gradientmap.frag"
+    }
+  ],
   "params": [
-    { "name": "dark", "type": "color", "default": "#101014" },
-    { "name": "light", "type": "color", "default": "#f2ede4" },
-    { "name": "mix", "type": "float", "min": 0, "max": 1, "step": 0.01, "default": 1 }
+    {
+      "name": "stops",
+      "type": "int",
+      "min": 2,
+      "max": 4,
+      "step": 1,
+      "default": 2
+    },
+    {
+      "name": "c1",
+      "type": "color",
+      "default": "#101014"
+    },
+    {
+      "name": "p1",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.005,
+      "default": 0
+    },
+    {
+      "name": "c2",
+      "type": "color",
+      "default": "#f2ede4"
+    },
+    {
+      "name": "p2",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.005,
+      "default": 1
+    },
+    {
+      "name": "c3",
+      "type": "color",
+      "default": "#e05252"
+    },
+    {
+      "name": "p3",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.005,
+      "default": 1
+    },
+    {
+      "name": "c4",
+      "type": "color",
+      "default": "#ffffff"
+    },
+    {
+      "name": "p4",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.005,
+      "default": 1
+    },
+    {
+      "name": "mix",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 1
+    }
   ]
 }

@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { Button, Select, Toggle } from "../ui";
 import { EFFECTS } from "../../lib/effects";
 import type { ParamSpec } from "../../lib/effects";
@@ -363,6 +364,141 @@ function TextParams({
   );
 }
 
+/** Photoshop-style multi-stop editor for the gradient map (#387):
+ *  draggable stops on a live gradient bar, 2-4 stops. */
+function GradientMapParams({
+  node,
+  onParamsChange,
+}: {
+  node: GraphNode;
+  onParamsChange: ParamsPanelProps["onParamsChange"];
+}) {
+  const p = node.params ?? {};
+  const num = (k: string, d: number) =>
+    typeof p[k] === "number" && Number.isFinite(p[k] as number) ? (p[k] as number) : d;
+  const col = (k: string, d: string) =>
+    typeof p[k] === "string" ? (p[k] as string) : d;
+  const stops = Math.min(4, Math.max(2, Math.round(num("stops", 2))));
+  const cs = [col("c1", "#101014"), col("c2", "#f2ede4"), col("c3", "#e05252"), col("c4", "#ffffff")];
+  const ps = [num("p1", 0), num("p2", 1), num("p3", 1), num("p4", 1)];
+  const mixV = num("mix", 1);
+  const [sel, setSel] = useState(0);
+  const barRef = useRef<HTMLDivElement>(null);
+  const dragIdx = useRef<number | null>(null);
+  const set = (patch: Record<string, number | string | boolean>) =>
+    onParamsChange({
+      stops,
+      c1: cs[0], p1: ps[0], c2: cs[1], p2: ps[1],
+      c3: cs[2], p3: ps[2], c4: cs[3], p4: ps[3],
+      mix: mixV,
+      ...patch,
+    });
+  const moveStop = (i: number, v: number) => {
+    // keep stops ordered: clamp between neighbours
+    const lo = i === 0 ? 0 : ps[i - 1];
+    const hi = i >= stops - 1 ? 1 : ps[i + 1];
+    set({ [`p${i + 1}`]: Math.min(hi, Math.max(lo, v)) });
+  };
+  const gradient = `linear-gradient(to right, ${cs
+    .slice(0, stops)
+    .map((c, i) => `${c} ${ps[i] * 100}%`)
+    .join(", ")})`;
+
+  return (
+    <div className="h-full border border-white/10 rounded-[3px] bg-[var(--color-surface)] overflow-y-auto font-mono">
+      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
+        <span className="inline-block w-1.5 h-1.5 rounded-[1px] bg-[#b98cff]" />
+        <h3 className="text-[10px] tracking-[0.08em] uppercase text-[var(--color-text-secondary)]">
+          Gradient Map
+        </h3>
+      </div>
+      <div className="p-3 flex flex-col gap-2">
+        <div
+          ref={barRef}
+          className="relative h-6 rounded-[3px] border border-white/15"
+          style={{ background: gradient }}
+          onPointerMove={(e) => {
+            if (dragIdx.current === null || !barRef.current) return;
+            const r = barRef.current.getBoundingClientRect();
+            moveStop(dragIdx.current, (e.clientX - r.left) / Math.max(1, r.width));
+          }}
+          onPointerUp={() => {
+            dragIdx.current = null;
+          }}
+        >
+          {Array.from({ length: stops }).map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              aria-label={`stop ${i + 1}`}
+              onPointerDown={(e) => {
+                setSel(i);
+                dragIdx.current = i;
+                (e.currentTarget.parentElement as HTMLElement).setPointerCapture(
+                  e.pointerId
+                );
+              }}
+              className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 ${
+                sel === i ? "border-accent" : "border-white/70"
+              }`}
+              style={{ left: `${ps[i] * 100}%`, background: cs[i] }}
+            />
+          ))}
+        </div>
+        <div className={ROW}>
+          <label className={NAME}>{`stop ${sel + 1}`}</label>
+          <input
+            type="color"
+            value={cs[sel]}
+            onChange={(e) => set({ [`c${sel + 1}`]: e.target.value })}
+            className="flex-1 h-7 rounded-[3px] border border-white/15 bg-[var(--color-input-bg)]"
+          />
+          <ValueField
+            name={`p${sel + 1}`}
+            value={ps[sel]}
+            min={0}
+            max={1}
+            onChange={(v) => moveStop(sel, v)}
+          />
+        </div>
+        <div className={ROW}>
+          <label className={NAME}>stops</label>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={stops <= 2}
+            onClick={() => set({ stops: stops - 1 })}
+          >
+            −
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={stops >= 4}
+            onClick={() =>
+              set({
+                stops: stops + 1,
+                [`p${stops + 1}`]: Math.min(1, ps[stops - 1] + 0.15),
+              })
+            }
+          >
+            +
+          </Button>
+        </div>
+        <div className={ROW}>
+          <label className={NAME}>mix</label>
+          <ScrubBar
+            p={{ name: "mix", type: "float", min: 0, max: 1, step: 0.01, default: 1 }}
+            value={mixV}
+            onChange={(v) => set({ mix: v })}
+          />
+          <ValueField name="mix" value={mixV} min={0} max={1} onChange={(v) => set({ mix: v })} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Output operator settings: size (mm or px), density, color space. */
 function OutputParams({
   node,
@@ -523,6 +659,10 @@ export function ParamsPanel({
 
   if (node.kind === "scale") {
     return <ScaleParams node={node} onParamsChange={onParamsChange} />;
+  }
+
+  if (node.kind === "effect" && node.effectId === "gradientmap") {
+    return <GradientMapParams node={node} onParamsChange={onParamsChange} />;
   }
 
   if (node.kind === "text") {

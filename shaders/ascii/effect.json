@@ -1,0 +1,55 @@
+{
+  "id": "ascii",
+  "label": "ASCII",
+  "inputs": 1,
+  "passes": [
+    {
+      "frag": "ascii.frag",
+      "textures": [
+        "glyph-atlas.png"
+      ]
+    }
+  ],
+  "params": [
+    {
+      "name": "scale",
+      "type": "float",
+      "min": 4,
+      "max": 64,
+      "step": 1,
+      "default": 12
+    },
+    {
+      "name": "charset",
+      "type": "enum",
+      "options": [
+        "detailed",
+        "simple",
+        "minimal",
+        "blocks",
+        "braille"
+      ],
+      "default": "detailed"
+    },
+    {
+      "name": "invert",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "name": "tinted",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "name": "dark",
+      "type": "color",
+      "default": "#000000"
+    },
+    {
+      "name": "light",
+      "type": "color",
+      "default": "#ffffff"
+    }
+  ]
+}

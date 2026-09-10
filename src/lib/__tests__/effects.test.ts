@@ -46,7 +46,7 @@ describe("effect registry", () => {
       }
     }
     const algo = EFFECTS.dither.params.find((p) => p.name === "algo");
-    expect(algo?.options).toEqual(["bayer", "halftone", "ascii"]);
+    expect(algo?.options).toEqual(["bayer", "ascii"]); // #399
   });
 
   test("registry has the four core effects", () => {
@@ -96,9 +96,9 @@ describe("effect registry", () => {
     expect(quality?.default).toBe(25);
   });
 
-  test("mix is a 2-input single-pass composite (Finish 2 D8)", () => {
+  test("mix is a 4-input mode-only layer stack (#395/#396/#397)", () => {
     const mixSpec = EFFECTS.mix;
-    expect(mixSpec.inputs).toBe(2);
+    expect(mixSpec.inputs).toBe(4);
     expect(mixSpec.passes.length).toBe(1);
     const mode = mixSpec.params.find((p) => p.name === "mode");
     expect(mode?.options).toEqual([
@@ -107,15 +107,19 @@ describe("effect registry", () => {
       "screen",
       "overlay",
       "add",
+      "subtract",
       "difference",
       "darken",
       "lighten",
+      "softlight",
+      "hardlight",
+      "exclusion",
     ]);
     expect(mode?.default).toBe("normal");
-    // amount now means OPACITY of B over A; old stored values keep
-    // their meaning, old "blend" mode falls back to normal (index 0).
-    const amount = mixSpec.params.find((p) => p.name === "amount");
-    expect(amount?.default).toBe(1);
+    // opacity lives on the LAYERS now (transform/text); mix only
+    // blends. swapAB flips the two bottom inputs.
+    expect(mixSpec.params.find((p) => p.name === "amount")).toBeUndefined();
+    expect(mixSpec.params.find((p) => p.name === "swapAB")?.default).toBe(false);
   });
 
   test("every param name is uniform-name safe", () => {

@@ -10,6 +10,12 @@ uniform vec3 uPaper;
 uniform float uThreshold; // luma at 50% coverage
 uniform float uOffset;    // misregistration of the 2nd impression, px
 uniform float uGrain;     // 0..1 ink-coverage noise
+uniform int uInk2On;      // extra ink slots (#386)
+uniform vec3 uInk2;
+uniform float uThreshold2;
+uniform int uInk3On;
+uniform vec3 uInk3;
+uniform float uThreshold3;
 
 in vec2 vUv;
 out vec4 fragColor;
@@ -42,5 +48,17 @@ void main() {
     float g = (hash21(vUv * uRes) - 0.5) * clamp(uGrain, 0.0, 1.0);
     float ink = clamp(cov + cov2 - max(g, 0.0) * 1.2 + min(g, 0.0) * 0.4, 0.0, 1.0);
     vec3 col = mix(uPaper, uInk * mix(vec3(1.0), uPaper, 0.25), ink);
+    // Extra ink passes (#386): each screens its own luma threshold and
+    // multiplies over the sheet like a second/third drum pass.
+    if (uInk2On == 1) {
+        float c2 = clamp(coverage(vUv, clamp(uThreshold2, 0.0, 1.0))
+            - max(g, 0.0) * 1.2, 0.0, 1.0);
+        col *= mix(vec3(1.0), uInk2, c2);
+    }
+    if (uInk3On == 1) {
+        float c3 = clamp(coverage(vUv, clamp(uThreshold3, 0.0, 1.0))
+            - max(g, 0.0) * 1.2, 0.0, 1.0);
+        col *= mix(vec3(1.0), uInk3, c3);
+    }
     fragColor = vec4(col, texture(uTex0, vUv).a);
 }

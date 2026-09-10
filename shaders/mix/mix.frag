@@ -1,55 +1,68 @@
-// Mix: 2-input COMPOSITE (Finish 2 D8). Input B composites OVER input A
-// with a blend mode and an opacity (uAmount), weighted by B's alpha —
-// so a transparent-background layer (transform/text output, or an
-// UNWIRED input, which the engines bind as transparent black) sits
-// correctly and an absent B is a clean passthrough of A.
+// Mix: 4-input COMPOSITE layer stack (#395/#396/#397). Inputs stack in
+// slot order (0 = bottom); each layer composites over the running
+// result with the blend mode, weighted by ITS OWN alpha - unwired
+// slots are transparent no-ops. Opacity lives on the LAYERS
+// (transform/text carry it), not here. swapAB flips inputs 0/1.
 //
-// Contract (the Rust engine test relies on it): uAmount = 0 ->
-// output == input A (uTex0) exactly, for every mode. Unwired B gives
-// the same for every amount.
+// Contract (engine test): with only input 0 wired, output == input 0
+// exactly, for every mode.
 // No version/precision directives here - the host prepends them.
-//
-// Historical note: v1 was a reduced TouchDesigner MatrixMixer port
-// (crossfade toward B); old graphs' stored `amount` values keep their
-// meaning (0 = A, 1 = full B-over-A), old "blend" mode falls back to
-// normal via the registry's unknown-enum rule.
 
-uniform sampler2D uTex0; // input A (bottom)
-uniform sampler2D uTex1; // input B (top / overlay)
-uniform int uMode;       // 0 normal, 1 multiply, 2 screen, 3 overlay,
-                         // 4 add, 5 difference, 6 darken, 7 lighten
-uniform float uAmount;   // opacity of B over A
+uniform sampler2D uTex0;
+uniform sampler2D uTex1;
+uniform sampler2D uTex2;
+uniform sampler2D uTex3;
+uniform int uMode;   // see options order in effect.json
+uniform int uSwapAB; // 1 = swap inputs 0 and 1
 
 in vec2 vUv;
 out vec4 fragColor;
 
+vec3 blendMode(vec3 a, vec3 b) {
+    if (uMode == 1) return a * b;                                  // multiply
+    if (uMode == 2) return 1.0 - (1.0 - a) * (1.0 - b);            // screen
+    if (uMode == 3) {                                              // overlay
+        vec3 lo = 2.0 * a * b;
+        vec3 hi = 1.0 - 2.0 * (1.0 - a) * (1.0 - b);
+        return mix(lo, hi, step(0.5, a));
+    }
+    if (uMode == 4) return a + b;                                  // add
+    if (uMode == 5) return a - b;                                  // subtract
+    if (uMode == 6) return abs(a - b);                             // difference
+    if (uMode == 7) return min(a, b);                              // darken
+    if (uMode == 8) return max(a, b);                              // lighten
+    if (uMode == 9) {                                              // softlight
+        return mix(a - (1.0 - 2.0 * b) * a * (1.0 - a),
+                   a + (2.0 * b - 1.0) * (sqrt(a) - a),
+                   step(0.5, b));
+    }
+    if (uMode == 10) {                                             // hardlight
+        vec3 lo = 2.0 * a * b;
+        vec3 hi = 1.0 - 2.0 * (1.0 - a) * (1.0 - b);
+        return mix(lo, hi, step(0.5, b));
+    }
+    if (uMode == 11) return a + b - 2.0 * a * b;                   // exclusion
+    return b;                                                      // normal
+}
+
+vec4 layer(vec4 acc, vec4 l) {
+    float w = l.a;
+    vec3 rgb = mix(acc.rgb, clamp(blendMode(acc.rgb, l.rgb), 0.0, 1.0), w);
+    float alpha = clamp(acc.a + w * (1.0 - acc.a), 0.0, 1.0);
+    return vec4(rgb, alpha);
+}
+
 void main() {
     vec4 a = texture(uTex0, vUv);
     vec4 b = texture(uTex1, vUv);
-    float w = clamp(uAmount, 0.0, 1.0) * b.a;
-
-    vec3 blended;
-    if (uMode == 1) {
-        blended = a.rgb * b.rgb;                              // multiply
-    } else if (uMode == 2) {
-        blended = 1.0 - (1.0 - a.rgb) * (1.0 - b.rgb);        // screen
-    } else if (uMode == 3) {                                  // overlay
-        vec3 lo = 2.0 * a.rgb * b.rgb;
-        vec3 hi = 1.0 - 2.0 * (1.0 - a.rgb) * (1.0 - b.rgb);
-        blended = mix(lo, hi, step(0.5, a.rgb));
-    } else if (uMode == 4) {
-        blended = a.rgb + b.rgb;                              // add
-    } else if (uMode == 5) {
-        blended = abs(a.rgb - b.rgb);                         // difference
-    } else if (uMode == 6) {
-        blended = min(a.rgb, b.rgb);                          // darken
-    } else if (uMode == 7) {
-        blended = max(a.rgb, b.rgb);                          // lighten
-    } else {
-        blended = b.rgb;                                      // normal (over)
+    if (uSwapAB == 1) {
+        vec4 tmp = a;
+        a = b;
+        b = tmp;
     }
-
-    vec3 rgb = mix(a.rgb, clamp(blended, 0.0, 1.0), w);
-    float alpha = clamp(a.a + w * (1.0 - a.a), 0.0, 1.0);
-    fragColor = vec4(rgb, alpha);
+    vec4 acc = a;
+    acc = layer(acc, b);
+    acc = layer(acc, texture(uTex2, vUv));
+    acc = layer(acc, texture(uTex3, vUv));
+    fragColor = acc;
 }

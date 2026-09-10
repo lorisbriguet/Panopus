@@ -17,7 +17,7 @@ fn load_effects_finds_core_effects() {
     for id in ["dither", "vhs", "jpeg", "mix"] {
         assert!(effects.contains_key(id), "missing effect {id}");
     }
-    assert_eq!(effects["mix"].inputs, 2);
+    assert_eq!(effects["mix"].inputs, 4); // #395-#397: mode-only layer stack
     assert_eq!(effects["vhs"].passes.len(), 2);
     assert_eq!(effects["jpeg"].passes.len(), 4);
     // enum defaults must be one of their options (mirrors the TS registry test)

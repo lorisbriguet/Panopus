@@ -2,12 +2,81 @@
   "id": "riso",
   "label": "Riso",
   "inputs": 1,
-  "passes": [{ "frag": "riso.frag" }],
+  "passes": [
+    {
+      "frag": "riso.frag"
+    }
+  ],
   "params": [
-    { "name": "ink", "type": "color", "default": "#ff4fa3" },
-    { "name": "paper", "type": "color", "default": "#f4efe6" },
-    { "name": "threshold", "type": "float", "min": 0, "max": 1, "step": 0.01, "default": 0.55 },
-    { "name": "offset", "type": "float", "min": 0, "max": 20, "step": 0.5, "default": 3 },
-    { "name": "grain", "type": "float", "min": 0, "max": 1, "step": 0.01, "default": 0.35 }
+    {
+      "name": "ink",
+      "type": "color",
+      "default": "#ff4fa3"
+    },
+    {
+      "name": "paper",
+      "type": "color",
+      "default": "#f4efe6"
+    },
+    {
+      "name": "threshold",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.55
+    },
+    {
+      "name": "offset",
+      "type": "float",
+      "min": 0,
+      "max": 20,
+      "step": 0.5,
+      "default": 3
+    },
+    {
+      "name": "grain",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.35
+    },
+    {
+      "name": "ink2On",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "name": "ink2",
+      "type": "color",
+      "default": "#2b6fd6"
+    },
+    {
+      "name": "threshold2",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.35
+    },
+    {
+      "name": "ink3On",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "name": "ink3",
+      "type": "color",
+      "default": "#f2c230"
+    },
+    {
+      "name": "threshold3",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.75
+    }
   ]
 }
