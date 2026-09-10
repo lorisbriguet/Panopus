@@ -82,6 +82,10 @@ const ui = {
     forward: "Forward",
     operation_failed: "Operation failed",
 
+    // Tag pills (font detail)
+    tag_remove_hint: "Remove tag",
+    tag_assign_hint: "Add tag",
+
     // Settings → Proofing
     proofing_category: "Proofing",
     custom_pangram_label: "Custom pangram",
@@ -367,6 +371,10 @@ const ui = {
     retry: "Reessayer",
     forward: "Suivant",
     operation_failed: "Operation echouee",
+
+    // Tag pills (font detail)
+    tag_remove_hint: "Retirer l'etiquette",
+    tag_assign_hint: "Ajouter l'etiquette",
 
     // Settings → Proofing
     proofing_category: "Epreuves",

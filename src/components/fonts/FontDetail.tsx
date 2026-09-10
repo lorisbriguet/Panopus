@@ -68,7 +68,8 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function TagEditor({ font }: { font: FontRow }) {
+// Exported for direct testing (tageditor.test.tsx) — only FontDetail mounts it.
+export function TagEditor({ font }: { font: FontRow }) {
   const t = useT();
   const darkMode = useAppStore((s) => s.darkMode);
   const { data: tags } = useTags();
@@ -109,12 +110,13 @@ function TagEditor({ font }: { font: FontRow }) {
               key={tag.id}
               type="button"
               aria-pressed={on}
+              title={on ? t.tag_remove_hint : t.tag_assign_hint}
               onClick={() =>
                 on
                   ? unassignTag.mutate({ fontId: font.id, tagId: tag.id })
                   : assignTag.mutate({ fontId: font.id, tagId: tag.id })
               }
-              className="text-xs px-2.5 py-0.5 rounded-full font-medium status-transition focus-accent border"
+              className="text-xs px-2.5 py-0.5 rounded-full font-medium status-transition focus-accent border inline-flex items-center gap-1"
               style={
                 on
                   ? { background: color.bg, color: color.text, borderColor: "transparent" }
@@ -126,6 +128,9 @@ function TagEditor({ font }: { font: FontRow }) {
               }
             >
               {tag.name}
+              {/* Visible remove affordance (#377) — the pill itself stays the
+                  click target, the ✕ just makes removability legible. */}
+              {on && <X size={11} aria-hidden="true" />}
             </button>
           );
         })}
