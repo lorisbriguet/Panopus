@@ -123,7 +123,8 @@ export function outputRatio(s: OutputSettings): number {
 export function nodeResolutions(
   g: FinishGraph,
   sourceDims: Map<string, { w: number; h: number }>,
-  cap: number
+  cap: number,
+  extraSinks?: string[]
 ): Map<string, { w: number; h: number }> {
   const res = new Map<string, { w: number; h: number }>();
   const clampAxis = (v: number) => Math.min(cap, Math.max(1, Math.round(v)));
@@ -131,7 +132,7 @@ export function nodeResolutions(
     const wire = g.wires.find((w) => w.to === id && w.toIn === 0);
     return (wire && res.get(wire.from)) || { w: 8, h: 8 };
   };
-  for (const id of executionOrder(g)) {
+  for (const id of executionOrder(g, extraSinks)) {
     const node = g.nodes.find((n) => n.id === id);
     if (!node) continue;
     if (node.kind === "source") {
@@ -235,13 +236,18 @@ export function wouldCycle(g: FinishGraph, from: string, to: string): boolean {
  * earliest in `g.nodes` runs first. Nodes on a cycle are never ready and
  * are silently dropped (the editor prevents cycles via wouldCycle).
  */
-export function executionOrder(g: FinishGraph): string[] {
+export function executionOrder(g: FinishGraph, extraSinks?: string[]): string[] {
   // Reverse reachability from the output node(s).
   const prev = new Map<string, string[]>(); // to -> froms
   for (const n of g.nodes) prev.set(n.id, []);
   for (const w of g.wires) prev.get(w.to)?.push(w.from);
   const reaches = new Set<string>();
   const stack = g.nodes.filter((n) => n.kind === "output").map((n) => n.id);
+  // Extra sinks (#420): a blue-dot previewed operator must render even
+  // when its branch never reaches an output.
+  for (const id of extraSinks ?? []) {
+    if (g.nodes.some((n) => n.id === id) && !stack.includes(id)) stack.push(id);
+  }
   for (const id of stack) reaches.add(id);
   while (stack.length > 0) {
     for (const p of prev.get(stack.pop()!) ?? []) {

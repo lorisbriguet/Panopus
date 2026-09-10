@@ -241,7 +241,11 @@ export function NodeCanvas({
   /** Connection drag in flight (source node) — Tab inserts there (#413). */
   const connectingFromRef = useRef<string | null>(null);
   const pendingFromRef = useRef<string | null>(null);
-  const rfRef = useRef<{ fitView: (o?: { padding?: number }) => void } | null>(null);
+  const rfRef = useRef<{
+    fitView: (o?: { padding?: number }) => void;
+    getViewport?: () => { x: number; y: number; zoom: number };
+    setViewport?: (vp: { x: number; y: number; zoom: number }) => void;
+  } | null>(null);
 
   // ReactFlow owns the node objects (applyNodeChanges keeps its internal
   // measurements alive — rebuilding fresh objects per change left nodes
@@ -501,8 +505,15 @@ export function NodeCanvas({
         return;
       }
       if (e.key === "h" || e.key === "H") {
-        // Home: fit every node in view (#390).
-        rfRef.current?.fitView({ padding: 0.2 });
+        // Home: fit every node in view (#390); when a params panel is
+        // open (any selection), bias left so the panel doesn't cover
+        // the right edge (#421).
+        const inst = rfRef.current;
+        inst?.fitView({ padding: 0.2 });
+        if (selectedNodeId && inst?.getViewport && inst.setViewport) {
+          const vp = inst.getViewport();
+          inst.setViewport({ ...vp, x: vp.x - 160 });
+        }
         return;
       }
       if (e.key === "Delete" || e.key === "Backspace") {
@@ -578,6 +589,8 @@ export function NodeCanvas({
         onInit={(inst) => {
           rfRef.current = inst as unknown as {
             fitView: (o?: { padding?: number }) => void;
+            getViewport?: () => { x: number; y: number; zoom: number };
+            setViewport?: (vp: { x: number; y: number; zoom: number }) => void;
           };
         }}
         onConnectStart={(_e, params) => {
@@ -713,39 +726,43 @@ export function NodeCanvas({
             </button>
           )}
           {ctxNode.kind === "effect" && (
-            <>
-              <p className="px-3 py-1 text-[10px] uppercase tracking-wide text-muted">
-                {t.op_swap}
-              </p>
-              {Object.values(EFFECTS)
-                .filter((sp) => sp.id !== "text" && sp.id !== ctxNode.effectId)
-                .map((sp) => (
-                  <button
-                    key={sp.id}
-                    type="button"
-                    onClick={() => {
-                      onGraphChange({
-                        ...graph,
-                        nodes: graph.nodes.map((n) =>
-                          n.id === ctxNode.id
-                            ? {
-                                ...n,
-                                effectId: sp.id,
-                                params: Object.fromEntries(
-                                  sp.params.map((sq) => [sq.name, sq.default])
-                                ),
-                              }
-                            : n
-                        ),
-                      });
-                      setCtxMenu(null);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
-                  >
-                    {sp.label}
-                  </button>
-                ))}
-            </>
+            <div className="relative group">
+              <div className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)]">
+                <span>{t.op_swap}</span>
+                <span aria-hidden="true" className="text-muted">▸</span>
+              </div>
+              {/* Submenu on hover (#418) */}
+              <div className="hidden group-hover:block absolute left-full top-0 min-w-[140px] bg-[var(--color-surface)] border border-[var(--color-border-header)] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1">
+                {Object.values(EFFECTS)
+                  .filter((sp) => sp.id !== "text" && sp.id !== ctxNode.effectId)
+                  .map((sp) => (
+                    <button
+                      key={sp.id}
+                      type="button"
+                      onClick={() => {
+                        onGraphChange({
+                          ...graph,
+                          nodes: graph.nodes.map((n) =>
+                            n.id === ctxNode.id
+                              ? {
+                                  ...n,
+                                  effectId: sp.id,
+                                  params: Object.fromEntries(
+                                    sp.params.map((sq) => [sq.name, sq.default])
+                                  ),
+                                }
+                              : n
+                          ),
+                        });
+                        setCtxMenu(null);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-row)] text-left"
+                    >
+                      {sp.label}
+                    </button>
+                  ))}
+              </div>
+            </div>
           )}
         </div>
       )}

@@ -39,8 +39,8 @@ describe("layoutText (tight bounds, #403)", () => {
   });
 
   test("many lines shrink the font so height stays capped", () => {
-    const l = layoutText(Array(20).fill("X").join("\n"), "Alpha", fakeCtx());
-    expect(l.h).toBeLessThanOrEqual(1024 + 2); // rounding slack
+    const l = layoutText(Array(40).fill("X").join("\n"), "Alpha", fakeCtx());
+    expect(l.h).toBeLessThanOrEqual(4096 + 2); // rounding slack
     expect(l.fontPx).toBeLessThan(160);
   });
 

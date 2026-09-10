@@ -9,10 +9,12 @@
  * and size is placement-only — so the cache key is `content|font`.
  */
 
-/** Fixed glyph size in raster px; total height caps at MAX_RASTER_H. */
+/** Default glyph size in raster px; total height caps at MAX_RASTER_H.
+ *  Callers pass a target height derived from the OUTPUT size so print
+ *  text stays sharp (#417). */
 const FONT_PX = 160;
 const LINE_HEIGHT = 1.2;
-const MAX_RASTER_H = 1024;
+const MAX_RASTER_H = 4096;
 
 export interface TextLayout {
   w: number;
@@ -44,7 +46,8 @@ interface MeasureCtx {
 export function layoutText(
   content: string,
   font: string,
-  ctx: MeasureCtx
+  ctx: MeasureCtx,
+  targetHeight?: number
 ): TextLayout {
   const lines = content.split("\n");
   const metrics = (px: number) => {
@@ -75,7 +78,9 @@ export function layoutText(
       w: Math.max(1, Math.ceil(m.w + pad * 2)),
     };
   };
-  let fontPx = FONT_PX;
+  let fontPx = targetHeight
+    ? Math.min(2048, Math.max(16, Math.round(targetHeight / (lines.length * LINE_HEIGHT))))
+    : FONT_PX;
   let m = metrics(fontPx);
   let d = dims(fontPx, m);
   if (d.h > MAX_RASTER_H) {
@@ -98,10 +103,10 @@ export function layoutText(
 /** djb2 over the raster-relevant inputs — the node's rasterKey. The
  *  layout version participates so cached rasters refresh when the
  *  measurement rules change. */
-const LAYOUT_VERSION = "v6"; // v6: library-wide font resolution (#411)
+const LAYOUT_VERSION = "v7"; // v7: output-size-driven raster height (#417)
 
-export function rasterKey(content: string, font: string): string {
-  const s = `${content}|${font}|${LAYOUT_VERSION}`;
+export function rasterKey(content: string, font: string, bucket = ""): string {
+  const s = `${content}|${font}|${bucket}|${LAYOUT_VERSION}`;
   let h = 5381;
   for (let i = 0; i < s.length; i++) {
     h = ((h << 5) + h + s.charCodeAt(i)) | 0;
@@ -118,12 +123,13 @@ export interface TextRaster {
  *  2D canvas); callers in tests exercise layoutText instead. */
 export async function rasterizeText(
   content: string,
-  font: string
+  font: string,
+  targetHeight?: number
 ): Promise<TextRaster | null> {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
-  const layout = layoutText(content, font, ctx);
+  const layout = layoutText(content, font, ctx, targetHeight);
   canvas.width = layout.w;
   canvas.height = layout.h;
   ctx.clearRect(0, 0, layout.w, layout.h);

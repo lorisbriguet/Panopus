@@ -22,6 +22,7 @@ import {
   captureRecipe,
   nodeResolutions,
   outputNodes,
+  outputPx,
   outputRatio,
   outputSettingsForNode,
   parseGraph,
@@ -69,6 +70,8 @@ export function FinishTab({
   /** TD blue-dot active preview (#384): non-output ops show their raw
    *  frame contain-fit; output ops show their page. */
   const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
+  /** Presentation mode (#422): p hides the network/params, artwork only. */
+  const [presentation, setPresentation] = useState(false);
   const [recipeModalOpen, setRecipeModalOpen] = useState(false);
   const [recipeName, setRecipeName] = useState("");
   const t = useT();
@@ -192,9 +195,22 @@ export function FinishTab({
   // old key simply re-triggers this effect.
   const { data: textFonts } = useProjectFontFamilies(projectId);
   const { data: textFontPaths } = useProjectFontPaths(projectId);
+  // Raster height tracks the LARGEST output so print text stays sharp
+  // (#417); bucketed so size scrubbing does not re-raster per tick.
+  const maxOutH = Math.max(
+    731,
+    ...outputNodes(graph).map((n) => outputPx(outputSettingsForNode(graph, n.id)).h)
+  );
+  const rasterBucket = (n: (typeof graph.nodes)[number]) => {
+    const size = typeof n.params?.size === "number" ? n.params.size : 0.15;
+    return Math.min(4096, Math.ceil((size * maxOutH) / 256) * 256);
+  };
   const textKeySig = graph.nodes
     .filter((n) => n.kind === "text")
-    .map((n) => `${n.id}:${n.params?.content ?? ""}:${n.params?.font ?? ""}:${n.rasterKey ?? ""}`)
+    .map(
+      (n) =>
+        `${n.id}:${n.params?.content ?? ""}:${n.params?.font ?? ""}:${rasterBucket(n)}:${n.rasterKey ?? ""}`
+    )
     .join("|");
   useEffect(() => {
     let cancelled = false;
@@ -203,7 +219,7 @@ export function FinishTab({
         if (n.kind !== "text") continue;
         const content = String(n.params?.content ?? "");
         const font = String(n.params?.font ?? "");
-        const key = rasterKey(content, font);
+        const key = rasterKey(content, font, String(rasterBucket(n)));
         if (key === n.rasterKey && n.rasterPath) {
           if (!textBitmaps[n.id]) {
             try {
@@ -231,7 +247,11 @@ export function FinishTab({
           font === "" ||
           isFontLoaded(font) ||
           (textFontPaths !== undefined && !textFontPaths[font]);
-        const raster = await rasterizeText(content === "" ? " " : content, font);
+        const raster = await rasterizeText(
+          content === "" ? " " : content,
+          font,
+          rasterBucket(n)
+        );
         if (!raster || cancelled) continue;
         if (!fontReady) {
           // Preview with the fallback, but leave the node UNKEYED so the
@@ -348,7 +368,20 @@ export function FinishTab({
       );
     };
     document.addEventListener("keydown", handler, true);
-    return () => document.removeEventListener("keydown", handler, true);
+    const pHandler = (e: KeyboardEvent) => {
+      if (e.key !== "p" && e.key !== "P") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (target?.isContentEditable) return;
+      setPresentation((v) => !v);
+    };
+    document.addEventListener("keydown", pHandler);
+    return () => {
+      document.removeEventListener("keydown", handler, true);
+      document.removeEventListener("keydown", pHandler);
+    };
   }, []);
 
   const handleNodeSelect = useCallback((nodeId: string | null) => {
@@ -371,7 +404,7 @@ export function FinishTab({
           artworkPath={artworkPath ?? ""}
           ratio={ratio}
           previewOutputId={previewNodeId ?? previewOutputId}
-          selectedNode={opPreview ? null : selectedNode}
+          selectedNode={opPreview || presentation ? null : selectedNode}
           onNodeParams={(nodeId, patch) => {
             commitGraph({
               ...graph,
@@ -385,8 +418,13 @@ export function FinishTab({
         />
       </div>
 
-      {/* Network spans the whole tab, transparent over the preview */}
-      <div className="absolute inset-0 z-10">
+      {/* Network spans the whole tab, transparent over the preview;
+          presentation mode (p) hides everything but the artwork (#422) */}
+      <div
+        className={`absolute inset-0 z-10 transition-opacity ${
+          presentation ? "opacity-0 pointer-events-none" : ""
+        }`}
+      >
         <NodeCanvas
           graph={graph}
           onGraphChange={handleGraphChange}
@@ -447,7 +485,7 @@ export function FinishTab({
       />
 
       {/* Parameter dialog floats on the right, TD-style */}
-      {selectedNode && (
+      {selectedNode && !presentation && (
         <div className="absolute top-3 right-3 bottom-3 w-80 z-20">
           <ParamsPanel
             node={selectedNode}

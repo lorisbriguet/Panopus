@@ -127,6 +127,12 @@ export function PreviewCanvas({
     if (uploaded) setNeedsRender(true);
   }, [artworkBitmap, sourceBitmaps, graph.nodes]);
 
+  // Re-render when the preview target or page shape changes (#419 —
+  // the blue dot must take effect immediately).
+  useEffect(() => {
+    setNeedsRender(true);
+  }, [previewOutputId, ratio]);
+
   // Upload text rasters (D3).
   useEffect(() => {
     const executor = executorRef.current;

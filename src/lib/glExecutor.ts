@@ -410,8 +410,11 @@ export class GlExecutor {
     // Preview resolutions (capped for perf) drive the render; TRUE
     // resolutions (device cap) drive place-mode fractions so "100%"
     // means real output pixels, matching the Rust exporter.
-    const res = nodeResolutions(graph, sourceDims, 2048);
-    const resTrue = nodeResolutions(graph, sourceDims, 16384);
+    // #420: the flagged preview node counts as a sink so outputless
+    // branches still render (order + resolutions must agree).
+    const extraSinks = this.previewOutput ? [this.previewOutput] : [];
+    const res = nodeResolutions(graph, sourceDims, 2048, extraSinks);
+    const resTrue = nodeResolutions(graph, sourceDims, 16384, extraSinks);
     const resOf = (id: string) => res.get(id) ?? { w: 8, h: 8 };
     const trueOf = (id: string) => resTrue.get(id) ?? { w: 8, h: 8 };
 
@@ -439,7 +442,7 @@ export class GlExecutor {
       return (w && outputs.get(w.from)) || fallback;
     };
 
-    for (const id of executionOrder(graph)) {
+    for (const id of executionOrder(graph, extraSinks)) {
       const node = byId.get(id);
       if (!node) continue;
       // Bypass (#382): pure passthrough of input 0.

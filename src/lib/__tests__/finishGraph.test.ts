@@ -453,3 +453,15 @@ describe("bypass (#382)", () => {
     expect(back.nodes.find((n) => n.id === "e")?.bypass).toBe(true);
   });
 });
+
+describe("executionOrder extra sinks (#420)", () => {
+  test("an outputless branch renders when flagged as a preview sink", () => {
+    const g = emptyGraph();
+    g.nodes.push({ id: "orphan", kind: "effect", effectId: "dither", x: 0, y: 0 });
+    g.wires.push({ from: "src", to: "orphan", toIn: 0 });
+    expect(executionOrder(g)).toEqual(["src", "out"]);
+    const withSink = executionOrder(g, ["orphan"]);
+    expect(withSink).toContain("orphan");
+    expect(withSink.indexOf("src")).toBeLessThan(withSink.indexOf("orphan"));
+  });
+});
