@@ -124,6 +124,58 @@ describe("NodeCanvas", () => {
     expect(screen.getByText("Dither")).toBeInTheDocument();
   });
 
+  // Card operators (network legibility round, direction B): the op is one
+  // solid card whose left spine carries the family hue, and selection is
+  // an accent outline around the WHOLE card — both live on the card root
+  // so they read over any artwork.
+  it("operator cards carry the family spine color", () => {
+    const graph: FinishGraph = {
+      v: 1,
+      nodes: [
+        { id: "src", kind: "source", x: 0, y: 0 },
+        { id: "effect1", kind: "effect", effectId: "dither", params: {}, x: 200, y: 0 },
+        { id: "out", kind: "output", x: 400, y: 0 },
+      ],
+      wires: [],
+    };
+    render(
+      <NodeCanvas
+        graph={graph}
+        onGraphChange={vi.fn()}
+        selectedNodeId={null}
+        onNodeSelect={vi.fn()}
+      />
+    );
+    const card = screen.getByText("Dither").closest(".font-mono");
+    expect(card?.getAttribute("style") ?? "").toMatch(/b98cff/i); // effect family
+    const source = screen.getByText("Source").closest(".font-mono");
+    expect(source?.getAttribute("style") ?? "").toMatch(/4fa3ff/i); // source family
+  });
+
+  it("selection outlines the whole card in accent", () => {
+    const graph: FinishGraph = {
+      v: 1,
+      nodes: [
+        { id: "src", kind: "source", x: 0, y: 0 },
+        { id: "effect1", kind: "effect", effectId: "dither", params: {}, x: 200, y: 0 },
+        { id: "out", kind: "output", x: 400, y: 0 },
+      ],
+      wires: [],
+    };
+    render(
+      <NodeCanvas
+        graph={graph}
+        onGraphChange={vi.fn()}
+        selectedNodeId={"effect1"}
+        onNodeSelect={vi.fn()}
+      />
+    );
+    const card = screen.getByText("Dither").closest(".font-mono");
+    expect(card?.getAttribute("style") ?? "").toMatch(/outline/);
+    const source = screen.getByText("Source").closest(".font-mono");
+    expect(source?.getAttribute("style") ?? "").not.toMatch(/outline/);
+  });
+
   it("wires a second connection into a 2-input effect on the first free input", () => {
     const graph: FinishGraph = {
       v: 1,

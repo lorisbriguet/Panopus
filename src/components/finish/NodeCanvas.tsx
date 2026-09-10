@@ -57,13 +57,15 @@ type OperatorData = {
   onPreviewToggle?: () => void;
 };
 
-/** Family color coding (#389), TD-style: one hue per operator family. */
+/** Family color coding (#389), TD-style: one hue per operator family.
+ *  Raw hex — rendered as the card's full-height left spine (legibility
+ *  round, direction B), so the hue stays readable at any zoom. */
 const TINTS: Record<string, string> = {
-  source: "bg-[#4fa3ff]",
-  effect: "bg-[#b98cff]",
-  scale: "bg-[#ffd166]",
-  text: "bg-[#ff6fb0]",
-  output: "bg-[#6fe3a5]",
+  source: "#4fa3ff",
+  effect: "#b98cff",
+  scale: "#ffd166",
+  text: "#ff6fb0",
+  output: "#6fe3a5",
 };
 
 /** Viewer frame: fixed 96px wide, height follows the output aspect but
@@ -74,12 +76,13 @@ function viewerHeight(ratio: number | undefined): number {
 }
 
 const HANDLE_CLASS =
-  "!w-[7px] !h-[7px] !rounded-[1px] !border-0 !bg-[var(--color-text-secondary)]";
+  "!w-[9px] !h-[9px] !rounded-[2px] !border-0 !bg-[#e2e2e6] !shadow-[0_0_0_1.5px_rgba(0,0,0,0.85)]";
 
 /**
- * TouchDesigner-style operator: the node body IS a live viewer of its
- * output (F4 portrait), name in small technical type underneath with a
- * family tint mark. Selection = accent outline, like TD's active OP.
+ * TouchDesigner-style operator as ONE solid card (legibility round,
+ * direction B): live viewer + name share a dark ground so the label never
+ * fights the artwork behind the network; the family hue runs the card's
+ * full left spine; selection = accent outline around the whole card.
  */
 function Operator({
   data,
@@ -95,12 +98,16 @@ function Operator({
   hasOutput: boolean;
 }) {
   return (
-    <div className="w-24 font-mono">
+    <div
+      className="w-24 font-mono rounded-[3px] bg-[#111114]/95 p-1 pb-[3px] shadow-[0_2px_12px_rgba(0,0,0,0.55)]"
+      style={{
+        borderLeft: `3px solid ${tint}`,
+        outline: selected ? "1.5px solid var(--color-accent)" : undefined,
+      }}
+    >
       <div
         className={`relative overflow-hidden rounded-[2px] border bg-black/70 ${
-          selected
-            ? "border-accent shadow-[0_0_0_1px_var(--color-accent-ring,transparent),0_0_14px_rgba(0,0,0,0.6)]"
-            : "border-white/15"
+          selected ? "border-accent" : "border-white/10"
         }`}
         style={{ height: viewerHeight(data.ratio) }}
       >
@@ -137,18 +144,17 @@ function Operator({
             e.stopPropagation();
             data.onPreviewToggle?.();
           }}
-          className={`absolute bottom-1 right-1 w-2.5 h-2.5 rounded-full border ${
+          className={`absolute bottom-1 right-1 w-3 h-3 rounded-full border shadow-[0_0_0_1.5px_rgba(0,0,0,0.7)] ${
             data.previewActive
               ? "bg-[#4fa3ff] border-white/70"
               : "bg-black/40 border-white/30 hover:border-white/60"
           }`}
         />
       </div>
-      <div className="mt-1 flex items-center gap-1.5 px-0.5">
-        <span className={`inline-block w-1.5 h-1.5 rounded-[1px] ${tint}`} />
+      <div className="mt-1 px-0.5">
         <span
-          className={`text-[10px] tracking-[0.08em] uppercase ${
-            selected ? "text-accent" : "text-[var(--color-text-secondary)]"
+          className={`text-[11px] tracking-[0.08em] uppercase ${
+            selected ? "text-accent" : "text-white/90"
           }`}
         >
           {data.label}
@@ -207,9 +213,15 @@ const RF_TYPE: Record<string, string> = {
   text: "opText",
 };
 
-/** Thin, light wires — TD network look. */
+/** Dual-stroke wires: light core over a dark drop-shadow casing, so the
+ *  path stays traceable over bright AND dark artwork alike. */
 const EDGE_OPTIONS = {
-  style: { stroke: "rgba(255,255,255,0.35)", strokeWidth: 1 },
+  style: {
+    stroke: "rgba(255,255,255,0.85)",
+    strokeWidth: 1.5,
+    filter:
+      "drop-shadow(0 0 1.5px rgba(0,0,0,0.95)) drop-shadow(0 0 3px rgba(0,0,0,0.6))",
+  },
 };
 
 /**
