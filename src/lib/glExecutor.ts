@@ -827,10 +827,21 @@ export class GlExecutor {
   }
 
   private getProgram(spec: EffectSpec, passIndex: number): ProgramEntry {
-    const key = `${spec.id}/${passIndex}`;
+    // Cache key carries a source fingerprint: in dev, editing a frag (or
+    // its manifest-declared params, which change the composed source)
+    // hot-swaps FRAG_SOURCES/EFFECTS while this executor instance
+    // survives the React refresh — an id-only key kept serving the stale
+    // compiled program. Static in production, so the hash never varies.
+    const rawSrc = FRAG_SOURCES[`${spec.id}/${spec.passes[passIndex].frag}`];
+    let h = 5381;
+    const fingerprintInput = (rawSrc ?? "") + JSON.stringify(spec.params);
+    for (let i = 0; i < fingerprintInput.length; i++) {
+      h = ((h << 5) + h + fingerprintInput.charCodeAt(i)) | 0;
+    }
+    const key = `${spec.id}/${passIndex}/${h}`;
     const cached = this.programs.get(key);
     if (cached) return cached;
-    const src = FRAG_SOURCES[`${spec.id}/${spec.passes[passIndex].frag}`];
+    const src = rawSrc;
     const entry =
       src === undefined
         ? {
