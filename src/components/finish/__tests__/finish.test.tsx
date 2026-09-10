@@ -543,21 +543,21 @@ describe("FinishTab graph undo (Finish 2 T1)", () => {
 
   const addBayer = () => {
     fireEvent.click(screen.getByRole("button", { name: /add/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Bayer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Dithering" }));
   };
 
   it("cmd+z undoes an added effect, cmd+shift+z redoes it", async () => {
     renderTab();
     addBayer();
-    expect(screen.getByText("Bayer")).toBeInTheDocument();
+    expect(screen.getByText("Dithering")).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: "z", metaKey: true });
     await waitFor(() =>
-      expect(screen.queryByText("Bayer")).not.toBeInTheDocument()
+      expect(screen.queryByText("Dithering")).not.toBeInTheDocument()
     );
 
     fireEvent.keyDown(document, { key: "Z", metaKey: true, shiftKey: true });
-    await waitFor(() => expect(screen.getByText("Bayer")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Dithering")).toBeInTheDocument());
   });
 
   it("adds an extra source whose params show its own picker (D7)", async () => {
@@ -631,6 +631,6 @@ describe("FinishTab graph undo (Finish 2 T1)", () => {
     });
     const width = await screen.findByLabelText("width");
     fireEvent.keyDown(width, { key: "z", metaKey: true });
-    expect(screen.getByText("Bayer")).toBeInTheDocument();
+    expect(screen.getByText("Dithering")).toBeInTheDocument();
   });
 });

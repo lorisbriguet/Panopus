@@ -1,6 +1,6 @@
 {
   "id": "bayer",
-  "label": "Bayer",
+  "label": "Dithering",
   "inputs": 1,
   "passes": [
     {
@@ -8,6 +8,19 @@
     }
   ],
   "params": [
+    {
+      "name": "algo",
+      "type": "enum",
+      "options": [
+        "bayer",
+        "cluster",
+        "lines",
+        "dots",
+        "noise",
+        "ign"
+      ],
+      "default": "bayer"
+    },
     {
       "name": "scale",
       "type": "float",
