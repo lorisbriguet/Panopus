@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Button, Select, Toggle } from "../ui";
+import { ColorPicker, type ColorPickerHandle } from "../ui/ColorPicker";
 import { EFFECTS } from "../../lib/effects";
 import type { ParamSpec } from "../../lib/effects";
 import { outputPx, outputSettingsFrom } from "../../lib/finishGraph";
@@ -407,12 +408,7 @@ function TextParams({
         </div>
         <div className={ROW}>
           <label className={NAME}>fill</label>
-          <input
-            type="color"
-            value={fill}
-            onChange={(e) => set({ fill: e.target.value })}
-            className="flex-1 h-7 rounded-[3px] border border-white/15 bg-[var(--color-input-bg)]"
-          />
+          <ColorPicker value={fill} onChange={(v) => set({ fill: v })} ariaLabel="fill color" />
         </div>
         {TEXT_SCRUBS.map((s) => {
           const value = typeof p[s.name] === "number" ? (p[s.name] as number) : s.def;
@@ -460,7 +456,7 @@ export function GradientMapParams({
   const [ghost, setGhost] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
-  const colorRef = useRef<HTMLInputElement>(null);
+  const colorRef = useRef<ColorPickerHandle>(null);
   const selStop = stops[Math.min(sel, stops.length - 1)];
 
   const commit = (next: GradientStop[]) =>
@@ -546,7 +542,7 @@ export function GradientMapParams({
                   dragging.current = true;
                   capture(e.currentTarget.parentElement as HTMLElement, e.pointerId);
                 }}
-                onDoubleClick={() => colorRef.current?.click()}
+                onDoubleClick={() => colorRef.current?.open()}
                 className={`absolute top-full -translate-x-1/2 flex flex-col items-center pt-[1px] ${
                   ghost && sel === i ? "opacity-30" : ""
                 }`}
@@ -571,17 +567,16 @@ export function GradientMapParams({
         </div>
         <div className={ROW}>
           <label className={NAME}>{`stop ${Math.min(sel, stops.length - 1) + 1}`}</label>
-          <input
+          <ColorPicker
             ref={colorRef}
-            type="color"
             value={selStop?.color ?? "#ffffff"}
-            onChange={(e) => {
+            onChange={(v) => {
               const next = stops.map((s, i) =>
-                i === sel ? { ...s, color: e.target.value } : s
+                i === sel ? { ...s, color: v } : s
               );
               commit(next);
             }}
-            className="flex-1 h-7 rounded-[3px] border border-white/15 bg-[var(--color-input-bg)]"
+            ariaLabel="stop color"
           />
           <ValueField
             name={`p${sel + 1}`}
@@ -901,11 +896,10 @@ export function ParamsPanel({
             return (
               <div key={p.name} className={row}>
                 <label className={name}>{p.name}</label>
-                <input
-                  type="color"
+                <ColorPicker
                   value={String(value)}
-                  onChange={(e) => handleParamChange(p.name, e.target.value)}
-                  className="flex-1 h-7 rounded-[3px] border border-white/15 bg-[var(--color-input-bg)]"
+                  onChange={(v) => handleParamChange(p.name, v)}
+                  ariaLabel={`${p.name} color`}
                 />
               </div>
             );
