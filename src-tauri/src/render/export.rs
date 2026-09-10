@@ -371,6 +371,32 @@ pub fn save_raster_in(
     Ok(path)
 }
 
+/// Which characters of `text` have NO glyph in the font (#416) —
+/// whitespace ignored, duplicates collapsed, order preserved.
+pub fn font_missing_chars(path: &Path, text: &str) -> Result<Vec<char>, String> {
+    let data = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let face = ttf_parser::Face::parse(&data, 0).map_err(|e| format!("parse: {e}"))?;
+    let mut seen = std::collections::HashSet::new();
+    let mut missing = Vec::new();
+    for ch in text.chars() {
+        if ch.is_whitespace() || !seen.insert(ch) {
+            continue;
+        }
+        if face.glyph_index(ch).is_none() {
+            missing.push(ch);
+        }
+    }
+    Ok(missing)
+}
+
+#[tauri::command]
+pub fn check_font_coverage(path: String, text: String) -> Result<Vec<String>, String> {
+    Ok(font_missing_chars(Path::new(&path), &text)?
+        .into_iter()
+        .map(String::from)
+        .collect())
+}
+
 #[tauri::command]
 pub fn save_finish_raster(
     app: tauri::AppHandle,

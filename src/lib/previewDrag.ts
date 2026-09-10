@@ -75,9 +75,18 @@ export function blockRect(
   const y = num(p.y, 0);
   let w: number;
   let h: number;
+  let bx = 0.5; // anchor fractions (#415): which block point x/y names
+  let by = 0.5; // in GL terms (by = 1 -> top edge)
   if (node.kind === "text") {
     h = num(p.size, 0.15) * dest.h;
-    w = h * num(p.rasterAspect, 4);
+    w = h * num(p.rasterAspect, 4) * num(p.stretch, 1); // #414
+    const anchor = typeof p.anchor === "string" ? p.anchor : "c";
+    const idx = ["tl", "t", "tr", "l", "c", "r", "bl", "b", "br"].indexOf(anchor);
+    if (idx >= 0) {
+      const row = Math.floor(idx / 3);
+      bx = (idx % 3) * 0.5;
+      by = 1 - row * 0.5;
+    }
   } else if (node.kind === "effect" && node.effectId === "transform") {
     const s = num(p.scale, 1);
     w = dest.w * s;
@@ -85,9 +94,10 @@ export function blockRect(
   } else {
     return null;
   }
-  const cx = dest.left + (0.5 + x) * dest.w;
-  const cy = dest.top + (0.5 - y) * dest.h; // +y = up
-  return { left: cx - w / 2, top: cy - h / 2, w, h };
+  const ax = dest.left + (0.5 + x) * dest.w;
+  const ay = dest.top + (0.5 - y) * dest.h; // +y = up
+  // css origin from the anchor point (mirrors text.frag's uv shift)
+  return { left: ax - bx * w, top: ay - (1 - by) * h, w, h };
 }
 
 /** Apply a CSS-pixel drag delta to the node's x/y params (clamped). */

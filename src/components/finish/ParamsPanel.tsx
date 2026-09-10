@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { Button, Select, Toggle } from "../ui";
 import { EFFECTS } from "../../lib/effects";
 import type { ParamSpec } from "../../lib/effects";
@@ -58,6 +59,8 @@ interface ParamsPanelProps {
   sourceInfo?: SourceInfo;
   /** Text operator: the project's font families (D3). */
   textFonts?: string[];
+  /** family -> font file path (coverage checks, #416). */
+  textFontPaths?: Record<string, string>;
 }
 
 export interface SourceInfo {
@@ -264,24 +267,55 @@ function ScaleParams({
 
 const TEXT_SCRUBS: { name: string; min: number; max: number; step: number; def: number }[] = [
   { name: "size", min: 0.01, max: 1, step: 0.005, def: 0.15 },
+  { name: "stretch", min: 0.25, max: 4, step: 0.01, def: 1 },
   { name: "x", min: -1, max: 1, step: 0.005, def: 0 },
   { name: "y", min: -1, max: 1, step: 0.005, def: 0 },
   { name: "rotate", min: -180, max: 180, step: 0.5, def: 0 },
   { name: "opacity", min: 0, max: 1, step: 0.01, def: 1 },
+  { name: "letterSpacing", min: -0.1, max: 1, step: 0.01, def: 0 },
+  { name: "lineHeight", min: 0.8, max: 2, step: 0.05, def: 1.2 },
 ];
+
+const ANCHORS = ["tl", "t", "tr", "l", "c", "r", "bl", "b", "br"] as const;
 
 /** Text operator (D3): content + project font + placement. */
 function TextParams({
   node,
   onParamsChange,
   textFonts,
+  textFontPaths,
 }: {
   node: GraphNode;
   onParamsChange: ParamsPanelProps["onParamsChange"];
   textFonts: string[];
+  textFontPaths?: Record<string, string>;
 }) {
   const t = useT();
   const p = node.params ?? {};
+  const anchor = typeof p.anchor === "string" ? p.anchor : "c";
+  const align = typeof p.align === "string" ? p.align : "left";
+  // Coverage warning (#416): characters the chosen face cannot draw.
+  const [missing, setMissing] = useState<string[]>([]);
+  const covContent = typeof p.content === "string" ? p.content : "";
+  const covFont = typeof p.font === "string" ? p.font : "";
+  const covPath = textFontPaths?.[covFont];
+  useEffect(() => {
+    let cancelled = false;
+    if (!covPath || covContent === "") {
+      setMissing([]);
+      return;
+    }
+    invoke<string[]>("check_font_coverage", { path: covPath, text: covContent })
+      .then((chars) => {
+        if (!cancelled) setMissing(Array.isArray(chars) ? chars : []);
+      })
+      .catch(() => {
+        if (!cancelled) setMissing([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [covPath, covContent]);
   const content = typeof p.content === "string" ? p.content : "";
   const font = typeof p.font === "string" ? p.font : "";
   const fill = typeof p.fill === "string" ? p.fill : "#f2ede4";
@@ -330,6 +364,39 @@ function TextParams({
             <p className="text-xs text-[var(--color-danger-text)]">{t.font_inactive}</p>
           </div>
         )}
+        {missing.length > 0 && (
+          <div className={ROW}>
+            <p className="text-xs text-[var(--color-danger-text)]">
+              {t.font_no_glyphs}: {missing.join(" ")}
+            </p>
+          </div>
+        )}
+        <div className={ROW}>
+          <label className={NAME}>anchor</label>
+          <div className="grid grid-cols-3 gap-0.5">
+            {ANCHORS.map((a) => (
+              <button
+                key={a}
+                type="button"
+                aria-label={`anchor ${a}`}
+                onClick={() => set({ anchor: a })}
+                className={`w-4 h-4 rounded-[2px] border ${
+                  anchor === a
+                    ? "bg-accent border-accent"
+                    : "bg-white/[0.06] border-white/15 hover:border-white/40"
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+        <div className={ROW}>
+          <label className={NAME}>align</label>
+          <Select value={align} onChange={(e) => set({ align: e.target.value })}>
+            <option value="left">left</option>
+            <option value="center">center</option>
+            <option value="right">right</option>
+          </Select>
+        </div>
         <div className={ROW}>
           <label className={NAME}>fill</label>
           <input
@@ -645,6 +712,7 @@ export function ParamsPanel({
   onExport,
   sourceInfo,
   textFonts,
+  textFontPaths,
 }: ParamsPanelProps) {
   const t = useT();
   const spec = node.effectId ? EFFECTS[node.effectId] : undefined;
@@ -671,6 +739,7 @@ export function ParamsPanel({
         node={node}
         onParamsChange={onParamsChange}
         textFonts={textFonts ?? []}
+        textFontPaths={textFontPaths}
       />
     );
   }

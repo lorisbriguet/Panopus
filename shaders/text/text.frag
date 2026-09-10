@@ -18,6 +18,8 @@ uniform float uRotate;       // degrees, counter-clockwise
 uniform vec3 uFill;          // multiplies the raster rgb
 uniform float uOpacity;
 uniform float uRasterAspect; // raster w / h
+uniform float uStretch;      // width multiplier (#414)
+uniform int uAnchor;         // 0..8 = tl,t,tr,l,c,r,bl,b,br (#415)
 
 in vec2 vUv;
 out vec4 fragColor;
@@ -46,8 +48,14 @@ void main() {
     float s = psin(r);
     p = vec2(c * p.x - s * p.y, s * p.x + c * p.y);
     float h = max(uSize, 1e-4);
-    float w = h * max(uRasterAspect, 1e-4);
-    vec2 uv = vec2(p.x / w + 0.5, p.y / h + 0.5);
+    float w = h * max(uRasterAspect, 1e-4) * clamp(uStretch, 0.25, 4.0);
+    // Anchor (#415): x/y point at the chosen block corner/edge instead
+    // of the center. Rows top->bottom in SCREEN terms (+y is up in GL).
+    int aRow = uAnchor / 3;
+    int aCol = uAnchor - aRow * 3;
+    float bx = float(aCol) * 0.5;
+    float by = 1.0 - float(aRow) * 0.5;
+    vec2 uv = vec2(p.x / w + bx, p.y / h + by);
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
         fragColor = base;
         return;

@@ -179,3 +179,21 @@ fn save_raster_in_writes_and_returns_path() {
     assert_eq!(again, path);
     assert_eq!(std::fs::read(&path).unwrap(), vec![9]);
 }
+
+#[test]
+fn font_coverage_reports_missing_chars() {
+    // AMDAL-style scenario (#416): a face without Latin coverage. Use a
+    // real library font if present, else skip.
+    let lib = std::path::Path::new(env!("HOME"))
+        .join("Documents/GitHub/panopus-library/velvetyne/amdal/AMDAL-Regular.otf");
+    if !lib.is_file() {
+        eprintln!("skipping: no AMDAL sample");
+        return;
+    }
+    let missing =
+        panopus_lib::render::export::font_missing_chars(&lib, "TEST ⴰⵎⴷⴰⵍ").unwrap();
+    assert!(missing.contains(&'T'), "{missing:?}");
+    assert!(missing.contains(&'E'), "{missing:?}");
+    assert!(!missing.contains(&'ⴰ'), "{missing:?}");
+    assert!(!missing.contains(&' '), "space should not be reported: {missing:?}");
+}

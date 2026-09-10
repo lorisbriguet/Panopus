@@ -108,3 +108,38 @@ describe("isDraggable", () => {
     expect(isDraggable(null)).toBe(false);
   });
 });
+
+describe("anchor + stretch (#414/#415)", () => {
+  const dest = { left: 0, top: 0, w: 500, h: 1000 };
+
+  test("stretch widens the text block", () => {
+    const r = blockRect(dest, textNode({ stretch: 2 }))!;
+    expect(r.w).toBeCloseTo(1600);
+  });
+
+  test("center anchor matches the old geometry", () => {
+    const c = blockRect(dest, textNode())!;
+    const explicit = blockRect(dest, {
+      ...textNode(),
+      params: { ...textNode().params, anchor: "c" as unknown as number },
+    })!;
+    expect(explicit).toEqual(c);
+  });
+
+  test("tl anchor puts the block right and below the position", () => {
+    const n = textNode();
+    n.params = { ...n.params, anchor: "tl" as unknown as number };
+    const r = blockRect(dest, n)!;
+    // position at frame center (x=0,y=0): anchor point css = (250, 500)
+    expect(r.left).toBeCloseTo(250);
+    expect(r.top).toBeCloseTo(500);
+  });
+
+  test("br anchor puts the block left and above the position", () => {
+    const n = textNode();
+    n.params = { ...n.params, anchor: "br" as unknown as number };
+    const r = blockRect(dest, n)!;
+    expect(r.left + r.w).toBeCloseTo(250);
+    expect(r.top + r.h).toBeCloseTo(500);
+  });
+});

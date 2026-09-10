@@ -30,7 +30,7 @@ interface PreviewCanvasProps {
   previewOutputId?: string | null;
   /** Selected node — text/transform become draggable blocks (D3). */
   selectedNode?: GraphNode | null;
-  onNodeParams?: (nodeId: string, patch: { x: number; y: number }) => void;
+  onNodeParams?: (nodeId: string, patch: Record<string, number>) => void;
   onCompileErrors?: (errors: Record<string, string | null>) => void;
   /** Per-node output thumbnails (TouchDesigner-style operator viewers). */
   onThumbnails?: (thumbs: Record<string, string>) => void;
@@ -68,6 +68,7 @@ export function PreviewCanvas({
     baseX: number;
     baseY: number;
   } | null>(null);
+  const resizeRef = useRef<{ startY: number; baseSize: number } | null>(null);
   // Ref so the executor keeps one stable callback across re-renders.
   const onThumbnailsRef = useRef(onThumbnails);
   onThumbnailsRef.current = onThumbnails;
@@ -308,6 +309,38 @@ export function PreviewCanvas({
             dragRef.current = null;
           }}
           />
+          {/* Corner resize (#401): bottom-right handle scales `size`. */}
+          {selectedNode?.kind === "text" && (
+            <div
+              data-testid="resize-handle"
+              className="absolute z-30 w-2.5 h-2.5 -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-accent bg-[var(--color-bg)] cursor-nwse-resize"
+              style={{
+                left: (view.cw - view.w) / 2 + block.left + block.w,
+                top: (view.ch - view.h) / 2 + block.top + block.h,
+              }}
+              onPointerDown={(e) => {
+                if (!selectedNode) return;
+                (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                const p = selectedNode.params ?? {};
+                resizeRef.current = {
+                  startY: e.clientY,
+                  baseSize: typeof p.size === "number" ? p.size : 0.15,
+                };
+              }}
+              onPointerMove={(e) => {
+                const r = resizeRef.current;
+                if (!r || !selectedNode || !dest || !onNodeParams) return;
+                const next = Math.min(
+                  1,
+                  Math.max(0.01, r.baseSize + (e.clientY - r.startY) / dest.h)
+                );
+                onNodeParams(selectedNode.id, { size: next });
+              }}
+              onPointerUp={() => {
+                resizeRef.current = null;
+              }}
+            />
+          )}
         </>
       )}
     </div>

@@ -205,12 +205,23 @@ export function FinishTab({
     const size = typeof n.params?.size === "number" ? n.params.size : 0.15;
     return Math.min(4096, Math.ceil((size * maxOutH) / 256) * 256);
   };
+  const textOptsOf = (n: (typeof graph.nodes)[number]) => ({
+    targetHeight: rasterBucket(n),
+    letterSpacing:
+      typeof n.params?.letterSpacing === "number" ? n.params.letterSpacing : 0,
+    lineHeight:
+      typeof n.params?.lineHeight === "number" ? n.params.lineHeight : 1.2,
+    align: (typeof n.params?.align === "string" ? n.params.align : "left") as
+      | "left"
+      | "center"
+      | "right",
+  });
   const textKeySig = graph.nodes
     .filter((n) => n.kind === "text")
-    .map(
-      (n) =>
-        `${n.id}:${n.params?.content ?? ""}:${n.params?.font ?? ""}:${rasterBucket(n)}:${n.rasterKey ?? ""}`
-    )
+    .map((n) => {
+      const o = textOptsOf(n);
+      return `${n.id}:${n.params?.content ?? ""}:${n.params?.font ?? ""}:${o.targetHeight}:${o.letterSpacing}:${o.lineHeight}:${o.align}:${n.rasterKey ?? ""}`;
+    })
     .join("|");
   useEffect(() => {
     let cancelled = false;
@@ -219,7 +230,12 @@ export function FinishTab({
         if (n.kind !== "text") continue;
         const content = String(n.params?.content ?? "");
         const font = String(n.params?.font ?? "");
-        const key = rasterKey(content, font, String(rasterBucket(n)));
+        const o = textOptsOf(n);
+        const key = rasterKey(
+          content,
+          font,
+          `${o.targetHeight}:${o.letterSpacing}:${o.lineHeight}:${o.align}`
+        );
         if (key === n.rasterKey && n.rasterPath) {
           if (!textBitmaps[n.id]) {
             try {
@@ -247,11 +263,7 @@ export function FinishTab({
           font === "" ||
           isFontLoaded(font) ||
           (textFontPaths !== undefined && !textFontPaths[font]);
-        const raster = await rasterizeText(
-          content === "" ? " " : content,
-          font,
-          rasterBucket(n)
-        );
+        const raster = await rasterizeText(content === "" ? " " : content, font, o);
         if (!raster || cancelled) continue;
         if (!fontReady) {
           // Preview with the fallback, but leave the node UNKEYED so the
@@ -500,6 +512,7 @@ export function FinishTab({
             compileError={compileErrors[selectedNode.id] ?? null}
             onExport={() => setExportOpen(true)}
             textFonts={textFonts ?? []}
+            textFontPaths={textFontPaths}
             sourceInfo={
               selectedNode.kind === "source"
                 ? sourceNodes(graph)[0]?.id === selectedNode.id

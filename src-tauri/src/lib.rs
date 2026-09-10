@@ -605,6 +605,7 @@ pub fn run() {
             activation::set_fonts_active,
             render::export::export_finish,
             render::export::save_finish_raster,
+            render::export::check_font_coverage,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

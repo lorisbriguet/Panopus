@@ -255,6 +255,7 @@ const ui = {
 
     // Text operator (Finish 2 D3)
     font_inactive: "Font not active — activate it for a faithful raster",
+    font_no_glyphs: "No glyphs in this font for",
 
     // Operator context menu (#381/#382)
     op_bypass: "Bypass",
@@ -535,6 +536,7 @@ const ui = {
 
     // Text operator (Finish 2 D3)
     font_inactive: "Police non active — activez-la pour un rendu fidele",
+    font_no_glyphs: "Pas de glyphes dans cette police pour",
 
     // Operator context menu (#381/#382)
     op_bypass: "Court-circuiter",

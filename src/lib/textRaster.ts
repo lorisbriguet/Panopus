@@ -43,15 +43,28 @@ interface MeasureCtx {
 /** Pure layout: line split, TIGHT glyph bounds (actualBoundingBox
  *  metrics, em-fraction fallback), minimal pad, height cap (#403).
  *  Testable with a fake measuring context. */
+export interface TextOpts {
+  targetHeight?: number;
+  letterSpacing?: number; // em fraction (#405)
+  lineHeight?: number;    // multiple of font size (#405)
+  align?: "left" | "center" | "right";
+}
+
 export function layoutText(
   content: string,
   font: string,
   ctx: MeasureCtx,
-  targetHeight?: number
+  opts: TextOpts = {}
 ): TextLayout {
+  const targetHeight = opts.targetHeight;
+  const lineH = opts.lineHeight && opts.lineHeight > 0 ? opts.lineHeight : LINE_HEIGHT;
   const lines = content.split("\n");
   const metrics = (px: number) => {
     ctx.font = `${px}px "${font}"`;
+    const spacing = opts.letterSpacing ?? 0;
+    if ("letterSpacing" in ctx) {
+      (ctx as { letterSpacing?: string }).letterSpacing = `${spacing * px}px`;
+    }
     let w = 1;
     let ascent = 0;
     let descent = 0;
@@ -73,13 +86,13 @@ export function layoutText(
     return {
       pad,
       h: Math.round(
-        (lines.length - 1) * px * LINE_HEIGHT + m.ascent + m.descent + pad * 2
+        (lines.length - 1) * px * lineH + m.ascent + m.descent + pad * 2
       ),
       w: Math.max(1, Math.ceil(m.w + pad * 2)),
     };
   };
   let fontPx = targetHeight
-    ? Math.min(2048, Math.max(16, Math.round(targetHeight / (lines.length * LINE_HEIGHT))))
+    ? Math.min(2048, Math.max(16, Math.round(targetHeight / (lines.length * lineH))))
     : FONT_PX;
   let m = metrics(fontPx);
   let d = dims(fontPx, m);
@@ -103,7 +116,7 @@ export function layoutText(
 /** djb2 over the raster-relevant inputs — the node's rasterKey. The
  *  layout version participates so cached rasters refresh when the
  *  measurement rules change. */
-const LAYOUT_VERSION = "v7"; // v7: output-size-driven raster height (#417)
+const LAYOUT_VERSION = "v8"; // v8: letterSpacing/lineHeight/align (#405)
 
 export function rasterKey(content: string, font: string, bucket = ""): string {
   const s = `${content}|${font}|${bucket}|${LAYOUT_VERSION}`;
@@ -124,24 +137,32 @@ export interface TextRaster {
 export async function rasterizeText(
   content: string,
   font: string,
-  targetHeight?: number
+  opts: TextOpts = {}
 ): Promise<TextRaster | null> {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
-  const layout = layoutText(content, font, ctx, targetHeight);
+  const layout = layoutText(content, font, ctx, opts);
   canvas.width = layout.w;
   canvas.height = layout.h;
   ctx.clearRect(0, 0, layout.w, layout.h);
   ctx.font = `${layout.fontPx}px "${font}"`;
+  if ("letterSpacing" in ctx) {
+    (ctx as unknown as { letterSpacing: string }).letterSpacing =
+      `${(opts.letterSpacing ?? 0) * layout.fontPx}px`;
+  }
   ctx.fillStyle = "#ffffff";
   ctx.textBaseline = "alphabetic";
+  const lineH = opts.lineHeight && opts.lineHeight > 0 ? opts.lineHeight : LINE_HEIGHT;
+  const align = opts.align ?? "left";
   layout.lines.forEach((line, i) => {
-    ctx.fillText(
-      line,
-      layout.originX,
-      layout.pad + layout.ascent + i * layout.fontPx * LINE_HEIGHT
-    );
+    let x = layout.originX;
+    if (align !== "left") {
+      const lw = ctx.measureText(line).width;
+      const inner = layout.w - layout.pad * 2;
+      x = layout.originX + (align === "center" ? (inner - lw) / 2 : inner - lw);
+    }
+    ctx.fillText(line, x, layout.pad + layout.ascent + i * layout.fontPx * lineH);
   });
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, "image/png")
