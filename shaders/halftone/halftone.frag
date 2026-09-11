@@ -19,7 +19,7 @@
 // No version/precision directives - the host prepends them.
 
 uniform sampler2D uTex0;
-uniform sampler2D uGrungeAtlas; // 4x2 atlas of 512px scan tiles
+uniform sampler2D uGrungeAtlas; // 4x2 atlas of 2048px scan tiles
 uniform vec2 uRes;
 uniform int uPattern;    // 0..8, see header
 uniform float uDots;     // cell size in px
@@ -177,25 +177,28 @@ float coverage(vec2 g, float ink, float aa, float R) {
 // grunge library — round 4: procedural damage never matched scans).
 // uSeed picks the tile (looping 0..8) and its fraction pans inside it.
 // Tiles are mean-0.5 normalized; sample - 0.5 = signed damage: dark
-// scan areas erase ink, bright ones deposit flecks. Unrotated space —
-// the paper doesn't turn with the screen. Mirror-wrap makes the
-// non-tiling scans seamless; texel-snap keeps both engines bit-equal.
-float damage(vec2 q) {
+// scan areas erase ink, bright ones deposit flecks. The scan is SCALED
+// TO FIT the frame (vUv space): one tile covers the artwork at any
+// resolution — cell-relative scaling mosaicked at print size. Mirror-
+// wrap absorbs the pan; texel-snap keeps both engines bit-equal.
+float damage(vec2 uv0) {
     float slot = mod(floor(uSeed), 8.0);
     vec2 quad = vec2(mod(slot, 4.0), floor(slot / 4.0));
     vec2 pan = fract(uSeed) * vec2(0.37, 0.61);
-    vec2 t = q * 0.045 + pan;
+    vec2 t = uv0 + pan;
     vec2 m = abs(fract(t * 0.5) * 2.0 - 1.0); // mirror repeat
     vec2 uv = (quad + m * 0.98 + 0.01) * vec2(0.25, 0.5);
-    vec2 atlasSize = vec2(2048.0, 1024.0);
-    uv = (floor(uv * atlasSize) + 0.5) / atlasSize;
+    // LINEAR sampling (no texel snap): the tile minifies in preview and
+    // magnifies at print size — nearest drops hairline cracks when
+    // minified and blocks them up when magnified. Cross-GPU filtering
+    // differences are <=1/255, far inside the chew smoothstep band.
     return (texture(uGrungeAtlas, uv).r - 0.5) * 2.0;
 }
 
 float chewed(float m, float G, float aa) {
     if (uGrunge <= 0.0) return m;
     return smoothstep(0.5 - max(aa, 0.12), 0.5 + max(aa, 0.12),
-                      m + uGrunge * 1.5 * G);
+                      m + uGrunge * 1.9 * G);
 }
 
 float cmykChannel(vec3 rgb, int i) {
@@ -225,7 +228,7 @@ void main() {
     // Shared paper-space fields: roughness grain and damage are common
     // to every ink (the paper is one surface).
     float R = uRoughness > 0.0 ? roughField(px / cell) : 0.5;
-    float G = uGrunge > 0.0 ? damage(px / cell) : 0.0;
+    float G = uGrunge > 0.0 ? damage(vUv) : 0.0;
 
     if (uChannels == 1) {
         vec3 col = vec3(1.0);

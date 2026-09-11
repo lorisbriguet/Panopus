@@ -27,7 +27,7 @@ const SOURCES = [
   "Light/Texturelabs_Grunge_121L.jpg",
   "Medium/Texturelabs_Grunge_128L.jpg",
 ];
-const T = 512;
+const T = 2048;
 
 function readPngGray(path) {
   const d = readFileSync(path);
