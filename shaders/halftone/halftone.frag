@@ -1,15 +1,17 @@
-// Halftone (Finish 2 roster, print family; screen library grown in the
-// node review, Texturelabs Retratone-inspired): rotated screens with a
-// PATTERN family and a GRUNGE control. gray = one black screen on white
-// paper; cmyk = four screens at the classic angles (C 15, M 75, Y 0,
-// K 45 - all relative to uAngle), combined subtractively like inks.
+// Halftone v3 (node review round 2, modeled on Texturelabs Retratone's
+// actual pattern tiles, decoded from the plugin's PSD Patt blocks):
+// ONE soft threshold over a SUM of smooth fields —
+//   coverage = smoothstep(T(g) - aa, T(g) + aa, ink + grunge*G(g))
+// where T is a smooth periodic screen RAMP (their tiles are sinusoidal
+// threshold maps, not hard shapes), ink is the CONTINUOUS per-pixel
+// tone (cell-quantizing the tone is what makes halftones look digital),
+// and G is high-frequency RETICULATED grain (their 1200px roughness
+// scan is dense cellular veining — smooth value noise reads plastic).
+// gray = one black screen on white paper; cmyk = four screens at the
+// classic angles (C 15, M 75, Y 0, K 45 - all relative to uAngle).
 // Patterns: 0 dots / 1 negdots / 2 lines / 3 crosslines / 4 waves /
 // 5 crosswaves / 6 brokenlines / 7 brokenwaves / 8 dust.
-// Grunge perturbs the ink with value noise ANCHORED TO SCREEN SPACE
-// (Retratone's roughness-texture trick), so the grit rides the screen,
-// not the pixels. Hashes are integer (bit-exact across compilers, per
-// the dithering ruling); trig is the folded Taylor psin (see below).
-// Defaults (dots, grunge 0) reproduce the previous shader byte-for-byte.
+// Integer hashes (bit-exact across compilers); folded-Taylor trig.
 // Portability discipline: no function out-params, no local arrays.
 // Alpha passthrough.
 // No version/precision directives - the host prepends them.
@@ -20,20 +22,17 @@ uniform int uPattern;    // 0..8, see header
 uniform float uDots;     // cell size in px
 uniform float uAngle;    // screen rotation, degrees
 uniform int uChannels;   // 0 gray, 1 cmyk
-uniform float uHard;     // edge: 0 soft .. 1 crisp
+uniform float uHard;     // threshold edge: 0 soft .. 1 crisp
 uniform float uGrunge;   // 0 clean .. 1 heavy grit
 
 in vec2 vUv;
 out vec4 fragColor;
 
-// Portable sine: native trig differs across shader backends beyond our
-// tolerance once a rotated lattice amplifies it (SwiftShader libm vs
-// Metal fast-math measured ~1e-4 — half a pixel over a 731px frame).
-// Odd Taylor on the folded [-pi/2, pi/2] range, max err ~4e-6, and
-// bit-stable because only mul/add are involved.
+float PI2 = 6.28318530717959;
+
 float psin(float x) {
     float P = 3.14159265358979;
-    x = x - floor(x / (2.0 * P) + 0.5) * (2.0 * P); // wrap to [-pi, pi]
+    x = x - floor(x / (2.0 * P) + 0.5) * (2.0 * P);
     if (x > 0.5 * P) x = P - x;
     if (x < -0.5 * P) x = -P - x;
     float x2 = x * x;
@@ -45,7 +44,6 @@ float pcos(float x) {
     return psin(x + 1.57079632679490);
 }
 
-// Continuous rotated grid coordinate (cell units).
 vec2 gridOf(vec2 px, float ang, float cell) {
     float r = radians(ang);
     float c = pcos(r);
@@ -53,18 +51,6 @@ vec2 gridOf(vec2 px, float ang, float cell) {
     return vec2(c * px.x - s * px.y, s * px.x + c * px.y) / cell;
 }
 
-// Source uv of the cell CENTER for a grid coord, texel-snapped (bilinear
-// weights at arbitrary fractional uv quantize differently per GPU).
-vec2 centerUv(vec2 g, float ang, float cell) {
-    float r = radians(ang);
-    float c = pcos(r);
-    float s = psin(r);
-    vec2 world = (floor(g) + 0.5) * cell;
-    vec2 cuv = vec2(c * world.x + s * world.y, -s * world.x + c * world.y) / uRes;
-    return (floor(cuv * uRes) + 0.5) / uRes;
-}
-
-// Integer hash on a lattice point (lowbias-style, bit-exact).
 float hash2(vec2 cellIdx) {
     uvec2 u = uvec2(ivec2(cellIdx) + 4096);
     uint h = u.x * 1664525u + u.y * 1013904223u;
@@ -74,7 +60,6 @@ float hash2(vec2 cellIdx) {
     return float(h & 0xFFFFu) / 65535.0;
 }
 
-// Value noise: bilinear hash blend, smoothstep weights (mul/add only).
 float vnoise(vec2 p) {
     vec2 i = floor(p);
     vec2 f = p - i;
@@ -86,69 +71,65 @@ float vnoise(vec2 p) {
     return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-// Retratone-style grit: blotches (~2 cells) + sub-cell grain perturb
-// the ink BEFORE the screen mask, in screen space so it sticks to the
-// pattern. Exactly ink when uGrunge == 0.
-float grunged(float ink, vec2 g) {
-    if (uGrunge <= 0.0) return ink;
-    float blotch = 0.65 * vnoise(g * 0.53) + 0.35 * vnoise(g * 1.71);
-    float grain = vnoise(g * 6.13);
-    float p = (blotch - 0.5) * 0.9 + (grain - 0.5) * 0.35;
-    return clamp(ink + uGrunge * p, 0.0, 1.0);
+// Reticulated (ridged) octave: veins where noise crosses its midline —
+// the cellular character of the Retratone roughness scan.
+float ridge(vec2 p) {
+    return 1.0 - abs(2.0 * vnoise(p) - 1.0);
 }
 
-float dotMask(vec2 local, float ink, float aa) {
-    // sqrt: dot AREA tracks coverage; 0.76 lets solid darks close up.
-    float radius = sqrt(clamp(ink, 0.0, 1.0)) * 0.76;
-    return 1.0 - smoothstep(radius - aa, radius + aa, length(local));
+// Grit field, centered on 0. Two ridged octaves at sub-cell frequency
+// (vein structure + micro grain) and sparse bright specks (their dust
+// and roughness scans both carry isolated flecks).
+float grit(vec2 g) {
+    float veins = 0.55 * ridge(g * 3.7) + 0.30 * ridge(g * 8.9);
+    float spark = hash2(floor(g * 6.1));
+    float speck = step(0.975, spark) * 0.8 - step(0.985, 1.0 - spark) * 0.5;
+    return veins - 0.47 + 0.15 * speck;
 }
 
-float lineMask(float d, float ink, float aa) {
-    float hw = clamp(ink, 0.0, 1.0) * 0.5;
-    return 1.0 - smoothstep(hw - aa, hw + aa, abs(d));
+// Smooth periodic threshold ramps ~[0,1], modeled on the decoded tiles.
+float dotRamp(vec2 g) {
+    // Separable cosine spot: their "evendots" tile exactly.
+    return 0.5 - 0.5 * (pcos(PI2 * g.x) * pcos(PI2 * g.y));
 }
 
-// Ink coverage of one screen cell for the selected pattern.
-float screenMask(vec2 g, float ink, float aa) {
-    // Parenthesized exactly like the pre-refactor cellOf: g - (floor+.5)
-    // — a different float op order flips boundary pixels.
-    vec2 local = g - (floor(g) + 0.5);
-    if (uPattern == 1) { // negdots: paper dots grow in the light
-        return 1.0 - dotMask(local, 1.0 - ink, aa);
+float lineRamp(float y) {
+    return 0.5 - 0.5 * pcos(PI2 * y);
+}
+
+// Soft dash interruption along a line (their broken tiles bake dashes
+// into the ramp, phase-shifted per row so runs don't align).
+float dashes(vec2 g) {
+    float phase = hash2(vec2(0.0, floor(g.y)));
+    return 0.42 * (0.5 + 0.5 * pcos(PI2 * (g.x * 0.31 + phase)));
+}
+
+float screenRamp(vec2 g) {
+    if (uPattern == 1) return 1.0 - dotRamp(g);
+    if (uPattern == 2) return lineRamp(g.y);
+    if (uPattern == 3) return min(lineRamp(g.y), lineRamp(g.x));
+    if (uPattern == 4) return lineRamp(g.y + 0.30 * psin(PI2 * g.x * 0.23));
+    if (uPattern == 5) {
+        float a = lineRamp(g.y + 0.30 * psin(PI2 * g.x * 0.23));
+        float b = lineRamp(g.x + 0.30 * psin(PI2 * g.y * 0.23));
+        return min(a, b);
     }
-    if (uPattern == 2) { // lines
-        return lineMask(local.y, ink, aa);
+    if (uPattern == 6) return lineRamp(g.y) + dashes(g);
+    if (uPattern == 7) return lineRamp(g.y + 0.30 * psin(PI2 * g.x * 0.23)) + dashes(g);
+    if (uPattern == 8) {
+        // dust: the grit field IS the screen — streaky reticulation with
+        // sparse low pockets, so flecks surface before tone fills in.
+        return clamp(0.62 + 0.85 * (0.6 * ridge(g * 1.9) + 0.4 * ridge(g * 5.3) - 0.62)
+                     - 0.35 * step(0.965, hash2(floor(g * 3.1))), 0.02, 1.2);
     }
-    if (uPattern == 3) { // crosslines: union of two perpendicular screens
-        float a1 = lineMask(local.y, ink * 0.75, aa);
-        float b1 = lineMask(local.x, ink * 0.75, aa);
-        return a1 + b1 - a1 * b1;
-    }
-    if (uPattern == 4) { // waves: line center wobbles along the row
-        float w = local.y + 0.28 * psin(g.x * 2.399);
-        return lineMask(w, ink, aa);
-    }
-    if (uPattern == 5) { // crosswaves
-        float a1 = lineMask(local.y + 0.28 * psin(g.x * 2.399), ink * 0.75, aa);
-        float b1 = lineMask(local.x + 0.28 * psin(g.y * 2.399), ink * 0.75, aa);
-        return a1 + b1 - a1 * b1;
-    }
-    if (uPattern == 6) { // brokenlines: segments drop out along the run
-        float seg = hash2(vec2(floor(g.x * 0.5), floor(g.y)));
-        return lineMask(local.y, ink, aa) * step(0.3, seg);
-    }
-    if (uPattern == 7) { // brokenwaves
-        float seg = hash2(vec2(floor(g.x * 0.5), floor(g.y)));
-        float w = local.y + 0.28 * psin(g.x * 2.399);
-        return lineMask(w, ink, aa) * step(0.3, seg);
-    }
-    if (uPattern == 8) { // dust: jittered, size-varied speckle
-        float r1 = hash2(floor(g));
-        float r2 = hash2(floor(g) + vec2(37.0, 17.0));
-        vec2 off = (vec2(r1, r2) - 0.5) * 0.5;
-        return dotMask(local - off, clamp(ink * (0.5 + r1), 0.0, 1.0), aa);
-    }
-    return dotMask(local, ink, aa); // 0: dots
+    return dotRamp(g); // 0: dots
+}
+
+// Coverage: soft threshold of tone + grit against the screen ramp.
+float coverage(vec2 g, float ink, float aa) {
+    float tone = clamp(ink, 0.0, 1.0);
+    if (uGrunge > 0.0) tone = tone + uGrunge * 0.55 * grit(g);
+    return smoothstep(screenRamp(g) - aa, screenRamp(g) + aa, tone);
 }
 
 float cmykChannel(vec3 rgb, int i) {
@@ -166,29 +147,31 @@ float screenAngle(int i) {
 void main() {
     vec2 px = vUv * uRes;
     float cell = clamp(uDots, 2.0, 64.0);
-    float aa = mix(0.28, 0.03, clamp(uHard, 0.0, 1.0));
+    // Threshold softness in tone units; soft ends stay slightly crisp so
+    // midtones don't wash to flat gray.
+    float aa = mix(0.30, 0.045, clamp(uHard, 0.0, 1.0));
+    // Continuous tone at the PIXEL (texel-snapped for cross-GPU
+    // stability) — dots deform along image contours like a real screen.
+    vec2 suv = (floor(px) + 0.5) / uRes;
+    vec4 src = texture(uTex0, suv);
     float alpha = texture(uTex0, vUv).a;
 
     if (uChannels == 1) {
-        // CMYK: four screens, each sampled at ITS OWN cell center.
         vec3 col = vec3(1.0);
         for (int i = 0; i < 4; i++) {
-            float ang = uAngle + screenAngle(i);
-            vec2 g = gridOf(px, ang, cell);
-            float ink = cmykChannel(
-                clamp(texture(uTex0, centerUv(g, ang, cell)).rgb, 0.0, 1.0), i);
-            float m = screenMask(g, grunged(ink, g), aa);
-            if (i == 0)      col.r *= 1.0 - m; // cyan eats red
-            else if (i == 1) col.g *= 1.0 - m; // magenta eats green
-            else if (i == 2) col.b *= 1.0 - m; // yellow eats blue
-            else             col   *= 1.0 - m; // black eats all
+            vec2 g = gridOf(px, uAngle + screenAngle(i), cell);
+            float ink = cmykChannel(clamp(src.rgb, 0.0, 1.0), i);
+            float m = coverage(g, ink, aa);
+            if (i == 0)      col.r *= 1.0 - m;
+            else if (i == 1) col.g *= 1.0 - m;
+            else if (i == 2) col.b *= 1.0 - m;
+            else             col   *= 1.0 - m;
         }
         fragColor = vec4(col, alpha);
     } else {
         vec2 g = gridOf(px, uAngle, cell);
-        float luma = dot(clamp(texture(uTex0, centerUv(g, uAngle, cell)).rgb, 0.0, 1.0),
-                         vec3(0.2126, 0.7152, 0.0722));
-        float m = screenMask(g, grunged(1.0 - luma, g), aa);
+        float luma = dot(clamp(src.rgb, 0.0, 1.0), vec3(0.2126, 0.7152, 0.0722));
+        float m = coverage(g, 1.0 - luma, aa);
         fragColor = vec4(vec3(1.0 - m), alpha);
     }
 }
