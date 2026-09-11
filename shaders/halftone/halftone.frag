@@ -19,6 +19,7 @@
 // No version/precision directives - the host prepends them.
 
 uniform sampler2D uTex0;
+uniform sampler2D uGrungeAtlas; // 4x2 atlas of 512px scan tiles
 uniform vec2 uRes;
 uniform int uPattern;    // 0..8, see header
 uniform float uDots;     // cell size in px
@@ -27,6 +28,8 @@ uniform int uChannels;   // 0 gray, 1 cmyk
 uniform float uHard;     // threshold edge: 0 soft .. 1 crisp
 uniform float uRoughness; // pre-screen: vivid-light grain deforms dots
 uniform float uGrunge;   // post-screen: dust & scratches damage
+uniform float uSeed;     // 0..8: loops through the atlas tiles; the
+                         // fraction pans inside a tile for variation
 
 in vec2 vUv;
 out vec4 fragColor;
@@ -169,25 +172,24 @@ float coverage(vec2 g, float ink, float aa, float R) {
     return smoothstep(screenRamp(g) - aa, screenRamp(g) + aa, tone);
 }
 
-// Grunge applied AFTER the screen: sparse, localized print damage — long
-// wobbling scratch strokes, soft press-gap blotches, rare ink flecks —
-// not an allover texture. Negative erases ink, positive adds. Unrotated
-// space: the paper doesn't turn with the screen.
+// Grunge applied AFTER the screen: REAL scan tiles (grunge-atlas.png,
+// built by scripts/build_grunge_atlas.mjs from the user's Texturelabs
+// grunge library — round 4: procedural damage never matched scans).
+// uSeed picks the tile (looping 0..8) and its fraction pans inside it.
+// Tiles are mean-0.5 normalized; sample - 0.5 = signed damage: dark
+// scan areas erase ink, bright ones deposit flecks. Unrotated space —
+// the paper doesn't turn with the screen. Mirror-wrap makes the
+// non-tiling scans seamless; texel-snap keeps both engines bit-equal.
 float damage(vec2 q) {
-    float lane = q.x * 1.6;
-    float ci = floor(lane);
-    float xo = 0.1 + 0.8 * hash2(vec2(ci, 31.0));
-    float seg = floor(q.y * 0.06); // very long strokes
-    float on = step(0.72, hash2(vec2(ci, seg)));
-    float wob = 0.14 * (vnoise(vec2(ci * 5.1, q.y * 0.5)) - 0.5);
-    float d = abs(lane - ci - xo + wob);
-    float scr = (1.0 - smoothstep(0.015, 0.05, d)) * on
-                * (0.5 + 0.5 * vnoise(vec2(ci * 2.7, q.y * 1.9)));
-    float blotch = 0.9 * smoothstep(0.78, 0.95, vnoise(q * 0.35));
-    vec2 fc = floor(q * 3.4);
-    vec2 fl = q * 3.4 - fc - 0.5;
-    float fleck = step(0.985, hash2(fc)) * (1.0 - smoothstep(0.08, 0.22, length(fl)));
-    return fleck - max(scr, blotch);
+    float slot = mod(floor(uSeed), 8.0);
+    vec2 quad = vec2(mod(slot, 4.0), floor(slot / 4.0));
+    vec2 pan = fract(uSeed) * vec2(0.37, 0.61);
+    vec2 t = q * 0.045 + pan;
+    vec2 m = abs(fract(t * 0.5) * 2.0 - 1.0); // mirror repeat
+    vec2 uv = (quad + m * 0.98 + 0.01) * vec2(0.25, 0.5);
+    vec2 atlasSize = vec2(2048.0, 1024.0);
+    uv = (floor(uv * atlasSize) + 0.5) / atlasSize;
+    return (texture(uGrungeAtlas, uv).r - 0.5) * 2.0;
 }
 
 float chewed(float m, float G, float aa) {
