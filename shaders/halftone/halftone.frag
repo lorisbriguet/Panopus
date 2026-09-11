@@ -192,13 +192,18 @@ float damage(vec2 uv0) {
     // magnifies at print size — nearest drops hairline cracks when
     // minified and blocks them up when magnified. Cross-GPU filtering
     // differences are <=1/255, far inside the chew smoothstep band.
-    return (texture(uGrungeAtlas, uv).r - 0.5) * 2.0;
+    return texture(uGrungeAtlas, uv).r; // raw scan luminance 0..1
 }
 
-float chewed(float m, float G, float aa) {
+// Grunge erodes the INK only (node review): the scan is a keep-mask —
+// its dark areas eat printed coverage as the slider sweeps a threshold
+// down through the scan's tonal range. Open paper never gains ink.
+float chewed(float m, float L, float aa) {
     if (uGrunge <= 0.0) return m;
-    return smoothstep(0.5 - max(aa, 0.12), 0.5 + max(aa, 0.12),
-                      m + uGrunge * 1.9 * G);
+    float band = max(aa, 0.12);
+    float keep = smoothstep(0.5 - band, 0.5 + band,
+                            L + (1.0 - uGrunge) * 1.1 - 0.05);
+    return m * keep;
 }
 
 float cmykChannel(vec3 rgb, int i) {
@@ -228,14 +233,14 @@ void main() {
     // Shared paper-space fields: roughness grain and damage are common
     // to every ink (the paper is one surface).
     float R = uRoughness > 0.0 ? roughField(px / cell) : 0.5;
-    float G = uGrunge > 0.0 ? damage(vUv) : 0.0;
+    float L = uGrunge > 0.0 ? damage(vUv) : 1.0;
 
     if (uChannels == 1) {
         vec3 col = vec3(1.0);
         for (int i = 0; i < 4; i++) {
             vec2 g = gridOf(px, uAngle + screenAngle(i), cell);
             float ink = cmykChannel(clamp(src.rgb, 0.0, 1.0), i);
-            float m = chewed(coverage(g, ink, aa, R), G, aa);
+            float m = chewed(coverage(g, ink, aa, R), L, aa);
             if (i == 0)      col.r *= 1.0 - m;
             else if (i == 1) col.g *= 1.0 - m;
             else if (i == 2) col.b *= 1.0 - m;
@@ -245,7 +250,7 @@ void main() {
     } else {
         vec2 g = gridOf(px, uAngle, cell);
         float luma = dot(clamp(src.rgb, 0.0, 1.0), vec3(0.2126, 0.7152, 0.0722));
-        float m = chewed(coverage(g, 1.0 - luma, aa, R), G, aa);
+        float m = chewed(coverage(g, 1.0 - luma, aa, R), L, aa);
         fragColor = vec4(vec3(1.0 - m), alpha);
     }
 }
