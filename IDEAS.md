@@ -6,6 +6,13 @@ history at 33ed5aa2. Panopus ideas start here.)
 
 ## Finish — node ideas
 
+### Distressor node
+- The user also has Texturelabs "Distressor" 1.0.7 installed
+  (`~/Library/Application Support/Adobe/UXP/Plugins/External/4c1e4b4a_1.0.7`)
+  — their distress/wear plugin. Same study approach as the Retratone
+  halftone round (2026-09-11): mine its pattern assets + labels for an
+  edge-wear / print-distress effect node.
+
 ### Channel separation node
 - Split the incoming image into channels: RGB, RGBA, or CMYK plate
   separation (noted 2026-09-10 during the node review).
