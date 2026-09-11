@@ -1,7 +1,7 @@
 // Halftone v3 (node review round 2, modeled on Texturelabs Retratone's
 // actual pattern tiles, decoded from the plugin's PSD Patt blocks):
 // ONE soft threshold over a SUM of smooth fields —
-//   coverage = smoothstep(T(g) - aa, T(g) + aa, ink + grunge*G(g))
+//   print = chew(smoothstep(T(g) - aa, T(g) + aa, ink), grunge)
 // where T is a smooth periodic screen RAMP (their tiles are sinusoidal
 // threshold maps, not hard shapes), ink is the CONTINUOUS per-pixel
 // tone (cell-quantizing the tone is what makes halftones look digital),
@@ -25,7 +25,8 @@ uniform float uDots;     // cell size in px
 uniform float uAngle;    // screen rotation, degrees
 uniform int uChannels;   // 0 gray, 1 cmyk
 uniform float uHard;     // threshold edge: 0 soft .. 1 crisp
-uniform float uGrunge;   // 0 clean .. 1 heavy grit
+uniform float uRoughness; // pre-screen: vivid-light grain deforms dots
+uniform float uGrunge;   // post-screen: dust & scratches damage
 
 in vec2 vUv;
 out vec4 fragColor;
@@ -77,16 +78,6 @@ float vnoise(vec2 p) {
 // the cellular character of the Retratone roughness scan.
 float ridge(vec2 p) {
     return 1.0 - abs(2.0 * vnoise(p) - 1.0);
-}
-
-// Grit field, centered on 0. Two ridged octaves at sub-cell frequency
-// (vein structure + micro grain) and sparse bright specks (their dust
-// and roughness scans both carry isolated flecks).
-float grit(vec2 g) {
-    float veins = 0.55 * ridge(g * 3.7) + 0.30 * ridge(g * 8.9);
-    float spark = hash2(floor(g * 6.1));
-    float speck = step(0.975, spark) * 0.8 - step(0.985, 1.0 - spark) * 0.5;
-    return veins - 0.47 + 0.15 * speck;
 }
 
 // Smooth periodic threshold ramps ~[0,1], modeled on the decoded tiles.
@@ -154,11 +145,55 @@ float screenRamp(vec2 g) {
     return dotRamp(g); // 0: dots
 }
 
-// Coverage: soft threshold of tone + grit against the screen ramp.
-float coverage(vec2 g, float ink, float aa) {
+// Roughness (Retratone's own pipeline, decoded from its layer-style
+// calls): the reticulated grain composites in VIVID LIGHT over the tone
+// BEFORE the Hard-Mix-style threshold — burns/dodges locally, so dot
+// boundaries warp and shatter instead of staying round. Paper space,
+// scaled with the cell like the plugin scales roughness with pattern.
+float roughField(vec2 q) {
+    return clamp(0.5 + 0.8 * (0.55 * ridge(q * 1.7) + 0.35 * ridge(q * 4.3) - 0.585)
+                 + 0.24 * (vnoise(q * 9.1) - 0.5), 0.0, 1.0);
+}
+
+float vividLight(float b, float s) {
+    return s < 0.5 ? 1.0 - (1.0 - b) / max(2.0 * s, 1e-3)
+                   : b / max(2.0 * (1.0 - s), 1e-3);
+}
+
+// Coverage: soft threshold of (roughened) tone against the screen ramp.
+float coverage(vec2 g, float ink, float aa, float R) {
     float tone = clamp(ink, 0.0, 1.0);
-    if (uGrunge > 0.0) tone = tone + uGrunge * 0.55 * grit(g);
+    if (uRoughness > 0.0) {
+        tone = clamp(mix(tone, vividLight(tone, R), uRoughness * 0.7), 0.0, 1.0);
+    }
     return smoothstep(screenRamp(g) - aa, screenRamp(g) + aa, tone);
+}
+
+// Grunge applied AFTER the screen: sparse, localized print damage — long
+// wobbling scratch strokes, soft press-gap blotches, rare ink flecks —
+// not an allover texture. Negative erases ink, positive adds. Unrotated
+// space: the paper doesn't turn with the screen.
+float damage(vec2 q) {
+    float lane = q.x * 1.6;
+    float ci = floor(lane);
+    float xo = 0.1 + 0.8 * hash2(vec2(ci, 31.0));
+    float seg = floor(q.y * 0.06); // very long strokes
+    float on = step(0.72, hash2(vec2(ci, seg)));
+    float wob = 0.14 * (vnoise(vec2(ci * 5.1, q.y * 0.5)) - 0.5);
+    float d = abs(lane - ci - xo + wob);
+    float scr = (1.0 - smoothstep(0.015, 0.05, d)) * on
+                * (0.5 + 0.5 * vnoise(vec2(ci * 2.7, q.y * 1.9)));
+    float blotch = 0.9 * smoothstep(0.78, 0.95, vnoise(q * 0.35));
+    vec2 fc = floor(q * 3.4);
+    vec2 fl = q * 3.4 - fc - 0.5;
+    float fleck = step(0.985, hash2(fc)) * (1.0 - smoothstep(0.08, 0.22, length(fl)));
+    return fleck - max(scr, blotch);
+}
+
+float chewed(float m, float G, float aa) {
+    if (uGrunge <= 0.0) return m;
+    return smoothstep(0.5 - max(aa, 0.12), 0.5 + max(aa, 0.12),
+                      m + uGrunge * 1.5 * G);
 }
 
 float cmykChannel(vec3 rgb, int i) {
@@ -185,12 +220,17 @@ void main() {
     vec4 src = texture(uTex0, suv);
     float alpha = texture(uTex0, vUv).a;
 
+    // Shared paper-space fields: roughness grain and damage are common
+    // to every ink (the paper is one surface).
+    float R = uRoughness > 0.0 ? roughField(px / cell) : 0.5;
+    float G = uGrunge > 0.0 ? damage(px / cell) : 0.0;
+
     if (uChannels == 1) {
         vec3 col = vec3(1.0);
         for (int i = 0; i < 4; i++) {
             vec2 g = gridOf(px, uAngle + screenAngle(i), cell);
             float ink = cmykChannel(clamp(src.rgb, 0.0, 1.0), i);
-            float m = coverage(g, ink, aa);
+            float m = chewed(coverage(g, ink, aa, R), G, aa);
             if (i == 0)      col.r *= 1.0 - m;
             else if (i == 1) col.g *= 1.0 - m;
             else if (i == 2) col.b *= 1.0 - m;
@@ -200,7 +240,7 @@ void main() {
     } else {
         vec2 g = gridOf(px, uAngle, cell);
         float luma = dot(clamp(src.rgb, 0.0, 1.0), vec3(0.2126, 0.7152, 0.0722));
-        float m = coverage(g, 1.0 - luma, aa);
+        float m = chewed(coverage(g, 1.0 - luma, aa, R), G, aa);
         fragColor = vec4(vec3(1.0 - m), alpha);
     }
 }

@@ -17,7 +17,8 @@
           "pattern": "lines",
           "dots": 10,
           "grunge": 0.6,
-          "angle": 15
+          "angle": 15,
+          "roughness": 0.4
         },
         "x": 0,
         "y": 0
