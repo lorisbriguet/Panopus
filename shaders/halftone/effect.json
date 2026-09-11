@@ -2,11 +2,68 @@
   "id": "halftone",
   "label": "Halftone",
   "inputs": 1,
-  "passes": [{ "frag": "halftone.frag" }],
+  "passes": [
+    {
+      "frag": "halftone.frag"
+    }
+  ],
   "params": [
-    { "name": "dots", "type": "float", "min": 2, "max": 64, "step": 0.5, "default": 8 },
-    { "name": "angle", "type": "float", "min": -90, "max": 90, "step": 1, "default": 15 },
-    { "name": "channels", "type": "enum", "options": ["gray", "cmyk"], "default": "gray" },
-    { "name": "hard", "type": "float", "min": 0, "max": 1, "step": 0.01, "default": 0.7 }
+    {
+      "name": "pattern",
+      "type": "enum",
+      "options": [
+        "dots",
+        "negdots",
+        "lines",
+        "crosslines",
+        "waves",
+        "crosswaves",
+        "brokenlines",
+        "brokenwaves",
+        "dust"
+      ],
+      "default": "dots"
+    },
+    {
+      "name": "dots",
+      "type": "float",
+      "min": 2,
+      "max": 64,
+      "step": 0.5,
+      "default": 8
+    },
+    {
+      "name": "angle",
+      "type": "float",
+      "min": -90,
+      "max": 90,
+      "step": 1,
+      "default": 15
+    },
+    {
+      "name": "channels",
+      "type": "enum",
+      "options": [
+        "gray",
+        "cmyk"
+      ],
+      "default": "gray"
+    },
+    {
+      "name": "hard",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0.7
+    },
+    {
+      "name": "grunge",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": 0
+    }
   ]
 }
