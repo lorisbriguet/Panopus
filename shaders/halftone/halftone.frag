@@ -10,7 +10,9 @@
 // gray = one black screen on white paper; cmyk = four screens at the
 // classic angles (C 15, M 75, Y 0, K 45 - all relative to uAngle).
 // Patterns: 0 dots / 1 negdots / 2 lines / 3 crosslines / 4 waves /
-// 5 crosswaves / 6 brokenlines / 7 brokenwaves / 8 dust.
+// 5 crosswaves / 6 brokenlines / 7 brokenwaves / 8 dust /
+// 9 scratches (dust & scratches: directional strokes + flecks, after
+// the streak-veined press-plate scan in Retratone's dust pattern).
 // Integer hashes (bit-exact across compilers); folded-Taylor trig.
 // Portability discipline: no function out-params, no local arrays.
 // Alpha passthrough.
@@ -121,6 +123,33 @@ float screenRamp(vec2 g) {
         // sparse low pockets, so flecks surface before tone fills in.
         return clamp(0.62 + 0.85 * (0.6 * ridge(g * 1.9) + 0.4 * ridge(g * 5.3) - 0.62)
                      - 0.35 * step(0.965, hash2(floor(g * 3.1))), 0.02, 1.2);
+    }
+    if (uPattern == 9) {
+        // dust & scratches: sparse scratch lanes running along the screen
+        // angle — segmented lengths, slight wobble, intensity varying
+        // along the stroke — plus isolated dust flecks. The base sits
+        // just under full tone so only near-black floods around them.
+        float lane = g.x * 2.0;
+        float ci = floor(lane);
+        float xo = 0.15 + 0.7 * hash2(vec2(ci, 11.0));
+        float seg = floor(g.y * 0.12); // strokes ~8 cells long
+        float on = smoothstep(0.35, 0.95, hash2(vec2(ci, seg)));
+        float wob = 0.10 * (vnoise(vec2(ci * 7.3, g.y * 0.7)) - 0.5);
+        float d = abs(lane - ci - xo + wob);
+        float widthv = 0.02 + 0.05 * hash2(vec2(ci, seg + 101.0));
+        // Depth GRADES along the stroke (squared -> mostly shallow), so
+        // highlights carry only faint broken slivers and shadows pull
+        // the full stroke out — tone drives the screen, like any ramp.
+        float along = vnoise(vec2(ci * 3.1, g.y * 3.7));
+        float depthc = on * (0.12 + 0.88 * along * along);
+        float scratch = (1.0 - smoothstep(widthv, widthv * 2.6, d)) * depthc;
+        vec2 fcell = floor(g * 2.7);
+        vec2 flocal = g * 2.7 - fcell - 0.5;
+        float fid = hash2(fcell);
+        float fleck = step(0.962, fid)
+                      * (1.0 - smoothstep(0.10, 0.26, length(flocal)))
+                      * (0.35 + 0.65 * hash2(fcell + vec2(5.0, 9.0)));
+        return clamp(0.99 - 0.95 * max(scratch, fleck), 0.03, 1.05);
     }
     return dotRamp(g); // 0: dots
 }
