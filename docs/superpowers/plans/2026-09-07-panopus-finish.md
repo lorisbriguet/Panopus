@@ -8,7 +8,7 @@
 
 **Tech Stack:** Tauri v2, React 19, TS, Tailwind v4, @xyflow/react, WebGL2; Rust: wgpu, naga (glsl-in), image, tiff, printpdf.
 
-**Spec:** `docs/superpowers/specs/2026-09-07-panopus-finish-design.md`
+**Spec:** [docs/superpowers/specs/2026-09-07-panopus-finish-design.md](../specs/2026-09-07-panopus-finish-design.md)
 
 ## Global Constraints
 
@@ -339,7 +339,7 @@ Grow the const: `MIGRATIONS: [(i64, &str, &str); 6]` adding `(6, "panopus_projec
 - Produces:
   - `cargo test --test parity_goldens -- --ignored` renders each effect (default params, seed 0) source→effect→output at 512×731 via the wgpu engine into `test/parity/goldens/<effect>.png`.
   - `npm run parity`: Playwright chromium loads `harness.html` (bundles the REAL `glExecutor` + registry via a small vite build step inside run.mjs — `npx vite build --config test/parity/vite.config.ts` emitting an iife), renders the same graphs, `page.screenshot`-free readback via `canvas.toDataURL`, diffs vs goldens: pass when ≥99% of pixels are within 6/255 per channel. Prints a per-effect table; nonzero exit on failure.
-- Pre-release gate (documented in RELEASING.md by Task 16); NOT in `npm test`.
+- Pre-release gate (documented in [RELEASING.md](../../../RELEASING.md) by Task 16); NOT in `npm test`.
 
 - [ ] **Step 1: Generate goldens** (run the ignored cargo test; eyeball each PNG — they must look like the effect, not black).
 - [ ] **Step 2: Build the JS harness; run `npm run parity` → expect PASS; if an effect diverges, fix the shader/executor semantics (uniform packing order and enum indexes are the usual suspects) until parity holds — divergence here is a real bug, not a tolerance problem.**
@@ -350,7 +350,7 @@ Grow the const: `MIGRATIONS: [(i64, &str, &str); 6]` adding `(6, "panopus_projec
 ### Task 16: Docs, gates, release readiness
 
 **Files:**
-- Modify: `README.md` (Projects & Finish section: workflow, effect-folder convention, F4 constant), `RELEASING.md` (add `npm run parity` to the pre-release checklist), `src/i18n/ui.ts` (sweep: parity test green)
+- Modify: [README.md](../../../README.md) (Projects & Finish section: workflow, effect-folder convention, F4 constant), [RELEASING.md](../../../RELEASING.md) (add `npm run parity` to the pre-release checklist), `src/i18n/ui.ts` (sweep: parity test green)
 
 - [ ] **Step 1: Full verification** — `npx tsc --noEmit && npm test && npm run lint && cargo test` all green; `npm run parity` green; design-system grep (no hardcoded grays in `src/components/finish/**`, `src/pages/Project*`).
 - [ ] **Step 2: Docs.** **Step 3: Manual end-to-end** — create project, add fonts via BulkBar, activate exclusively (verify in another app), attach artwork, chain JPEG→dither→VHS, export all formats, verify the PNG at 10571×15118.

@@ -1,5 +1,7 @@
 # Panopus Projects & Finish — GLSL poster renderer (SM task 918)
 
+Plan: [2026-09-07-panopus-finish.md](../plans/2026-09-07-panopus-finish.md)
+
 **Goal:** Panopus becomes the studio pipeline hub. A *project* gathers the fonts for a
 poster; the poster is designed in external software (later: our own design tool, SM 919);
 the designed artwork returns to Panopus for a *finishing pass* — a node-based GLSL effect

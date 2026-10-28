@@ -34,7 +34,7 @@ npm run parity                    # preview/export pixel parity, all PASS
 
 ## 2. Design-system compliance audit (required)
 
-Grep gates from `DESIGN-SYSTEM.md` — all must return **0**:
+Grep gates from [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) — all must return **0**:
 
 ```bash
 grep -rnE 'bg-gray-|text-gray-|border-gray-|divide-gray-' src --include='*.tsx' | wc -l
@@ -71,8 +71,8 @@ Smoke-test the built .dmg app before publishing: launch, check the library grid 
 ## 5. Changelog + docs
 
 - Write the changelog from real commits/changes, grouped: Features / Fixes / Refactors / Breaking. Concise, user-facing wording; no noise.
-- Update `README.md`: feature list if features shipped, remove anything now inaccurate.
-- Keep `IDEAS.md` in sync (move shipped items to the Done section).
+- Update [README.md](README.md): feature list if features shipped, remove anything now inaccurate.
+- Keep [IDEAS.md](IDEAS.md) in sync (move shipped items to the Done section).
 
 ## 6. latest.json (auto-updater manifest — only once the updater is re-wired)
 
@@ -126,7 +126,7 @@ private again, installed builds degrade to "Update check failed" in Settings > U
 
 - `git status` clean; tag, `package.json`, `tauri.conf.json`, `Cargo.toml` all agree.
 - Updater-enabled releases: `curl -sL .../releases/latest/download/latest.json` returns the new version with a non-empty signature, and an installed previous version updates end-to-end (the real signature test).
-- Note follow-ups/risks in `IDEAS.md`.
+- Note follow-ups/risks in [IDEAS.md](IDEAS.md).
 
 ## Common failure modes
 

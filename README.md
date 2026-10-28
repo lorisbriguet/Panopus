@@ -87,7 +87,7 @@ shaders/<id>/
   *.png           # optional texture assets referenced by passes
 ```
 
-The same folder feeds both renderers: the WebGL2 preview in the webview and the wgpu/naga export engine in Rust. `npm run parity` (see RELEASING.md) renders the graph cases in `test/parity/cases/` through both and diffs against committed goldens; shaders must stay bit-stable across compilers (integer hashes, no `fract(sin(...))`).
+The same folder feeds both renderers: the WebGL2 preview in the webview and the wgpu/naga export engine in Rust. `npm run parity` (see [RELEASING.md](RELEASING.md)) renders the graph cases in `test/parity/cases/` through both and diffs against committed goldens; shaders must stay bit-stable across compilers (integer hashes, no `fract(sin(...))`).
 
 **Operators beyond effects** — the graph also has built-in operators: multiple **Source** operators (collage: each carries its own artwork), **Scale** (resolution is a chain property: de-res before an effect, up-res after, smooth or pixel resampling) and multiple named **Output** operators (each a deliverable with its own size/unit/dpi/color/fit; export writes every checked output in one run). Graph editing has local undo (Cmd+Z / Cmd+Shift+Z), and effect subchains can be saved as app-wide **recipes** and pasted into any project.
 
@@ -115,7 +115,12 @@ src-tauri/              # Rust backend
 ## Limitations
 
 - **Library location is fixed for previews** — the asset protocol scope is compile-time limited to `~/Documents/GitHub/panopus-library` (plus the system font directories). Choosing a library folder outside that path in Settings breaks font previews in this version.
-- **Auto-updater is unwired** — the updater plugin is not registered; updates are manual (see RELEASING.md).
+- **Auto-updater is unwired** — the updater plugin is not registered; updates are manual (see [RELEASING.md](RELEASING.md)).
+
+## Docs
+
+- [RELEASING.md](RELEASING.md) · [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) · [IDEAS.md](IDEAS.md)
+- Specs: [Panopus design](docs/superpowers/specs/2026-09-03-panopus-design.md) · [Projects & Finish](docs/superpowers/specs/2026-09-07-panopus-finish-design.md) · [Finish 2](docs/superpowers/specs/2026-09-08-finish-2-design.md)
 
 ## License
 

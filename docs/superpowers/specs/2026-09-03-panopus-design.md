@@ -2,6 +2,8 @@
 
 **Date:** 2026-09-03
 **Status:** Approved by Loris (chat), pending spec review
+
+Plan: [2026-09-03-panopus-v1.md](../plans/2026-09-03-panopus-v1.md)
 **Goal:** A macOS Font Book replacement: activate/deactivate fonts to declutter design
 software, and preview fonts in a better environment. Visually part of the Studio
 Manager suite.
@@ -12,7 +14,7 @@ Manager suite.
   `StudioManager` (Tauri v2, React 19, TypeScript, Tailwind v4, SQLite).
   Kept from SM: Tauri shell + auto-updater, design tokens / 10 themes / 19 accents,
   `components/ui/`, Zustand stores (app/tab/undo), React Query setup, i18n EN/FR,
-  command palette (cmdk), settings page patterns, DESIGN-SYSTEM.md and RELEASING.md
+  command palette (cmdk), settings page patterns, [DESIGN-SYSTEM.md](../../../DESIGN-SYSTEM.md) and [RELEASING.md](../../../RELEASING.md)
   conventions. Deleted: all business pages (clients, invoices, quotes, expenses,
   income, finances, calendar, dashboard widgets tied to billing).
   Identifiers: `ch.panopus.app`, DB `panopus.db`.

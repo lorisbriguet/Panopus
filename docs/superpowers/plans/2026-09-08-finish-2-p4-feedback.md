@@ -4,6 +4,8 @@
 
 **Goal:** The user's field-test backlog (StudioManager task 918, subtasks #381–#405), triaged into three batches: bugs/quick fixes, TD interaction parity, node & effect redesign. The original P4 (proof render, variation strip, A/B) moves to P5.
 
+Finish 2 design: [2026-09-08-finish-2-design.md](../specs/2026-09-08-finish-2-design.md)
+
 **Spec:** the subtask list is the spec; decisions confirmed with the user:
 - **#404**: add-fonts UI ON the project Fonts tab (search the library, add).
 - **#397 + #395/#396**: transform gains `opacity`; mix becomes an
