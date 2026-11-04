@@ -25,7 +25,7 @@ function graphFor(font: string): FinishGraph {
     v: 1,
     nodes: [
       { id: "src", kind: "source", x: 0, y: 0 },
-      { id: "e", kind: "effect", effectId: "ascii", params: { font, scale: 16 }, x: 0, y: 0 },
+      { id: "e", kind: "effect", effectId: "halftone", params: { pattern: "dots", dots: 14, grunge: 0.65, seed: font === "dots" ? 0 : 5, hard: 0.85, angle: 15 }, x: 0, y: 0 },
       { id: "out", kind: "output", params: { unit: "px", width: 512, height: 731, dpi: 300 }, x: 0, y: 0 },
     ],
     wires: [
@@ -38,7 +38,7 @@ function graphFor(font: string): FinishGraph {
 async function run() {
   const img = await artwork();
   const root = document.getElementById("root")!;
-  for (const font of ["jgs5", "jgsfont"]) {
+  for (const font of ["dots", "lines"]) {
     const canvas = document.createElement("canvas");
     canvas.style.width = "512px";
     canvas.style.height = "731px";

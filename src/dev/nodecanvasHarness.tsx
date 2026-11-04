@@ -34,7 +34,7 @@ const graph: FinishGraph = {
   nodes: [
     { id: "src", kind: "source", x: 30, y: 180 },
     { id: "vhs", kind: "effect", effectId: "vhs", x: 190, y: 160, bypass: true },
-    { id: "riso", kind: "effect", effectId: "riso", x: 350, y: 150 },
+    { id: "riso", kind: "effect", effectId: "gradientmap", x: 350, y: 150 },
     { id: "txt", kind: "text", x: 350, y: 360 },
     { id: "mix", kind: "effect", effectId: "mix", x: 520, y: 220 },
     { id: "scale", kind: "scale", x: 680, y: 230 },
