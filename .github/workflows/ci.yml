@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: typecheck, lint, test
+    # macOS: the only platform the app ships to (same as StudioManager's CI).
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # npm 10.9 (bundled with Node 22) crashes on Vitest 4's peer set; see
+      # RELEASING.md, prerequisites in StudioManager.
+      - run: npm install -g npm@11
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npx vitest run
+      # No Rust job: the Tauri build needs macOS system libraries, and releases
+      # are built per RELEASING.md. Rust dependencies are covered by the weekly
+      # cargo audit in dependency-audit.yml.
