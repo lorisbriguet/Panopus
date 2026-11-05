@@ -34,7 +34,7 @@ tauri-plugin-notification = "2"
 ttf-parser = "0.24"
 # Ledger checksums for the setup() schema bootstrap — must stay on the same
 # major as the sha2 used by sqlx's migrator (SHA-384 over the migration SQL).
-sha2 = "0.10"
+sha2 = "0.11"
 core-foundation = "0.10"
 md5 = "0.7"
 walkdir = "2"
