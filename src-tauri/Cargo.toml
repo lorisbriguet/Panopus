@@ -36,6 +36,6 @@ ttf-parser = "0.24"
 # major as the sha2 used by sqlx's migrator (SHA-384 over the migration SQL).
 sha2 = "0.10"
 core-foundation = "0.10"
-md5 = "0.7"
+md5 = "0.8"
 walkdir = "2"
 notify = "6"
